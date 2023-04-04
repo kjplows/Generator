@@ -201,9 +201,15 @@ double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const doubl
   // if we're very lucky, M will coincide with a map point
   while( (*scmit).first <= M && scmit != scaleMap.end() ){ ++scmit; }
   std::map< double, double >::iterator scpit = std::prev( scmit, 1 );
-  //LOG( "HNL", pDEBUG )
-  //  << "Requested map for M = " << M << ": iter at ( " << (*scpit).first << ", " << (*scmit).first << " ]";
-  assert( scmit != scaleMap.end() );
+  LOG( "HNL", pDEBUG )
+    << "Requested map for M = " << M << ": iter at ( " << (*scpit).first << ", " << (*scmit).first << " ]";
+  // emergency fix due to the scaling implemented in this code.
+  // for some reason, close to the K+ / K0 --> N e pi0/pi threshold the scaling throws artefacts. Kill these.
+  if( M > 0.35 && M <= 0.36 ){
+    if( ma == mE && mP == mK0 ) return 1.0;
+    return 0.0;
+  }
+  else assert( scmit != scaleMap.end() );
   // if coincide then return scale there
   if( scaleMap.find( M ) != scaleMap.end() ) return (*scmit).second;
   // otherwise transform scmit-1 and scmit second to log, do a linear extrapolation and return
