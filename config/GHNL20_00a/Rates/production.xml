@@ -225,7 +225,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 
     <parent name="mu" pdg="13">
       <param type="vec-double" name="Masses" delim=";">
-	0.000 ; 105.000
+	0.000 ; 0.105
       </param>
 
       <channel name="ElectronLike">
