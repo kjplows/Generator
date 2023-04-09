@@ -11,6 +11,12 @@
 
 #include "Physics/BeamHNL/HNLBRCalculator.h"
 
+// this include has to be here
+#include "libxml/xmlmemory.h"
+#include "libxml/parser.h"
+
+#include "Framework/Utils/XmlParserUtils.h"
+
 using namespace genie;
 using namespace genie::hnl;
 
@@ -120,6 +126,9 @@ void BRCalculator::LoadConfig(void)
     { 0.100570, 0.00000363 }
   };
 
+  this->GetParam( "UseInputQM", fIsUsingInputQM );
+  if( fIsUsingInputQM ) this->ConstructInputQMMessage();
+
   fIsConfigLoaded = true;
 }
 //----------------------------------------------------------------------------
@@ -193,6 +202,8 @@ double BRCalculator::DWidth_PseudoscalarToLepton( const double mP, const double 
 double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const double M, const double ma ) const {
   assert( mP == mK || mP == mK0 ); // RETHERE remove this when/if heavier pseudoscalars are considered
   assert( ma == mE || ma == mMu );
+
+  LOG( "HNL", pDEBUG ) << "Parent, coproduced lepton masses are = " << mP << ", " << ma;
   
   std::map< double, double > scaleMap = ( ma == mE ) ? kscale_K3e : kscale_K3mu;
 
@@ -278,6 +289,8 @@ double BRCalculator::DWidth_PiZeroAndNu( const double M, const double Ue42, cons
   const double x       = genie::utils::hnl::MassX( mPi0, M );
   const double preFac  = GF2 * M*M*M / ( 32. * pi );
   const double kinPart = ( 1. - x*x ) * ( 1. - x*x );
+  double unsc = preFac * 3.0 * fpi2 * kinPart;
+  LOG( "HNL", pDEBUG ) << "Pi0-nu unscaled gamma = " << unsc;
   return preFac * ( Ue42 + Umu42 + Ut42 ) * fpi2 * kinPart;
 }
 //----------------------------------------------------------------------------
@@ -287,11 +300,15 @@ double BRCalculator::DWidth_PiAndLepton( const double M, const double Ua42, cons
   const double preFac  = GF2 * M*M*M / ( 16. * pi );
   const double kalPart = TMath::Sqrt( genie::utils::hnl::Kallen( 1, xPi*xPi, xLep*xLep ) );
   const double othPart = 1. - xPi*xPi - xLep*xLep * ( 2. + xPi*xPi - xLep*xLep );
+  double unsc = preFac * fpi2 * Vud2 * kalPart * othPart;
+  LOG( "HNL", pDEBUG ) << "Pi-ell at ma = " << ma << " unscaled gamma = " << unsc;
   return preFac * fpi2 * Ua42 * Vud2 * kalPart * othPart;
 }
 //----------------------------------------------------------------------------
 double BRCalculator::DWidth_Invisible( const double M, const double Ue42, const double Umu42, const double Ut42 ) const {
   const double preFac = GF2 * TMath::Power( M, 5. ) / ( 192. * pi*pi*pi );
+  double unsc = preFac * 3.0;
+  LOG( "HNL", pDEBUG ) << "Invisible unscaled gamma = " << unsc;
   return preFac * ( Ue42 + Umu42 + Ut42 );
 }
 //----------------------------------------------------------------------------
@@ -304,6 +321,11 @@ double BRCalculator::DWidth_SameLepton( const double M, const double Ue42, const
   const double C2Part = ( Ue42 + Umu42 + Ut42 ) * f2 * BR_C2;
   const double D1Part = bIsMu ? 2. * s2w * Umu42 * f1 : 2. * s2w * Ue42 * f1;
   const double D2Part = bIsMu ? s2w * Umu42 * f2 : s2w * Ue42 * f2;
+
+  double cUnsc = preFac * (f1 * BR_C1 + f2 * BR_C2) * 3.0;
+  double dUnsc = preFac * 2.0 * s2w * (f1 + f2);
+  LOG( "HNL", pDEBUG ) << "Same-lepton with isMu ? " << (int) bIsMu << " gives CPart unscaled gamma = "
+		       << cUnsc << " and DPart unscaled gamma = " << dUnsc;
   return preFac * ( C1Part + C2Part + D1Part + D2Part );
 }
 //----------------------------------------------------------------------------
@@ -314,6 +336,9 @@ double BRCalculator::DWidth_DiffLepton( const double M, const double Ua42, const
   const double kinLn  = -12. * TMath::Power( x, 4. ) * TMath::Log( x*x );
   const double kinPart = kinPol + kinLn;
   const double coupPart = (!IsMajorana) ? Ua42 : Ua42 + Ub42; // 2nd diagram in Majorana case!
+  double dispMaj = (!IsMajorana) ? 1.0 : 2.0;
+  double unsc = preFac * kinPart * dispMaj;
+  LOG( "HNL", pDEBUG ) << "Different-lepton unscaled gamma = " << unsc;
   return preFac * kinPart * coupPart;
 }
 //----------------------------------------------------------------------------
@@ -519,4 +544,164 @@ double BRCalculator::Pi0Pi0NuForm( double *x, double *par ){
     double Frac2 = 1.0 / ( Enu * Epi + MPi0 * MPi0 - MN * MN );
 
     return ETerm * std::pow( ( Frac1 + Frac2 ), 2.0 );
+}
+//----------------------------------------------------------------------------
+// RETHERE: figure out integration for this.
+void BRCalculator::ConstructInputQMMessage() const
+{
+  // VERY anti-pattern-like way of doing things. RETHERE after chatting with Marco!
+  // XML access copied from AlgConfigPool::CommonList
+  std::string xml_prefix = "GHNL20_00a/Rates/";
+  std::string xml_decay_name = xml_prefix + "decay.xml";
+  std::string xml_prod_name = xml_prefix + "production.xml";
+
+  std::string full_decay_path = utils::xml::GetXMLFilePath( xml_decay_name );
+  std::string full_prod_path = utils::xml::GetXMLFilePath( xml_prod_name );
+
+  LOG( "HNL", pDEBUG )
+    << "fIsUsingInputQM = " << fIsUsingInputQM
+    << "\ndecay path = " << full_decay_path
+    << "\nprod path  = " << full_prod_path;
+
+  // Fantastic, the paths are resolved. Let's find a channel and use it.
+  // Uses the machinery from Tools/Flux/GNuMIFlux.cxx
+
+  xmlDocPtr xml_decay_doc = xmlParseFile( full_decay_path.c_str() );
+  xmlDocPtr xml_prod_doc = xmlParseFile( full_prod_path.c_str() );
+
+  if( !xml_decay_doc ){
+    LOG( "HNL", pERROR )
+      << "Cannot parse decay-width XML at location " << xml_decay_name << " !";
+    return;
+  }
+  if( !xml_prod_doc ){
+    LOG( "HNL", pERROR )
+      << "Cannot parse production-scale XML at location " << xml_prod_name << " !";
+    return;
+  }
+  
+  LOG( "HNL", pINFO ) 
+    << "Attempting to load configurations from files:"
+    << "\nFrom decay rates: " << xml_decay_name
+    << "\nFrom production rates: " << xml_prod_name;
+
+  std::string cfg = "Default"; // RETHERE make this general
+  this->LoadTheorySet(xml_decay_doc, xml_prod_doc, cfg);
+
+  return;
+}
+//----------------------------------------------------------------------------
+bool BRCalculator::LoadTheorySet(xmlDocPtr & xml_decay_doc, xmlDocPtr & xml_prod_doc,
+				 std::string cfg) const
+{
+  // point to root element in the file
+  xmlNodePtr xml_decay_root = xmlDocGetRootElement( xml_decay_doc );
+  xmlNodePtr xml_prod_root = xmlDocGetRootElement( xml_prod_doc );
+  
+  // look for a particular pset config
+  bool found_decay = false;
+  bool found_prod = false;
+  xmlNodePtr xml_decay_pset = xml_decay_root->xmlChildrenNode;
+  xmlNodePtr xml_prod_pset = xml_prod_root->xmlChildrenNode;
+  for( ; xml_decay_pset != NULL ; xml_decay_pset = xml_decay_pset->next ){
+    if( ! xmlStrEqual(xml_decay_pset->name, (const xmlChar*)"param_set") ) continue;
+    
+    // every time there is a 'param_set' tag
+    std::string param_set_name =
+      utils::str::TrimSpaces(utils::xml::GetAttribute(xml_decay_pset,"name"));
+    
+    if( param_set_name != cfg ) continue; 
+    LOG( "HNL", pINFO ) << "Found config \"" << cfg << "\"";
+    
+    // RETHERE this should probably be its own method a la GNuMIFluxXMLHelper::ParseParamSet();
+    LOG( "HNL", pDEBUG ) << "You really must hit ParseParamSet() here. Do it. RETHERE.";
+    this->ParseParamSet( xml_decay_doc, xml_decay_pset, false );
+    
+    found_decay = true;
+  } // loop over elements of root
+
+  for( ; xml_prod_pset != NULL ; xml_prod_pset = xml_prod_pset->next ){
+    if( ! xmlStrEqual(xml_prod_pset->name, (const xmlChar*)"param_set") ) continue;
+    
+    // every time there is a 'param_set' tag
+    std::string param_set_name =
+      utils::str::TrimSpaces(utils::xml::GetAttribute(xml_prod_pset,"name"));
+    
+    if( param_set_name != cfg ) continue; 
+    LOG( "HNL", pINFO ) << "Found config \"" << cfg << "\"";
+    
+    // RETHERE this should probably be its own method a la GNuMIFluxXMLHelper::ParseParamSet();
+    LOG( "HNL", pDEBUG ) << "You really must hit ParseParamSet() here. Do it. RETHERE.";
+    
+    found_prod = true;
+  } // loop over elements of root
+
+  xmlFree(xml_decay_pset); xmlFree(xml_prod_pset);
+  return (found_decay && found_prod);
+}
+//----------------------------------------------------------------------------
+void BRCalculator::ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset,
+				 bool isProduction ) const
+{
+  xmlNodePtr xml_child = xml_pset->xmlChildrenNode;
+
+  for( ; xml_child != NULL ; xml_child = xml_child->next ) {
+    // so far we have 1 vector of masses for all HNL decay channels
+    // and 1 vector per HNL parent, meaning we should say if we're doing P --> N or N --> X
+    if( !isProduction ){
+      // build the decay rates
+      std::string pname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_child->name));
+      if( pname == "param" ){
+	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
+	LOG( "HNL", pDEBUG ) << "pname, ppname = " << pname << ", " << ppname;
+	// this is either a calculation or the masses.
+	std::string pval = utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1));
+	if( ppname == "Calculation" ){
+	  LOG( "HNL", pDEBUG )
+	    << "Doing decay rates from calculation set named " << pval;
+	} else if( ppname == "Masses" ){
+	  // Ideally this should be methodised
+	  fDecayMasses = this->GetDoubleVector(pval);
+	}
+      } else if( pname == "decayChannel" ) { // decayChannel
+	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
+	LOG( "HNL", pDEBUG ) << "pname, ppname = " << pname << ", " << ppname;
+	LOG( "HNL", pDEBUG )
+	  << "Found a decayChannel with name = \"" << ppname << "\"";
+	// now we need to loop over all the rates in the decay channels and get vectors
+	// also need to associate scalings with them
+	xmlNodePtr xml_grandchild = xml_child->xmlChildrenNode;
+	for( ; xml_grandchild != NULL ; xml_grandchild = xml_grandchild->next ) {
+	  std::string gname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_grandchild->name));
+	  if( gname == "param" ){
+	    std::string pgname = utils::str::TrimSpaces(utils::xml::GetAttribute(xml_grandchild, "name"));
+	    LOG( "HNL", pDEBUG ) << "pgname = " << pgname;
+	  }
+	} // loop over params in decayChannel
+      }
+    } else {
+      LOG( "HNL", pDEBUG )
+	<< "Production scale factors not implemented yet...";
+      return;
+    }
+  } // loop over children.
+}
+//----------------------------------------------------------------------------
+// copied from GNuMIFlux.cxx
+std::vector<double> BRCalculator::GetDoubleVector(std::string str) const
+{
+  // turn string into vector<double>
+  // be liberal about separators, users might punctuate for clarity
+  std::vector<std::string> strtokens = genie::utils::str::Split(str," ,;:()[]=");
+  std::vector<double> vect;
+  size_t ntok = strtokens.size();
+
+  for (size_t i=0; i < ntok; ++i) {
+    std::string trimmed = utils::str::TrimSpaces(strtokens[i]);
+    if ( " " == trimmed || "" == trimmed ) continue;  // skip empty strings
+    double val = strtod(trimmed.c_str(), (char**)NULL);
+    vect.push_back(val);
+  }
+
+  return vect;
 }

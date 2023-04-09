@@ -41,7 +41,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
     -->
 
     <!-- N4 -> v v v -->
-    <channel name="NuNuNu">
+    <decayChannel name="nu_nu_nu">
       <param type="vec-double" name="Rates_0" delim=";">
 	0.000       ; 2.14224e-25 ; 6.8558e-24  ; 5.20612e-23 ; 2.19386e-22 ; <!-- 0 - 20 --> 
 	6.69511e-22 ; 1.66596e-21 ; 3.60079e-21 ; 7.02034e-21 ; 1.26509e-20 ;
@@ -64,13 +64,13 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	1.26509e-15 ; 1.33695e-15 ; 1.41204e-15 ; 1.49047e-15 ; 1.57234e-15 ; 
 	1.65778e-15 ; 1.74688e-15 ; 1.83978e-15 ; 1.93659e-15
       </param>
-      <param type="string" name="Scaling_0 "> x[0]+x[1]+x[2] </param>
+      <param type="string" name="Scaling_Dirac_0 "> x[0]+x[1]+x[2] </param>
+      <param type="string" name="Scaling_Majorana_0"> 2.0*(x[0]+x[1]+x[2]) </param>
 
-      <param type="string" name="ToMajorana"> 2.0 </param>
-    </channel>
+    </decayChannel>
 
     <!-- N4 -> v e e -->
-    <channel name="NuEE">
+    <decayChannel name="nu_e_e">
       <!-- Flavour-agnostic contribution -->
       <param type="vec-double" name="Rates_0" delim=";"> 
 	0.000       ; 2.19603e-26 ; 8.17917e-25 ; 6.39193e-24 ; 2.72236e-23 ; <!-- 0 - 20 -->
@@ -94,7 +94,8 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	1.59012e-16 ; 1.69044e-16 ; 1.77483e-16 ; 1.8734e-16  ; 1.97631e-16 ;
 	2.0837e-16  ; 2.1957e-16  ; 2.31246e-16 ; 2.43415e-16
       </param>
-      <param type="string" name="Scaling_0"> x[0]+x[1]+x[2] </param>
+      <param type="string" name="Scaling_Dirac_0"> x[0]+x[1]+x[2] </param>
+      <param type="string" name="Scaling_Majorana_0"> 2.0*(x[0]+x[1]+x[2]) </param>
 
       <!-- Flavour-specific contribution -->
       <param type="vec-double" name="Rates_1" delim=";">
@@ -120,13 +121,12 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	2.55616e-16 ; 2.69356e-16 ; 2.8368e-16  ; 2.98607e-16	
       </param>
       <param type="string" name="Scaling_1"> x[0] </param>
+      <param type="string" name="Scaling_Majorana_1"> 2.0*x[0] </param>
 
-      <param type="string" name="ToMajorana"> 2.0 </param>
-
-    </channel>
+    </decayChannel>
 
     <!-- N4 -> v e mu -->
-    <channel name="NuEMu">
+    <decayChannel name="nu_mu_e">
       <param type="vec-double" name="Rates_0" delim=";">
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ; <!-- 0 - 20 -->
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ;
@@ -149,14 +149,13 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	5.61692e-16 ; 5.98728e-16 ; 6.37646e-16 ; 6.78516e-16 ; 7.21406e-16 ;
 	7.66388e-16 ; 8.13536e-16 ; 8.62924e-16 ; 9.14632e-16
       </param>
-      <param type="string" name="Scaling_0"> x[0] </param>
+      <param type="string" name="Scaling_Dirac_0"> x[0] </param>
+      <param type="string" name="Scaling_Majorana_0"> 2.0*(x[0]+x[1]) </param>
 
-      <param type="string" name="ToMajorana"> 2.0*(x[0]+x[1])/x[0] </param>
-
-    </channel>
+    </decayChannel>
 
     <!-- N4 -> pi0 v -->
-    <channel name="Pi0Nu">
+    <decayChannel name="nu_pi0">
       <param type="vec-double" name="Rates_0" delim=";">
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ; <!-- 0 - 20 -->
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ;
@@ -179,13 +178,13 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	5.17781e-15 ; 5.37548e-15 ; 5.57785e-15 ; 5.78497e-15 ; 5.99688e-15 ;
 	6.21364e-15 ; 6.4353e-15  ; 6.66191e-15 ; 6.89352e-15
       </param>
-      <param type="string" name="Scaling_0"> x[0]+x[1]+x[2] </param>
-      
-      <param type="string" name="ToMajorana"> 2.0 </param>
-    </channel>
+      <param type="string" name="Scaling_Dirac_0"> x[0]+x[1]+x[2] </param>
+      <param type="string" name="Scaling_Majorana_0"> 2.0*(x[0]+x[1]+x[2]) </param>
+
+    </decayChannel>
 
     <!-- N4 -> pi e -->
-    <channel name="PiE">
+    <decayChannel name="e_pi">
       <param type="vec-double" name="Rates_0" delim=";">
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ; <!-- 0 - 20 -->
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ;
@@ -208,13 +207,13 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	3.23115e-15 ; 3.35562e-15 ; 3.48305e-15 ; 3.61349e-15 ; 3.74697e-15 ;
 	3.88351e-15 ; 4.02316e-15 ; 4.16594e-15 ; 4.31188e-15
       </param>
-      <param type="string" name="Scaling_0"> x[0] </param>
+      <param type="string" name="Scaling_Dirac_0"> x[0] </param>
+      <param type="string" name="Scaling_Majorana_0"> 2.0*x[0] </param>
 
-      <param type="string" name="ToMajorana"> 2.0 </param>
-    </channel>
+    </decayChannel>
 
     <!-- N4 -> v mu mu -->
-    <channel name="NuMuMu">
+    <decayChannel name="nu_mu_mu">
       <!-- Flavour-agnostic contribution -->
       <param type="vec-double" name="Rates_0" delim=";"> 
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ; <!-- 0 - 20 -->
@@ -238,7 +237,8 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	5.32173e-17 ; 5.7375e-17  ; 6.23995e-17 ; 6.71537e-17 ; 7.28787e-17 ;
 	7.83078e-17 ; 8.40487e-17 ; 9.09699e-17 ; 9.74973e-17
       </param>
-      <param type="string" name="Scaling_0"> x[0]+x[1]+x[2] </param>
+      <param type="string" name="Scaling_Dirac_0"> x[0]+x[1]+x[2] </param>
+      <param type="string" name="Scaling_Majorana_0"> 2.0*(x[0]+x[1]+x[2]) </param>
 
       <!-- Flavour-specific contribution -->
       <param type="vec-double" name="Rates_1" delim=";">
@@ -263,14 +263,13 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	1.02218e-16 ; 1.09539e-16 ; 1.18065e-16 ; 1.26289e-16 ; 1.35869e-16 ;
 	1.45092e-16 ; 1.5483e-16  ; 1.66114e-16 ; 1.7699e-16
       </param>
-      <param type="string" name="Scaling_1"> x[1] </param>
+      <param type="string" name="Scaling_Dirac_1"> x[1] </param>
+      <param type="string" name="Scaling_Majorana_1"> 2.0*x[1] </param>
 
-      <param type="string" name="ToMajorana"> 2.0 </param>
-
-    </channel>
+    </decayChannel>
 
     <!-- N4 -> pi mu -->
-    <channel name="PiMu">
+    <decayChannel name="mu_pi">
       <param type="vec-double" name="Rates_0" delim=";">
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ; <!-- 0 - 20 -->
 	0.000       ; 0.000       ; 0.000       ; 0.000       ; 0.000       ;
@@ -293,10 +292,10 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	2.61692e-15 ; 2.73359e-15 ; 2.85325e-15 ; 2.97592e-15 ; 3.10164e-15 ;
 	3.23044e-15 ; 3.36236e-15 ; 3.49741e-15 ; 3.63565e-15
       </param>
-      <param type="string" name="Scaling_0"> x[1] </param>
+      <param type="string" name="Scaling_Dirac_0"> x[1] </param>
+      <param type="string" name="Scaling_Majorana_0"> 2.0*x[1] </param>
 
-      <param type="string" name="ToMajorana"> 2.0 </param>
-    </channel>
+    </decayChannel>
     
   </param_set>
 

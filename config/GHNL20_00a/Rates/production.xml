@@ -36,7 +36,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
       </param>
 
       <!-- Above the closing of the TwoBodyMuon threshold this is identically 1 -->
-      <channel name="TwoBodyElectron">
+      <productionChannel name="TwoBodyElectron">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.000123  ; 0.000593728 ; 0.00200265 ; 0.00434007 ; 0.00759019 ; <!-- 0 - 4 -->
 	  0.0117316 ; 0.016738    ; 0.022579   ; 0.0292211  ; 0.0366287  ;
@@ -47,9 +47,9 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	  0.373845  ; 0.417018    ; 0.476536   ; 0.575607   ; 1.000
 	</param>
 	<param type="string" name="Scaling"> x[0] </param>
-      </channel>
+      </productionChannel>
 
-      <channel name="TwoBodyMuon">
+      <productionChannel name="TwoBodyMuon">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.999877  ; 0.999406    ; 0.997997   ; 0.99566    ; 0.99241    ; <!-- 0 - 4 -->
 	  0.988268  ; 0.983262    ; 0.977421   ; 0.970779   ; 0.963371   ;
@@ -60,7 +60,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	  0.626155  ; 0.582982    ; 0.523464   ; 0.424393   ; 0.000
 	</param>
 	<param type="string" name="Scaling"> x[1] </param>
-      </channel>
+      </productionChannel>
     </parent>
 
     <parent name="KPlus" pdg="321">
@@ -77,7 +77,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	0.380 ; 0.381 ; 0.382 ; 0.383 ; 0.384 ; 0.385 ; 0.386 ; 0.387 ; 0.388
       </param>
 
-      <channel name="TwoBodyElectron">
+      <productionChannel name="TwoBodyElectron">
 	<param type="vec-double" name="Factors" delim=";">
 	  2.2371e-05 ; 0.00215574 ; 0.00846672 ; 0.0185873  ; 0.0320867  ; <!-- 0 - 20 -->
 	  0.04834    ; 0.066684   ; 0.0864939  ; 0.107135   ; 0.128028   ; 
@@ -100,9 +100,9 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	  0.786228   ; 0.839621   ; 1.000
 	</param>
 	<param type="string" name="Scaling"> x[0] </param>
-      </channel>
+      </productionChannel>
 
-      <channel name="TwoBodyMuon">
+      <productionChannel name="TwoBodyMuon">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.888123 ; 0.886995 ; 0.884687 ; 0.875773 ; 0.866241 ; <!-- 0 - 20 -->
 	  0.854523 ; 0.841085 ; 0.826769 ; 0.811659 ; 0.795901 ;
@@ -125,9 +125,9 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	  0.213772 ; 0.160379 ; 0.000
 	</param>
 	<param type="string" name="Scaling"> x[1] </param>
-      </channel>
+      </productionChannel>
 
-      <channel name="ThreeBodyElectron">
+      <productionChannel name="ThreeBodyElectron">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.0673922   ; 0.0667869   ; 0.0643752   ; 0.0636479   ; 0.0612585   ; <!-- 0 - 20 -->
 	  0.0587132   ; 0.0559245   ; 0.052593    ; 0.0492395   ; 0.0462735   ;
@@ -150,9 +150,9 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	  0.000       ; 0.000       ; 0.000
 	</param>
 	<param type="string" name="Scaling"> x[0] </param>
-      </channel>
+      </productionChannel>
 
-      <channel name="ThreeBodyMuon">
+      <productionChannel name="ThreeBodyMuon">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.0444621   ; 0.0440627   ; 0.0424716   ; 0.0419918   ; 0.0404134   ; <!-- 0 - 20 -->
 	  0.0384234   ; 0.036069    ; 0.0341441   ; 0.0319669   ; 0.0297974   ;
@@ -175,7 +175,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	  0.000       ; 0.000       ; 0.000
 	</param>
 	<param type="string" name="Scaling"> x[1] </param>
-      </channel>
+      </productionChannel>
     </parent>
 
     <parent name="K0L" pdg="130">
@@ -188,7 +188,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	0.250 ; 0.255
       </param>
 
-      <channel name="ThreeBodyElectron">
+      <productionChannel name="ThreeBodyElectron">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.58702 ; 0.58733 ; 0.58778 ; 0.58838 ; 0.58913 ; <!-- 0 - 20 -->
 	  0.59002 ; 0.59106 ; 0.59225 ; 0.59359 ; 0.59508 ;
@@ -203,9 +203,9 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	  0.99934 ; 1.000
 	</param>
 	<param type="string" name="Scaling"> x[0] </param>
-      </channel>
+      </productionChannel>
 
-      <channel name="ThreeBodyMuon">
+      <productionChannel name="ThreeBodyMuon">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.41298    ; 0.41267  ; 0.41222  ; 0.41162  ; 0.41087   ; <!-- 0 - 20 -->
 	  0.40998    ; 0.40894  ; 0.40775  ; 0.40641  ; 0.40492   ;
@@ -220,7 +220,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	  0.00066126 ; 0.000
 	</param>
 	<param type="string" name="Scaling"> x[1] </param>
-      </channel>
+      </productionChannel>
     </parent>
 
     <parent name="mu" pdg="13">
@@ -228,26 +228,26 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 	0.000 ; 0.105
       </param>
 
-      <channel name="ElectronLike">
+      <productionChannel name="ElectronLike">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.33333 ; 0.33333
 	</param>
 	<param type="string" name="Scaling"> x[0] </param>
-      </channel>
+      </productionChannel>
 
-      <channel name="MuonLike">
+      <productionChannel name="MuonLike">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.33333 ; 0.33333
 	</param>
 	<param type="string" name="Scaling"> x[1] </param>
-      </channel>
+      </productionChannel>
 
-      <channel name="TauLike">
+      <productionChannel name="TauLike">
 	<param type="vec-double" name="Factors" delim=";">
 	  0.33333 ; 0.33333
 	</param>
 	<param type="string" name="Scaling"> x[2] </param>
-      </channel>
+      </productionChannel>
     </parent>
     
   </param_set>
