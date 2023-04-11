@@ -708,10 +708,11 @@ void BRCalculator::ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset,
 	      tmpRates = this->GetDoubleVector(gval);
 	    }
 	    else { // it's a scaling. Have to figure out what scaling to use.
-	      if( !fMajorana && pgname.find("Dirac") != std::string::npos )
-		tmpScale = gval;
-	      else if( fMajorana && pgname.find("Majorana") != std::string::npos )
-		tmpScale = gval;
+	      if( !fMajorana && pgname.find("Dirac") == std::string::npos ||
+		  fMajorana && pgname.find("Majorana") == std::string::npos )
+		continue;
+	      
+	      tmpScale = gval;
 
 	      // by now the raw rates should be loaded. Let's scale these.
 	      TFormula scaleForm(Form("scale_%s_%s", ppname.c_str(), pgname.c_str()), tmpScale.c_str());
