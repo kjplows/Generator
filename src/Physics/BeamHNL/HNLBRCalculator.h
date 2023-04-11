@@ -81,8 +81,7 @@ namespace genie {
 
       void LoadConfig(void);
 
-      // RETHERE: figure out integration for this.
-      void ConstructInputQMMessage() const;
+      void InitialiseInputQM() const;
       bool LoadTheorySet(xmlDocPtr & xml_decay_doc, xmlDocPtr & xml_prod_doc, std::string cfg) const;
       void ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset, bool isProduction) const;
 
@@ -145,13 +144,16 @@ namespace genie {
       // kinematic functions
       double GetFormfactorF1( double x ) const;
       double GetFormfactorF2( double x ) const;
+
+      // interpolator function from pre-calculated knots.
+      double Interpolate( double x, double x1, double y1, double x2, double y2 ) const;
      
       bool fIsConfigLoaded = false;
 
       bool fIsUsingInputQM = false; // input theory calculations instead of in-house calc
       mutable std::vector<double> fDecayMasses;
       // value: (vector of rates at the correct scalings)
-      std::map<HNLDecayMode_t, std::vector<double>> fDecayRates;
+      mutable std::map<HNLDecayMode_t, std::vector<double>> fDecayRates;
       
       // physical constants
       double wAng, s2w;
