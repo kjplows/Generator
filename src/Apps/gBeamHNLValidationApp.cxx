@@ -745,6 +745,7 @@ int TestDecay(void)
       TLorentzVector tmpVtx( ox, oy, oz, 0.0 );
       event->SetVertex( tmpVtx );
 
+      event->Particle(0)->SetFirstMother(-2);
       vtxGen->ProcessEventRecord(event);
 
       LOG( "gevald_hnl", pDEBUG ) << *event;
@@ -1028,7 +1029,7 @@ int TestGeom(void)
     TVector3 startPoint, momentum;
     TVector3 entryPoint, exitPoint, decayPoint;
 
-    startPoint.SetXYZ( use_ox, use_oy, use_oz );
+    startPoint.SetXYZ( use_ox, use_oy, use_oz ); // mm
     momentum.SetXYZ( p4HNL->Px(), p4HNL->Py(), p4HNL->Pz() );
 
     use_start[0] = use_ox;
@@ -1047,14 +1048,16 @@ int TestGeom(void)
       << "Set momentum for this trajectory = " << utils::print::Vec3AsString( &momentum )
       << " [GeV/c]";
 
-    TLorentzVector tmpVtx( use_ox, use_oy, use_oz, 0.0);
+    TLorentzVector tmpVtx( use_start[0], use_start[1], use_start[2], 0.0);
     event->SetVertex( tmpVtx );
     TLorentzVector tmpMom = *p4HNL;
     GHepParticle ptHNL( genie::kPdgHNL, kIStInitialState, -1, -1, -1, -1, tmpMom, tmpVtx );
     event->AddParticle( ptHNL );
-    LOG( "gevald_hnl", pDEBUG ) 
+    LOG( "gevald_hnl", pDEBUG )
+      << "\nProbe x4 = " << utils::print::X4AsString( event->Particle(0)->X4() )
       << "\nProbe p4 = " << utils::print::P4AsString( event->Particle(0)->P4() );
 
+    event->Particle(0)->SetFirstMother(-2);
     vtxGen->ProcessEventRecord(event);
 
     if( event->Vertex()->T() != -999.9 ){

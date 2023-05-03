@@ -382,6 +382,7 @@ int main(int argc, char ** argv)
 
      // Simulate decay
      hnlgen->ProcessEventRecord(event);
+     event->Particle(0)->SetFirstMother(-2);
      vtxGen->ProcessEventRecord(event);
 
      // add the FS 4-momenta to special branches

@@ -160,6 +160,7 @@ namespace hnl {
     mutable TGeoVolume * fGeoVolume = 0;
     
     mutable bool isUsingDk2nu = false;
+    mutable bool isParticleGun = false;
     mutable bool isUsingRootGeom = false;
     mutable double uMult = 1.0, xMult = 1.0; // these need to be different.
 

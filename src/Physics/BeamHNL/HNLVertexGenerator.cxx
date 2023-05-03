@@ -73,7 +73,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   
   bool didIntersectDet = this->VolumeEntryAndExitPoints( startPoint, momentum, entryPoint, exitPoint, fGeoManager, fGeoVolume );
 
-  if( isUsingDk2nu ) assert( didIntersectDet ); // forced to hit detector somewhere!
+  if( !isParticleGun && isUsingDk2nu ) assert( didIntersectDet ); // forced to hit detector somewhere!
   else {
     std::vector< double > * newProdVtx = new std::vector< double >();
     newProdVtx->emplace_back( startPoint.X() );
@@ -415,10 +415,16 @@ void VertexGenerator::ImportBoundingBox( TGeoBBox * box ) const
 void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
 {
   isUsingDk2nu = (event_rec->Particle(1) != NULL); // validation App doesn't run Decayer
+  isParticleGun = (event_rec->Particle(0)->FirstMother() < -1); // hack
   isUsingRootGeom = true;
 
-  uMult = ( isUsingDk2nu ) ? units::m / units::mm : units::cm / units::mm;
-  xMult = ( isUsingDk2nu ) ? units::cm / units::mm : 1.0;
+  LOG( "HNL", pDEBUG ) << "isParticleGun = " << (int) isParticleGun
+		       << " with first mother " << event_rec->Particle(0)->FirstMother();
+
+  //uMult = ( isUsingDk2nu ) ? units::m / units::mm : units::cm / units::mm;
+  //uMult = units::m / units::mm;
+  //xMult = ( isUsingDk2nu ) ? units::cm / units::mm : 1.0;
+  xMult = ( isParticleGun ) ? units::cm / units::mm : 1.0;
 
   fCoMLifetime = event_rec->Probability();
 
@@ -428,23 +434,34 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
   TVector3 detori( (fCx + fDetTranslation.at(0)) * units::m / units::cm,
 		   (fCy + fDetTranslation.at(1)) * units::m / units::cm,
 		   (fCz + fDetTranslation.at(2)) * units::m / units::cm ); // for rotations of the detector
+  if( isParticleGun ){
+    detori.SetXYZ( fDetTranslation.at(0) * units::m / units::mm,
+		   fDetTranslation.at(1) * units::m / units::mm,
+		   fDetTranslation.at(2) * units::m / units::mm );
+  }
 
   TLorentzVector * x4HNL = event_rec->Particle(0)->GetX4(); // NEAR, cm ns
   TVector3 xHNL_near = x4HNL->Vect();
-  TVector3 xHNL_user = this->ApplyUserRotation( xHNL_near, detori, fDetRotation, false ); // tgt-hall --> user
+  TVector3 xHNL_user = ( isParticleGun ) ? this->ApplyUserRotation( xHNL_near, detori, fDetRotation, false ) : xHNL_near; // tgt-hall --> user
   TLorentzVector * x4HNL_user = new TLorentzVector();
-  /*
-  x4HNL_user->SetXYZT( xHNL_user.X() - (fCx + fDetTranslation.at(0)) * units::m / units::cm, 
-		       xHNL_user.Y() - (fCy + fDetTranslation.at(1)) * units::m / units::cm,
-		       xHNL_user.Z() - (fCz + fDetTranslation.at(2)) * units::m / units::cm,
-		       x4HNL->T() ); // USER, cm ns
-  */
-  x4HNL_user->SetXYZT( xHNL_user.X() - (fCx) * units::m / units::cm, 
-		       xHNL_user.Y() - (fCy) * units::m / units::cm,
-		       xHNL_user.Z() - (fCz) * units::m / units::cm,
-		       x4HNL->T() ); // USER, cm ns
+  if( !isParticleGun ){
+    x4HNL_user->SetXYZT( xHNL_user.X() - (fCx) * units::m / units::cm, 
+			 xHNL_user.Y() - (fCy) * units::m / units::cm,
+			 xHNL_user.Z() - (fCz) * units::m / units::cm,
+			 x4HNL->T() ); // USER, cm ns
+  } else {
+    x4HNL_user->SetXYZT( xHNL_user.X() - fDetTranslation.at(0) * units::m / units::mm,
+			 xHNL_user.Y() - fDetTranslation.at(1) * units::m / units::mm,
+			 xHNL_user.Z() - fDetTranslation.at(2) * units::m / units::mm,
+			 x4HNL->T() ); // USER, mm ns
+  }
 
   TVector3 startPoint( xMult * x4HNL_user->X(), xMult * x4HNL_user->Y(), xMult * x4HNL_user->Z() ); // USER mm
+
+  LOG( "HNL", pDEBUG )
+    << "\nx4HNL_user = " << utils::print::X4AsString( x4HNL_user ) << " [mm]"
+    << "\nstartPoint = " << utils::print::Vec3AsString( &startPoint );
+
   double mtomm = units::m / units::mm;
   
   TLorentzVector * p4HNL = event_rec->Particle(0)->GetP4();
@@ -516,12 +533,6 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   
   // enter the volume.
   TGeoNode * nextNode = gGeoManager->FindNextBoundaryAndStep( stepmax );
-  if( pathString != string::npos ){
-    LOG( "HNL", pDEBUG ) << "pathString = " << pathString
-      			 << "\nCurrent point is ( " << (gGeoManager->GetCurrentPoint())[0]
-			 << ", " << (gGeoManager->GetCurrentPoint())[1]
-			 << ", " << (gGeoManager->GetCurrentPoint())[2] << " )";
-  }
   
   if( (gGeoManager->GetCurrentPoint())[0] == firstXROOT && 
       (gGeoManager->GetCurrentPoint())[1] == firstYROOT && 
@@ -531,13 +542,14 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   pathString = this->CheckGeomPoint( (gGeoManager->GetCurrentPoint())[0], 
 				     (gGeoManager->GetCurrentPoint())[1], 
 				     (gGeoManager->GetCurrentPoint())[2] );
-  if( pathString != string::npos ){
-    LOG( "HNL", pDEBUG ) << "pathString = " << pathString
-			 << "\nCurrent point is ( " << (gGeoManager->GetCurrentPoint())[0]
-			 << ", " << (gGeoManager->GetCurrentPoint())[1]
-			 << ", " << (gGeoManager->GetCurrentPoint())[2] << " )";
-    
-  }
+
+  LOG( "HNL", pDEBUG )
+    << "Current point is ( " << (gGeoManager->GetCurrentPoint())[0] << ", "
+    << (gGeoManager->GetCurrentPoint())[1] << ", "
+    << (gGeoManager->GetCurrentPoint())[2] << " ), and current direction is ( "
+    << (gGeoManager->GetCurrentDirection())[0] << ", " 
+    << (gGeoManager->GetCurrentDirection())[1] << ", " 
+    << (gGeoManager->GetCurrentDirection())[2] << " )"; 
 
   if( nextNode == NULL )
     return false; 
@@ -554,6 +566,14 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   fEyROOT = ( gGeoManager->GetCurrentPoint() )[1];
   fEzROOT = ( gGeoManager->GetCurrentPoint() )[2];
 
+  LOG( "HNL", pDEBUG )
+    << "Current point is ( " << (gGeoManager->GetCurrentPoint())[0] << ", "
+    << (gGeoManager->GetCurrentPoint())[1] << ", "
+    << (gGeoManager->GetCurrentPoint())[2] << " ), and current direction is ( "
+    << (gGeoManager->GetCurrentDirection())[0] << ", " 
+    << (gGeoManager->GetCurrentDirection())[1] << ", " 
+    << (gGeoManager->GetCurrentDirection())[2] << " )"; 
+
   TVector3 entryPoint_user( fExROOT * units::cm / units::m, 
 			    fEyROOT * units::cm / units::m, 
 			    fEzROOT * units::cm / units::m ); // USER, m
@@ -562,9 +582,11 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
 			  entryPoint_near.Y() + (fCy + fDetTranslation.at(1)),
 			  entryPoint_near.Z() + (fCz + fDetTranslation.at(2)) );
 
+  /*
   LOG( "HNL", pDEBUG )
     << "\nEntry point found at ( " << fEx << ", " << fEy << ", " << fEz << " ) [" << lunitString.c_str() << "]"
     << "\nIn ROOT, entry at    ( " << fExROOT << ", " << fEyROOT << ", " << fEzROOT << " ) [cm]"; 
+  */
 
   // now propagate until we exit again
   
@@ -627,10 +649,20 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
 			 exitPoint_near.Y() + (fCy + fDetTranslation.at(1)),
 			 exitPoint_near.Z() + (fCz + fDetTranslation.at(2)) );
 
+  LOG( "HNL", pDEBUG )
+    << "Current point is ( " << (gGeoManager->GetCurrentPoint())[0] << ", "
+    << (gGeoManager->GetCurrentPoint())[1] << ", "
+    << (gGeoManager->GetCurrentPoint())[2] << " ), and current direction is ( "
+    << (gGeoManager->GetCurrentDirection())[0] << ", " 
+    << (gGeoManager->GetCurrentDirection())[1] << ", " 
+    << (gGeoManager->GetCurrentDirection())[2] << " )"; 
+
+  /*
   LOG( "HNL", pINFO )
     << "\nExit point found at ( " << fXx << ", " << fXy << ", " << fXz << " ) ["
     << lunitString.c_str() << "]"
     << "\nIn ROOT, exit at    ( " << fXxROOT << ", " << fXyROOT << ", " << fXzROOT << " ) [cm]"; 
+  */
 
   return true;
   
