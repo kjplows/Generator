@@ -424,7 +424,7 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
   //uMult = ( isUsingDk2nu ) ? units::m / units::mm : units::cm / units::mm;
   //uMult = units::m / units::mm;
   //xMult = ( isUsingDk2nu ) ? units::cm / units::mm : 1.0;
-  xMult = ( isParticleGun ) ? units::cm / units::mm : 1.0;
+  xMult = ( !isParticleGun ) ? units::cm / units::mm : 1.0;
 
   fCoMLifetime = event_rec->Probability();
 
