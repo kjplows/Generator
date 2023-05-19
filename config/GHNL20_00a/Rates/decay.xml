@@ -11,6 +11,7 @@ Rates obtained ("Default") by applying the EFT found in EPJ C 78 (2021) 81
 
     <!-- Who did the calculations? -->
     <param type="string" name="Calculation"> ColomaEtAl_EFT </param>
+    <param type="string" name="Reference"> Coloma et al, EPJ C 81 (2021) 78 </param>
 
     <!-- Define knots for HNL masses here -->
     <param type="vec-double" name="Masses" delim=";"> 

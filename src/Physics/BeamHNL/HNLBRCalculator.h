@@ -151,9 +151,16 @@ namespace genie {
       bool fIsConfigLoaded = false;
 
       bool fIsUsingInputQM = false; // input theory calculations instead of in-house calc
+      // Decay rates
+      // key: (vector of masses)
       mutable std::vector<double> fDecayMasses;
       // value: (vector of rates at the correct scalings)
       mutable std::map<HNLDecayMode_t, std::vector<double>> fDecayRates;
+      // Production rates
+      // key: (vector of vectors of masses)
+      mutable std::map<int, std::vector<double>> fProdMasses; // pdg code of parent --> masses
+      // value: (vector of factors at the correct scalings)
+      mutable std::map<HNLProd_t, std::vector<double>> fProdFactors;
       
       // physical constants
       double wAng, s2w;

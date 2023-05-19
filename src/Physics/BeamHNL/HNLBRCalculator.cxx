@@ -164,20 +164,72 @@ double BRCalculator::KScale_Global( HNLProd_t hnldm, const double M ) const {
     return 0.0;
   }
   
-  switch( hnldm ){
-  case kHNLProdPion2Muon: return KScale_PseudoscalarToLepton( mPi, M, mMu );
-  case kHNLProdPion2Electron: return KScale_PseudoscalarToLepton( mPi, M, mE );
-  case kHNLProdKaon2Muon: return KScale_PseudoscalarToLepton( mK, M, mMu );
-  case kHNLProdKaon2Electron: return KScale_PseudoscalarToLepton( mK, M, mE );
-  case kHNLProdKaon3Muon: return KScale_PseudoscalarToPiLepton( mK, M, mMu );
-  case kHNLProdKaon3Electron: return KScale_PseudoscalarToPiLepton( mK, M, mE );
-  case kHNLProdNeuk3Muon: return KScale_PseudoscalarToPiLepton( mK0, M, mMu );
-  case kHNLProdNeuk3Electron: return KScale_PseudoscalarToPiLepton( mK0, M, mE );
-  case kHNLProdMuon3Numu:
-  case kHNLProdMuon3Nue:
-  case kHNLProdMuon3Nutau:
-    return KScale_MuonToNuAndElectron( M );
-  default: return 0.0;
+  if( !fIsUsingInputQM ){ // use in-house calculations
+    switch( hnldm ){
+    case kHNLProdPion2Muon: return KScale_PseudoscalarToLepton( mPi, M, mMu );
+    case kHNLProdPion2Electron: return KScale_PseudoscalarToLepton( mPi, M, mE );
+    case kHNLProdKaon2Muon: return KScale_PseudoscalarToLepton( mK, M, mMu );
+    case kHNLProdKaon2Electron: return KScale_PseudoscalarToLepton( mK, M, mE );
+    case kHNLProdKaon3Muon: return KScale_PseudoscalarToPiLepton( mK, M, mMu );
+    case kHNLProdKaon3Electron: return KScale_PseudoscalarToPiLepton( mK, M, mE );
+    case kHNLProdNeuk3Muon: return KScale_PseudoscalarToPiLepton( mK0, M, mMu );
+    case kHNLProdNeuk3Electron: return KScale_PseudoscalarToPiLepton( mK0, M, mE );
+    case kHNLProdMuon3Numu:
+    case kHNLProdMuon3Nue:
+    case kHNLProdMuon3Nutau:
+      return KScale_MuonToNuAndElectron( M );
+    default: return 0.0;
+    }
+  } else { // someone has provided an input. Let's grab it and see!
+    // first look at the parent
+    std::vector<double> tMasses;
+    switch( hnldm ){
+    case kHNLProdPion2Muon: case kHNLProdPion2Electron:
+      tMasses = (*fProdMasses.find(kPdgPiP)).second;
+      break;
+    case kHNLProdKaon2Muon: case kHNLProdKaon2Electron: 
+    case kHNLProdKaon3Muon: case kHNLProdKaon3Electron:
+      tMasses = (*fProdMasses.find(kPdgKP)).second;
+      break;
+    case kHNLProdNeuk3Muon: case kHNLProdNeuk3Electron:
+      tMasses = (*fProdMasses.find(kPdgK0L)).second;
+      break;
+    case kHNLProdMuon3Numu: case kHNLProdMuon3Nue: case kHNLProdMuon3Nutau:
+      tMasses = (*fProdMasses.find(kPdgMuon)).second;
+      break;
+    }
+
+    // now iterate over the decay masses and find the ones closest to the mass
+    int iMass = 0;
+    double mLow = -1.0, mHigh = -1.0;
+    std::vector<double>::iterator itMass = tMasses.begin();
+    while( itMass != tMasses.end() && mHigh <= M ){
+      mLow = mHigh;
+      mHigh = (*itMass);
+      ++itMass; iMass++;
+    }
+    if( itMass == tMasses.end() ){
+      // makes no sense to interpolate here. Stick to last mass.
+      --itMass;
+      std::vector< double > factors = (*fProdFactors.find( hnldm )).second;
+      LOG( "HNL", pDEBUG )
+	<< "\nFor channel " << utils::hnl::ProdAsString( hnldm ) << " there is no interpolation: "
+	<< "\n the input mass M = " << M << " GeV > " << (*itMass) << ", which is the last known"
+	<< "mass. Returning the last point " << factors.at(factors.size()-1);
+      return factors.at(factors.size()-1);
+    }
+
+    // grab the factors from the appropriate channels
+    std::vector< double > chanFactors = (*fProdFactors.find( hnldm )).second;
+    double fLow = chanFactors.at(iMass-1), fHigh = chanFactors.at(iMass);
+
+    LOG( "HNL", pDEBUG )
+      << "\nFor channel " << utils::hnl::ProdAsString( hnldm ) << " the interpolation is in"
+      << "\n" << mLow << " -> " << M << " -> " << mHigh
+      << "\nwith endpoints" << fLow << " -> " << fHigh << " giving the answer "
+      << this->Interpolate( M, mLow, fLow, mHigh, fHigh );
+
+    return this->Interpolate( M, mLow, fLow, mHigh, fHigh );
   }
 
   return 0.0;
@@ -212,8 +264,10 @@ double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const doubl
   // if we're very lucky, M will coincide with a map point
   while( (*scmit).first <= M && scmit != scaleMap.end() ){ ++scmit; }
   std::map< double, double >::iterator scpit = std::prev( scmit, 1 );
+  /*
   LOG( "HNL", pDEBUG )
     << "Requested map for M = " << M << ": iter at ( " << (*scpit).first << ", " << (*scmit).first << " ]";
+  */
   // emergency fix due to the scaling implemented in this code.
   // for some reason, close to the K+ / K0 --> N e pi0/pi threshold the scaling throws artefacts. Kill these.
   if( M > 0.35 && M <= 0.36 ){
@@ -655,6 +709,8 @@ bool BRCalculator::LoadTheorySet(xmlDocPtr & xml_decay_doc, xmlDocPtr & xml_prod
     
     if( param_set_name != cfg ) continue; 
     LOG( "HNL", pINFO ) << "Found config \"" << cfg << "\"";
+
+    this->ParseParamSet( xml_prod_doc, xml_prod_pset, true );
     
     found_prod = true;
   } // loop over elements of root
@@ -677,12 +733,15 @@ void BRCalculator::ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset,
       if( pname == "param" ){
 	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
 	// this is either a calculation or the masses.
-	std::string pval = utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1));
+	std::string pval = std::string( (const char*) (xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1)) );
+	  //utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1));
 	if( ppname == "Calculation" ){
 	  LOG( "HNL", pDEBUG )
 	    << "Doing decay rates from calculation set named " << pval;
+	} else if( ppname == "Reference" ){
+	  LOG( "HNL", pINFO )
+	    << "Calculating the decay rates from Ref. " << pval;
 	} else if( ppname == "Masses" ){
-	  // Ideally this should be methodised
 	  fDecayMasses = this->GetDoubleVector(pval);
 	}
       } else if( pname == "decayChannel" ) { // decayChannel
@@ -708,8 +767,8 @@ void BRCalculator::ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset,
 	      tmpRates = this->GetDoubleVector(gval);
 	    }
 	    else { // it's a scaling. Have to figure out what scaling to use.
-	      if( !fMajorana && pgname.find("Dirac") == std::string::npos ||
-		  fMajorana && pgname.find("Majorana") == std::string::npos )
+	      if( (!fMajorana && pgname.find("Dirac") == std::string::npos) ||
+		  (fMajorana && pgname.find("Majorana") == std::string::npos) )
 		continue;
 	      
 	      tmpScale = gval;
@@ -730,7 +789,7 @@ void BRCalculator::ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset,
 		} // loop over masses
 	      } // only do once: for Dirac *or* for Majorana
 
-	      bool isGChildMajorana = (pgname.find("Majorana") != std::string::npos);
+	      //bool isGChildMajorana = (pgname.find("Majorana") != std::string::npos);
 	    }
 	  }
 	} // loop over params in decayChannel -- all separate components
@@ -770,9 +829,95 @@ void BRCalculator::ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset,
 	fDecayRates.insert( { dkmd, chanRates } );
       }
     } else {
-      LOG( "HNL", pDEBUG )
-	<< "Production scale factors not implemented yet...";
-      return;
+      // build the production rates
+      std::string pname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_child->name));
+      if( pname == "param" ){
+	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
+	// this is the calculation
+	std::string pval = std::string( (const char *) (xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1)) );
+	if( ppname == "Calculation" ){
+	  LOG( "HNL", pDEBUG )
+	    << "Doing production rates from calculation set named " << pval;
+	} else if( ppname == "Reference" ){
+	  LOG( "HNL", pINFO )
+	    << "Calculating the production rates from Ref. " << pval;
+	}
+      } else if( pname == "parent" ){
+	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
+	std::string pppdg = utils::xml::GetAttribute(xml_child, "pdg");
+	int pdg = std::stoi(pppdg);
+	std::string pval = std::string( (const char*) (xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1)) );
+	LOG( "HNL", pDEBUG )
+	  << "Found parent with name " << ppname << " and PDG code " << pppdg;
+	// Each parent has a string of masses, and a collection of implemented productionChannels.
+	// Loop over the children of this node
+	xmlNodePtr xml_grandchild = xml_child->xmlChildrenNode;
+	
+	for( ; xml_grandchild != NULL ; xml_grandchild = xml_grandchild->next ) {
+	  std::string gname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_grandchild->name));
+	  if( gname == "param" ){ // masses
+	    std::string gval = utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_grandchild->xmlChildrenNode, 1));
+	    std::vector<double> inMasses = this->GetDoubleVector(gval);
+	    fProdMasses.insert( { pdg, inMasses } );
+	  } else if( gname == "productionChannel" ){
+	    std::string pgname = utils::str::TrimSpaces(utils::xml::GetAttribute(xml_grandchild, "name"));
+	    LOG( "HNL", pDEBUG )
+	      << "Reading in factors for production channel with name " << pgname;
+
+	    // now we need to loop over all the factors in the decay channels and get vectors
+	    std::vector<double> chanFactors;
+	    xmlNodePtr xml_descendant = xml_grandchild->xmlChildrenNode;
+	    
+	    for( ; xml_descendant != NULL ; xml_descendant = xml_descendant->next ){
+	      std::string dname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_descendant->name));
+	      if( dname == "param" ){
+		std::string pdname = utils::str::TrimSpaces(utils::xml::GetAttribute(xml_descendant, "name"));
+		std::string dval = utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_descendant->xmlChildrenNode, 1));
+		
+		
+		// list of factors that are purely kinematic here.
+		chanFactors = this->GetDoubleVector(dval);
+	      
+		// now we have the full vector of production rates for this channel, properly scaled.
+		// Insert into the map of rates to use.
+		// ugly if-else block a la Python here...
+		HNLProd_t pdmd = kHNLProdNull;
+		if( pdg == kPdgPiP && pgname == "N4_mu" )
+		  pdmd = kHNLProdPion2Muon;
+		else if( pdg == kPdgPiP && pgname == "N4_e" )
+		  pdmd = kHNLProdPion2Electron;
+		else if( pdg == kPdgKP && pgname == "N4_mu" )
+		  pdmd = kHNLProdKaon2Muon;
+		else if( pdg == kPdgKP && pgname == "N4_e" )
+		  pdmd = kHNLProdKaon2Electron;
+		else if( pdg == kPdgKP && pgname == "N4_pi0_mu" )
+		  pdmd = kHNLProdKaon3Muon;
+		else if( pdg == kPdgKP && pgname == "N4_pi0_e" )
+		  pdmd = kHNLProdKaon3Electron;
+		else if( pdg == kPdgK0L && pgname == "N4_pi_mu" )
+		  pdmd = kHNLProdNeuk3Muon;
+		else if( pdg == kPdgK0L && pgname == "N4_pi_e" )
+		  pdmd = kHNLProdNeuk3Electron;
+		else if( pdg == kPdgMuon && pgname == "N4_e_numu" )
+		  pdmd = kHNLProdMuon3Numu;
+		else if( pdg == kPdgMuon && pgname == "N4_e_nue" )
+		  pdmd = kHNLProdMuon3Nue;
+		else if( pdg == kPdgMuon && pgname == "N4_e_nutau" )
+		  pdmd = kHNLProdMuon3Nutau;
+		else {
+		  LOG( "HNL", pERROR ) << "Unknown decay channel " << pgname << " for parent with PDG code " << pppdg << " !!! Cannot proceed";
+		  return;
+		}
+		
+		LOG( "HNL", pDEBUG )
+		  << "Found production channel " << utils::hnl::ProdAsString( pdmd );
+		
+		fProdFactors.insert( { pdmd, chanFactors } );
+	      } // loop over params in productionChannel -- all separate components
+	    }
+	  } // loop over production channels for parent
+	}
+      } // loop over all parents
     }
   } // loop over children.
 }
@@ -782,7 +927,7 @@ std::vector<double> BRCalculator::GetDoubleVector(std::string str) const
 {
   // turn string into vector<double>
   // be liberal about separators, users might punctuate for clarity
-  std::vector<std::string> strtokens = genie::utils::str::Split(str," ,;:()[]=");
+  std::vector<std::string> strtokens = genie::utils::str::Split(str," ,;:()[]=\t\n");
   std::vector<double> vect;
   size_t ntok = strtokens.size();
 
