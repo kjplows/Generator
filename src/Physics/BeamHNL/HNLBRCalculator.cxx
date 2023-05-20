@@ -352,8 +352,9 @@ double BRCalculator::DWidth_Global( HNLDecayMode_t hnldm, const double M ) const
       mLow = (*itMass);
       ++itMass;
       mHigh = (*itMass);
-      iMass--;
+      //iMass--;
     }
+    iMass--;
 
     // grab the rates from the appropriate channels
     std::vector< double > chanRates = (*fDecayRates.find( hnldm )).second;
@@ -410,7 +411,7 @@ double BRCalculator::DWidth_SameLepton( const double M, const double Ue42, const
   const double D2Part = bIsMu ? s2w * Umu42 * f2 : s2w * Ue42 * f2;
 
   double cUnsc = preFac * (f1 * BR_C1 + f2 * BR_C2) * 3.0;
-  double dUnsc = preFac * 2.0 * s2w * (f1 + f2);
+  double dUnsc = preFac * s2w * (2.0 * f1 + f2);
   LOG( "HNL", pDEBUG ) << "Same-lepton with isMu ? " << (int) bIsMu << " gives CPart unscaled gamma = "
 		       << cUnsc << " and DPart unscaled gamma = " << dUnsc;
   return preFac * ( C1Part + C2Part + D1Part + D2Part );
