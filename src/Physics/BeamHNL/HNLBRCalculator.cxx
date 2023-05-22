@@ -203,21 +203,23 @@ double BRCalculator::KScale_Global( HNLProd_t hnldm, const double M ) const {
     int iMass = 0;
     double mLow = -1.0, mHigh = -1.0;
     std::vector<double>::iterator itMass = tMasses.begin();
-    while( itMass != tMasses.end() && mHigh <= M ){
+    while( itMass != tMasses.end() && mHigh < M ){
       mLow = mHigh;
       mHigh = (*itMass);
       ++itMass; iMass++;
     }
-    if( itMass == tMasses.end() ){
+    if( itMass == tMasses.end() && mHigh < M ){
+       //itMass == tMasses.end() ){
       // makes no sense to interpolate here. Stick to last mass.
       --itMass;
       std::vector< double > factors = (*fProdFactors.find( hnldm )).second;
       LOG( "HNL", pDEBUG )
 	<< "\nFor channel " << utils::hnl::ProdAsString( hnldm ) << " there is no interpolation: "
-	<< "\n the input mass M = " << M << " GeV > " << (*itMass) << ", which is the last known"
+	<< "\n the input mass M = " << M << " GeV > " << (*itMass) << ", which is the last known "
 	<< "mass. Returning the last point " << factors.at(factors.size()-1);
       return factors.at(factors.size()-1);
     }
+    iMass--;
 
     // grab the factors from the appropriate channels
     std::vector< double > chanFactors = (*fProdFactors.find( hnldm )).second;
