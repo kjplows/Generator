@@ -749,7 +749,6 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
   LOG( "HNL", pDEBUG )
     << "Getting flux input from finpath = " << finpath.c_str();
 
-  // recurse over files in this directory and add to chain
   if(!ctree){
     ctree = new TChain( "dkTree" );
     cmeta = new TChain( "dkMeta" );
@@ -757,23 +756,24 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
 
   if( fPathLoaded ) return;
 
-  TSystemDirectory dir( finpath.c_str(), finpath.c_str() );
-  TList * files = dir.GetListOfFiles(); int nFiles = 0;
-  assert( files );
-  files->Sort();
+  // recurse over files in this directory and add to chain
 
-  TSystemFile * file;
-  TString fname;
-  TIter next(files);
-  
-  while( (file=( TSystemFile * ) next()) && !fPathLoaded ){
-    fname = file->GetName();
-    if( !file->IsDirectory() ){
-      TString fullpath = TString( finpath.c_str() ) + fname;
-      nFiles++;
-      ctree->Add( fullpath );
-      cmeta->Add( fullpath );
-    }
+  std::list<TString> files = this->RecurseOverDir( finpath );
+  assert( files.size() > 0 );
+  int nFiles = 0;
+
+  std::list<TString>::iterator itFiles = files.begin();  
+  while( itFiles != files.end() && !fPathLoaded ){
+    /*
+    TSystemFile * file = (*itFiles);
+    TString fname = file->GetName();
+    TString fullpath = TString( finpath.c_str() ) + fname;
+    */
+    TString fullpath = (*itFiles);
+    nFiles++;
+    ctree->Add( fullpath );
+    cmeta->Add( fullpath );
+    ++itFiles;
   }
 
   if( !ctree ){ LOG( "HNL", pFATAL ) << "Could not open flux tree!"; }
@@ -790,9 +790,74 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
     << "\n got from " << nFiles << " files";
 
   fPathLoaded = true;
+}
+//----------------------------------------------------------------------------
+std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
+{
+  // grabs all the files (that are not directories) from the current dir recursively.
+  
+  LOG( "HNL", pDEBUG ) << "Entering HNLFluxCreator::RecurseOverDir()...";
+  TSystemDirectory topDir( finpath.c_str(), finpath.c_str() );
+  std::list<TString> files; int nFiles = 0;
+  std::list<TString> dirNames;
+  std::list<TObject *> dirs; // this will take all directories that have not been opened yet.
+  dirs.emplace_front( &topDir );
+  dirNames.emplace_front( topDir.GetName() );
 
-  delete file;
-  delete files;
+  LOG( "HNL", pDEBUG )
+    << "Starting to add files to input. Current size is " << dirs.size();
+  
+  while( dirs.size() > 0 ){ // there is still stuff we haven't looked at.
+    int nNow = dirs.size();
+    LOG( "HNL", pDEBUG ) 
+      << "Scanning directory " << dirNames.front() << " with " << nNow << " elements...";
+    
+    // go to first object and get the structure next level down
+    TSystemDirectory * currDir = dynamic_cast<TSystemDirectory *>( dirs.front() );
+    TString dirPath = dirNames.front();
+    
+    // first, strip the first two elements . and ..
+    TList * rootElements = currDir->GetListOfFiles(); rootElements->Sort();
+    LOG( "HNL", pDEBUG )
+      << "Pre-sanitisation, dir structure is...";
+    rootElements->ls();
+    rootElements->Remove( rootElements->First() ); // .
+    rootElements->Remove( rootElements->First() ); // ..
+
+    if( rootElements->GetEntries() == 0 ) continue;
+    else {
+      LOG( "HNL", pDEBUG )
+	<< "Post-sanitisation, dir structure is: ";
+      rootElements->ls();
+    }
+
+    TSystemFile * elem;
+    TIter next(rootElements);
+    TObject * sFile;
+    TIter sNext( rootElements );
+
+    // put all the files in the list, and all the directories in the dirs list.
+    // for names, add the full path (== dirPath + "/" + name of next dir)
+    // TSystemDirectory inherits from TSystemFile
+    while( sFile = sNext() ){
+      TString fullPath = dirPath + "/" + sFile->GetName() ;
+      if( dynamic_cast< TSystemDirectory * >( sFile ) ) {
+	dirs.emplace_back( sFile );
+	dirNames.emplace_back( fullPath );
+	LOG( "HNL", pDEBUG ) 
+	  << "Adding directory " << fullPath.Data() << " to linked list...";
+      } else
+	files.emplace_back( fullPath );
+    }
+
+    dirs.pop_front();
+    dirNames.pop_front();
+  } // while dirs.size() > 0
+  
+  nFiles = files.size();
+  LOG( "HNL", pDEBUG )
+    << "Found " << nFiles << " files in total.";
+  return files;
 }
 //----------------------------------------------------------------------------
 void FluxCreator::InitialiseTree() const

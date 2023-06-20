@@ -34,6 +34,7 @@
 #include <cassert>
 #include <iomanip> // for momentum balance stream
 #include <map>
+#include <list>
 #include <sstream>
 
 // -- ROOT includes
@@ -142,6 +143,7 @@ namespace genie{
 
       // init
       void OpenFluxInput( std::string finpath ) const;
+      std::list<TString> RecurseOverDir( std::string finpath ) const;
       void InitialiseTree() const;
       void InitialiseMeta() const;
 
