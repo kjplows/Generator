@@ -749,7 +749,6 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
   LOG( "HNL", pDEBUG )
     << "Getting flux input from finpath = " << finpath.c_str();
 
-  // recurse over files in this directory and add to chain
   if(!ctree){
     ctree = new TChain( "dkTree" );
     cmeta = new TChain( "dkMeta" );
@@ -757,23 +756,24 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
 
   if( fPathLoaded ) return;
 
-  TSystemDirectory dir( finpath.c_str(), finpath.c_str() );
-  TList * files = dir.GetListOfFiles(); int nFiles = 0;
-  assert( files );
-  files->Sort();
+  // recurse over files in this directory and add to chain
 
-  TSystemFile * file;
-  TString fname;
-  TIter next(files);
-  
-  while( (file=( TSystemFile * ) next()) && !fPathLoaded ){
-    fname = file->GetName();
-    if( !file->IsDirectory() ){
-      TString fullpath = TString( finpath.c_str() ) + fname;
-      nFiles++;
-      ctree->Add( fullpath );
-      cmeta->Add( fullpath );
-    }
+  std::list<TString> files = this->RecurseOverDir( finpath );
+  assert( files.size() > 0 );
+  int nFiles = 0;
+
+  std::list<TString>::iterator itFiles = files.begin();  
+  while( itFiles != files.end() && !fPathLoaded ){
+    /*
+    TSystemFile * file = (*itFiles);
+    TString fname = file->GetName();
+    TString fullpath = TString( finpath.c_str() ) + fname;
+    */
+    TString fullpath = (*itFiles);
+    nFiles++;
+    ctree->Add( fullpath );
+    cmeta->Add( fullpath );
+    ++itFiles;
   }
 
   if( !ctree ){ LOG( "HNL", pFATAL ) << "Could not open flux tree!"; }
@@ -790,9 +790,82 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
     << "\n got from " << nFiles << " files";
 
   fPathLoaded = true;
+}
+//----------------------------------------------------------------------------
+std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
+{
+  // grabs all the files (that are not directories) from the current dir recursively.
+  
+  LOG( "HNL", pDEBUG ) << "Entering HNLFluxCreator::RecurseOverDir()...";
+  TSystemDirectory topDir( finpath.c_str(), finpath.c_str() );
+  std::list<TString> files; int nFiles = 0;
+  std::list<TObject *> dirs; // this will take all directories that have not been opened yet.
+  dirs.emplace_front( &topDir );
 
-  delete file;
-  delete files;
+  LOG( "HNL", pDEBUG )
+    << "Starting to add files to input. Current size is " << dirs.size();
+  
+  while( dirs.size() > 0 ){ // there is still stuff we haven't looked at.
+    int nNow = dirs.size();
+    LOG( "HNL", pDEBUG ) 
+      << "Scanning directory " << (dirs.front())->GetName() << " with " << nNow << " elements...";
+    
+    // go to first object and get the structure next level down
+    TSystemDirectory * currDir = dynamic_cast<TSystemDirectory *>( dirs.front() );
+    TString dirPath = currDir->GetName();
+    dirs.pop_front();
+    
+    // add all directories to dirs
+    TList * rootElements = currDir->GetListOfFiles(); rootElements->Sort();
+    LOG( "HNL", pDEBUG )
+      << "Pre-sanitisation, dir structure is...";
+    rootElements->ls();
+    // remove the first two elements, which are not interesting ( . , .. )
+    rootElements->Remove( rootElements->First() ); // .
+    rootElements->Remove( rootElements->First() ); // ..
+
+    if( rootElements->GetEntries() == 0 ) continue;
+    else {
+      LOG( "HNL", pDEBUG )
+	<< "Post-sanitisation, dir structure is: ";
+      rootElements->ls();
+    }
+    
+    TSystemFile * elem;
+    TIter next(rootElements);
+    std::list<TSystemFile *> elements; // c++11 implementation is more comprehensible
+    TObject * sFile;
+    TIter sNext( rootElements );
+    // TSystemDirectory inherits from TSystemFile
+    while( sFile = sNext() ){
+      if( dynamic_cast< TSystemDirectory * >( sFile ) ) {
+	LOG( "HNL", pDEBUG ) 
+	  << "Adding directory " << sFile->GetName() << " to linked list...";
+	dirs.emplace_front( sFile );
+      } else
+	elements.emplace_back( dynamic_cast< TSystemFile * >( sFile ) );
+    }
+
+    // first add the files (not dirs) of this directory. Then any directories should get added to front.
+    std::list<TSystemFile *>::iterator fNext = elements.begin();
+    TSystemFile * file;
+    TString fname;
+    while( fNext != elements.end() ){
+      file = (*fNext);
+      LOG( "HNL", pDEBUG ) << "Looking at this file: " << file->GetName();
+      fname = file->GetName();
+      TString path = TString( finpath.c_str() ) + "/" + dirPath + "/" + fname;
+      LOG( "HNL", pDEBUG )
+	<< "Adding file " << path << " into list of files...";
+      //files.emplace_back( file ); nFiles++; 
+      files.emplace_back( path ); nFiles++; 
+      ++fNext;
+    }
+  }
+  
+  LOG( "HNL", pDEBUG )
+    << "Found " << nFiles << " files in total.";
+  return files;
 }
 //----------------------------------------------------------------------------
 void FluxCreator::InitialiseTree() const
