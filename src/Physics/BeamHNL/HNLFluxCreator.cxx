@@ -799,8 +799,10 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
   LOG( "HNL", pDEBUG ) << "Entering HNLFluxCreator::RecurseOverDir()...";
   TSystemDirectory topDir( finpath.c_str(), finpath.c_str() );
   std::list<TString> files; int nFiles = 0;
+  std::list<TString> dirNames;
   std::list<TObject *> dirs; // this will take all directories that have not been opened yet.
   dirs.emplace_front( &topDir );
+  dirNames.emplace_front( topDir.GetName() );
 
   LOG( "HNL", pDEBUG )
     << "Starting to add files to input. Current size is " << dirs.size();
@@ -808,19 +810,17 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
   while( dirs.size() > 0 ){ // there is still stuff we haven't looked at.
     int nNow = dirs.size();
     LOG( "HNL", pDEBUG ) 
-      << "Scanning directory " << (dirs.front())->GetName() << " with " << nNow << " elements...";
+      << "Scanning directory " << dirNames.front() << " with " << nNow << " elements...";
     
     // go to first object and get the structure next level down
     TSystemDirectory * currDir = dynamic_cast<TSystemDirectory *>( dirs.front() );
-    TString dirPath = currDir->GetName();
-    dirs.pop_front();
+    TString dirPath = dirNames.front();
     
-    // add all directories to dirs
+    // first, strip the first two elements . and ..
     TList * rootElements = currDir->GetListOfFiles(); rootElements->Sort();
     LOG( "HNL", pDEBUG )
       << "Pre-sanitisation, dir structure is...";
     rootElements->ls();
-    // remove the first two elements, which are not interesting ( . , .. )
     rootElements->Remove( rootElements->First() ); // .
     rootElements->Remove( rootElements->First() ); // ..
 
@@ -830,39 +830,31 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
 	<< "Post-sanitisation, dir structure is: ";
       rootElements->ls();
     }
-    
+
     TSystemFile * elem;
     TIter next(rootElements);
-    std::list<TSystemFile *> elements; // c++11 implementation is more comprehensible
     TObject * sFile;
     TIter sNext( rootElements );
+
+    // put all the files in the list, and all the directories in the dirs list.
+    // for names, add the full path (== dirPath + "/" + name of next dir)
     // TSystemDirectory inherits from TSystemFile
     while( sFile = sNext() ){
+      TString fullPath = dirPath + "/" + sFile->GetName() ;
       if( dynamic_cast< TSystemDirectory * >( sFile ) ) {
+	dirs.emplace_back( sFile );
+	dirNames.emplace_back( fullPath );
 	LOG( "HNL", pDEBUG ) 
-	  << "Adding directory " << sFile->GetName() << " to linked list...";
-	dirs.emplace_front( sFile );
+	  << "Adding directory " << fullPath.Data() << " to linked list...";
       } else
-	elements.emplace_back( dynamic_cast< TSystemFile * >( sFile ) );
+	files.emplace_back( fullPath );
     }
 
-    // first add the files (not dirs) of this directory. Then any directories should get added to front.
-    std::list<TSystemFile *>::iterator fNext = elements.begin();
-    TSystemFile * file;
-    TString fname;
-    while( fNext != elements.end() ){
-      file = (*fNext);
-      LOG( "HNL", pDEBUG ) << "Looking at this file: " << file->GetName();
-      fname = file->GetName();
-      TString path = TString( finpath.c_str() ) + "/" + dirPath + "/" + fname;
-      LOG( "HNL", pDEBUG )
-	<< "Adding file " << path << " into list of files...";
-      //files.emplace_back( file ); nFiles++; 
-      files.emplace_back( path ); nFiles++; 
-      ++fNext;
-    }
-  }
+    dirs.pop_front();
+    dirNames.pop_front();
+  } // while dirs.size() > 0
   
+  nFiles = files.size();
   LOG( "HNL", pDEBUG )
     << "Found " << nFiles << " files in total.";
   return files;
