@@ -134,6 +134,7 @@ string          kDefOptGeomLUnits   = "mm";    // default geometry length units
 string          kDefOptGeomDUnits   = "g_cm3"; // default geometry density units
 NtpMCFormat_t   kDefOptNtpFormat    = kNFGHEP; // default event tree format
 string          kDefOptEvFilePrefix = "gntp";
+string          kDefOptTopVolName   = "TOP";   // default top volume name 
 
 string          kDefOptSName   = "genie::EventGenerator";
 string          kDefOptSConfig = "BeamHNL";
@@ -164,7 +165,7 @@ TGeoManager *    gOptRootGeoManager = 0;                 // the workhorse geomet
 TGeoVolume  *    gOptRootGeoVolume  = 0;
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
-string           gOptRootGeomTopVol = "";                // input geometry top event generation volume
+string           gOptTopVolName = kDefOptTopVolName;     // input geometry top event generation volume
 double           gOptGeomLUnits = 0;                     // input geometry length units
 long int         gOptRanSeed = -1;                       // random number seed
 
@@ -221,11 +222,11 @@ int main(int argc, char ** argv)
       << "The specified ROOT geometry doesn't exist! Initialization failed!";
     exit(1);
   }
-  vtxGen->SetGeomFile( gOptRootGeom );
+  vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
 
-  TGeoVolume * top_volume = gOptRootGeoManager->GetTopVolume();
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
   assert( top_volume );
   __attribute__((unused)) TGeoShape * ts  = top_volume->GetShape();
 
@@ -466,7 +467,7 @@ void InitBoundingBox(void)
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
 
-  TGeoVolume * top_volume = gOptRootGeoManager->GetTopVolume();
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
   assert( top_volume );
   TGeoShape * ts  = top_volume->GetShape();
 
@@ -856,6 +857,16 @@ void GetCommandLineArgs(int argc, char ** argv)
      gOptGeomLUnits = utils::units::UnitFromString(lunits);
      // gOptGeomDUnits = utils::units::UnitFromString(dunits);
 
+     // check for top volume selection
+     if( parser.OptionExists("top_volume") ) {
+       gOptTopVolName = parser.ArgAsString("top_volume");
+       LOG("gevgen_pghnl", pINFO)
+	 << "Using the following volume as top: " << gOptTopVolName;
+     } else {
+       LOG("gevgen_pghnl", pINFO)
+	 << "Using default top_volume name \"" << kDefOptTopVolName << "\"";
+     } // --top_volume
+
   } // using root geom?
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
@@ -886,7 +897,7 @@ void GetCommandLineArgs(int argc, char ** argv)
   if (gOptUsingRootGeom) {
     gminfo << "Using ROOT geometry - file: " << gOptRootGeom
            << ", top volume: "
-           << ((gOptRootGeomTopVol.size()==0) ? "<master volume>" : gOptRootGeomTopVol)
+           << ((gOptTopVolName.size()==0) ? "<master volume>" : gOptTopVolName)
            << ", length  units: " << lunits;
            // << ", density units: " << dunits;
   }

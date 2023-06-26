@@ -51,8 +51,10 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
     
     gGeoManager = TGeoManager::Import( fGeomFile.c_str() );
     
-    TGeoVolume * top_volume = gGeoManager->GetTopVolume();
+    LOG( "HNL", pDEBUG ) << "Using volume \"" << fTopVolume << "\" as top volume...";
+    TGeoVolume * top_volume = gGeoManager->GetVolume( fTopVolume.c_str() );
     assert( top_volume );
+    gGeoManager->SetTopVolume(top_volume);
     TGeoShape * ts = top_volume->GetShape();
     TGeoBBox * box = (TGeoBBox *) ts;
     
@@ -1376,12 +1378,12 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
     //double ux = rx - ox, uy = ry - oy, uz = rz - oz;
 
     LOG( "HNL", pDEBUG )
-      << "\nChecking point " << utils::print::Vec3AsString(&checkPoint) << " [m, user]";
+      << "\nChecking point " << utils::print::Vec3AsString(&checkPoint) << " [cm, user]";
 
     // check if the point is inside the geometry, otherwise do it again
     std::string pathString = this->CheckGeomPoint( ux, uy, uz ); int iNode = 1; // 1 past beginning
     int iBad = 0;
-    while( pathString.find( "/", iNode ) == string::npos && iBad < 10 ){
+    while( pathString.find( fTopVolume.c_str(), iNode ) == string::npos && iBad < 10 ){
       rx = (rnd->RndGen()).Uniform( -fLx/2.0, fLx/2.0 ); ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
       ry = (rnd->RndGen()).Uniform( -fLy/2.0, fLy/2.0 ); uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
       rz = (rnd->RndGen()).Uniform( -fLz/2.0, fLz/2.0 ); uz = (rz + fDetOffset.at(2)) * units::m / units::cm;
@@ -1389,7 +1391,8 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
       pathString = this->CheckGeomPoint( ux, uy, uz ); iNode = 1;
       iBad++;
     }
-    assert( pathString.find( "/", iNode ) != string::npos );
+    LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
+    assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos );
   }
 
   // turn u back into [m] from [cm]
@@ -1625,7 +1628,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 
   // first check that detStartPoint is not already in the detector! If it is, we should flag this now.
   std::string detPathString = this->CheckGeomPoint( detStartPoint.X(), detStartPoint.Y(), detStartPoint.Z() ); int iDNode = 1; // 1 past beginning
-  bool startsInsideDet = ( detPathString.find("/", iDNode) != string::npos );
+  bool startsInsideDet = ( detPathString.find(fTopVolume.c_str(), iDNode) != string::npos );
 
   TLorentzVector detPpar_4v( detPpar.X(), detPpar.Y(), detPpar.Z(), p4par.E() );
   
@@ -1674,7 +1677,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 				  currz + largeStep * curdz );
 
     /* // this is the very correct, very slow way of doing it
-    while( detPathString.find("/", iDNode) != string::npos ){
+    while( detPathString.find(fTopVolume.c_str(), iDNode) != string::npos ){
       gGeoManager->SetCurrentPoint( (gGeoManager->GetCurrentPoint())[0] + (gGeoManager->GetCurrentDirection())[0] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[1] + (gGeoManager->GetCurrentDirection())[1] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[2] + (gGeoManager->GetCurrentDirection())[2] * sStepSize );
@@ -1715,7 +1718,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 				  currz + largeStep * curdz );
 
     /* // slow but correct
-    while( detPathString.find("/", iDNode) == string::npos ){
+    while( detPathString.find(fTopVolume.c_str(), iDNode) == string::npos ){
       gGeoManager->SetCurrentPoint( (gGeoManager->GetCurrentPoint())[0] + (gGeoManager->GetCurrentDirection())[0] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[1] + (gGeoManager->GetCurrentDirection())[1] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[2] + (gGeoManager->GetCurrentDirection())[2] * sStepSize );
@@ -1747,7 +1750,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
     gGeoManager->SetCurrentPoint( -currx, -curry, -currz );
 
     /* // slow but correct
-    while( detPathString.find("/", iDNode) != string::npos ){
+    while( detPathString.find(fTopVolume.c_str(), iDNode) != string::npos ){
       gGeoManager->SetCurrentPoint( (gGeoManager->GetCurrentPoint())[0] + (gGeoManager->GetCurrentDirection())[0] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[1] + (gGeoManager->GetCurrentDirection())[1] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[2] + (gGeoManager->GetCurrentDirection())[2] * sStepSize );
@@ -2172,10 +2175,11 @@ void FluxCreator::LoadConfig(void)
   fIsConfigLoaded = true;
 }
 //____________________________________________________________________________
-void FluxCreator::SetGeomFile( string geomfile ) const
+void FluxCreator::SetGeomFile( string geomfile, string topVolume ) const
 {
   LOG( "HNL", pDEBUG ) << "Setting geometry file to " << geomfile;
   fGeomFile = geomfile;
+  fTopVolume = topVolume;
 }
 //____________________________________________________________________________
 void FluxCreator::SetFirstFluxEntry( int iFirst ) const

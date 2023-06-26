@@ -42,7 +42,7 @@ namespace genie {
 
       virtual void ProcessEventRecord(GHepRecord * event_rec) const = 0;
 
-      virtual void SetGeomFile( std::string geomfile ) const = 0;
+      virtual void SetGeomFile( std::string geomfile, std::string topVolume ) const = 0;
 
     protected:
 

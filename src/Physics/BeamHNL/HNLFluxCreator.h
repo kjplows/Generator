@@ -112,7 +112,7 @@ namespace genie{
       // set the input path for a flux
       void SetInputFluxPath( std::string finpath ) const;
       // set path to geometry file
-      void SetGeomFile( string geomfile ) const;
+      void SetGeomFile( string geomfile, string topVolume ) const;
       // get N(flux input entries)
       int GetNFluxEntries() const;
       // set first entry for read-in from chain
@@ -198,6 +198,7 @@ namespace genie{
       mutable bool isParentOnAxis = true;
       mutable TGeoVolume * fTopVol = 0;
       mutable string fGeomFile = "";
+      mutable string fTopVolume = "";
       mutable bool fIsUsingRootGeom = false;
 
       mutable TChain * ctree = 0, * cmeta = 0;

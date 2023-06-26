@@ -17,6 +17,7 @@
 		   [-g geometry (ROOT file)]
                    [-L geometry_length_units]
                    [-o output_event_file_prefix]
+		   [--top_volume top_volume_name]
                    [--seed random_number_seed]
                    [--message-thresholds xml_file]
                    [--event-record-print-level level]
@@ -54,6 +55,8 @@
               The default output filename is:
               gntp.[run_number].ghep.root
               This cmd line arguments lets you override 'gntp'
+	   --top_volume
+	      Sets the top volume to be used for event generation.
            --seed
               Random number seed.
 
@@ -153,6 +156,7 @@ string          kDefOptGeomDUnits   = "g_cm3"; // default geometry density units
 NtpMCFormat_t   kDefOptNtpFormat    = kNFGHEP; // default event tree format
 string          kDefOptEvFilePrefix = "gntp";
 string          kDefOptFluxFilePath = "./input-flux.root";
+string          kDefOptTopVolName   = "TOP"; // default top volume name 
 
 string          kDefOptSName   = "genie::EventGenerator";
 string          kDefOptSConfig = "BeamHNL";
@@ -182,6 +186,7 @@ HNLDecayMode_t   gOptDecayMode    = kHNLDcyNull;         // HNL decay mode
 std::vector< HNLDecayMode_t > gOptIntChannels;           // decays to un-inhibit
 
 string           gOptEvFilePrefix = kDefOptEvFilePrefix; // event file prefix
+
 bool             gOptUsingRootGeom = false;              // using root geom or target mix?
 string           gOptRootGeom;                           // input ROOT file with realistic detector geometry
 
@@ -190,7 +195,7 @@ TGeoManager *    gOptRootGeoManager = 0;                 // the workhorse geomet
 TGeoVolume  *    gOptRootGeoVolume  = 0;
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
-string           gOptRootGeomTopVol = "";                // input geometry top event generation volume
+string           gOptTopVolName = kDefOptTopVolName;     // input geometry top event generation volume
 double           gOptGeomLUnits = 0;                     // input geometry length units
 long int         gOptRanSeed = -1;                       // random number seed
 
@@ -322,9 +327,9 @@ int main(int argc, char ** argv)
   int iflux = (gOptFirstEvent < 0) ? 0 : gOptFirstEvent; int ievent = iflux;
   int maxFluxEntries = -1;
   fluxCreator->SetInputFluxPath( gOptFluxFilePath );
-  fluxCreator->SetGeomFile( gOptRootGeom );
+  fluxCreator->SetGeomFile( gOptRootGeom, gOptTopVolName );
   fluxCreator->SetFirstFluxEntry( iflux );
-  vtxGen->SetGeomFile( gOptRootGeom );
+  vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
   
   bool tooManyEntries = false;
   while (1)
@@ -370,6 +375,7 @@ int main(int argc, char ** argv)
       << " *** Generating event............ " << (ievent-gOptFirstEvent);
     
     EventRecord * event = new EventRecord;
+    FluxContainer retGnmf;
     event->SetWeight(1.0);
     event->SetProbability( CoMLifetime );
     event->SetXSec( iflux ); // will be overridden, use as handy container
@@ -393,12 +399,13 @@ int main(int argc, char ** argv)
 	 break;
        }
        
-       FluxContainer retGnmf = fluxCreator->RetrieveFluxInfo();
+       retGnmf = fluxCreator->RetrieveFluxInfo();
        FillFlux( gnmf, retGnmf );
        
        // check to see if this was nonsense
        if( ! event->Particle(0) ){ iflux++; delete event; continue; }
        
+       // add position to generate in the event record for now
        gOptEnergyHNL = event->Particle(0)->GetP4()->E();
        iflux++;
      } else { // monoenergetic HNL. Add it with energy and momentum pointing on z axis
@@ -454,6 +461,11 @@ int main(int argc, char ** argv)
 
      // Simulate decay
      hnlgen->ProcessEventRecord(event);
+     
+     // for now, set the X4() of Particle(1) to be the point at which the flux needs to go.
+     event->Particle(1)->SetPosition( retGnmf.targetPointUser.X(), 
+				      retGnmf.targetPointUser.Y(),
+				      retGnmf.targetPointUser.Z(), 0.0 );
 
      // add the FS 4-momenta to special branches
      // Quite inelegant. Gets the job done, though
@@ -593,7 +605,7 @@ void InitBoundingBox(void)
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
 
-  TGeoVolume * top_volume = gOptRootGeoManager->GetTopVolume();
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
   assert( top_volume );
   TGeoShape * ts  = top_volume->GetShape();
 
@@ -995,34 +1007,44 @@ void GetCommandLineArgs(int argc, char ** argv)
 
      // length units:
      if( parser.OptionExists('L') ) {
-        LOG("gevgen_hnl", pDEBUG)
+        LOG("gevgen_hnl", pINFO)
            << "Checking for input geometry length units";
         lunits = parser.ArgAsString('L');
      } else {
-        LOG("gevgen_hnl", pDEBUG) << "Using default geometry length units";
+        LOG("gevgen_hnl", pINFO) << "Using default geometry length units";
         lunits = kDefOptGeomLUnits;
      } // -L
      // // density units:
      // if( parser.OptionExists('D') ) {
-     //    LOG("gevgen_hnl", pDEBUG)
+     //    LOG("gevgen_hnl", pINFO)
      //       << "Checking for input geometry density units";
      //    dunits = parser.ArgAsString('D');
      // } else {
-     //    LOG("gevgen_hnl", pDEBUG) << "Using default geometry density units";
+     //    LOG("gevgen_hnl", pINFO) << "Using default geometry density units";
      //    dunits = kDefOptGeomDUnits;
      // } // -D
      gOptGeomLUnits = utils::units::UnitFromString(lunits);
      // gOptGeomDUnits = utils::units::UnitFromString(dunits);
+
+     // check for top volume selection
+     if( parser.OptionExists("top_volume") ) {
+       gOptTopVolName = parser.ArgAsString("top_volume");
+       LOG("gevgen_hnl", pINFO)
+	 << "Using the following volume as top: " << gOptTopVolName;
+     } else {
+       LOG("gevgen_hnl", pINFO)
+	 << "Using default top_volume name \"" << kDefOptTopVolName << "\"";
+     } // --top_volume
 
   } // using root geom?
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
   // event file prefix
   if( parser.OptionExists('o') ) {
-    LOG("gevgen_hnl", pDEBUG) << "Reading the event filename prefix";
+    LOG("gevgen_hnl", pINFO) << "Reading the event filename prefix";
     gOptEvFilePrefix = parser.ArgAsString('o');
   } else {
-    LOG("gevgen_hnl", pDEBUG)
+    LOG("gevgen_hnl", pINFO)
       << "Will set the default event filename prefix";
     gOptEvFilePrefix = kDefOptEvFilePrefix;
   } //-o
@@ -1044,7 +1066,7 @@ void GetCommandLineArgs(int argc, char ** argv)
   if (gOptUsingRootGeom) {
     gminfo << "Using ROOT geometry - file: " << gOptRootGeom
            << ", top volume: "
-           << ((gOptRootGeomTopVol.size()==0) ? "<master volume>" : gOptRootGeomTopVol)
+           << ((gOptTopVolName.size()==0) ? "<master volume>" : gOptTopVolName)
            << ", length  units: " << lunits;
            // << ", density units: " << dunits;
   }

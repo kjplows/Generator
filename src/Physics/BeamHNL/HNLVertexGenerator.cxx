@@ -55,8 +55,9 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 
     fGeoManager = TGeoManager::Import(fGeomFile.c_str());
     
-    TGeoVolume * top_volume = fGeoManager->GetTopVolume();
+    TGeoVolume * top_volume = fGeoManager->GetVolume(fTopVolume.c_str());
     assert( top_volume );
+    fGeoManager->SetTopVolume( top_volume );
     TGeoShape * ts = top_volume->GetShape();
     TGeoBBox * box = (TGeoBBox *) ts;
     
@@ -456,11 +457,21 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
 			 x4HNL->T() ); // USER, mm ns
   }
 
-  TVector3 startPoint( xMult * x4HNL_user->X(), xMult * x4HNL_user->Y(), xMult * x4HNL_user->Z() ); // USER mm
+  // set starting point for calculations. Where would the flux go?
+  TLorentzVector * x4Flux = 0;
+  if( !isParticleGun ){
+    x4Flux = event_rec->Particle(1)->GetX4(); // USER, m
+    x4Flux->SetXYZT( x4Flux->X() * units::m / units::cm,
+		     x4Flux->Y() * units::m / units::cm,
+		     x4Flux->Z() * units::m / units::cm, 0.0 ); // USER, cm
+  } else {
+    x4Flux = x4HNL_user;
+  }
+  TVector3 startPoint( xMult * x4Flux->X(), xMult * x4Flux->Y(), xMult * x4Flux->Z() ); // USER mm
 
   LOG( "HNL", pDEBUG )
     << "\nx4HNL_user = " << utils::print::X4AsString( x4HNL_user ) << " [mm]"
-    << "\nstartPoint = " << utils::print::Vec3AsString( &startPoint );
+    << "\nstartPoint = " << utils::print::Vec3AsString( &startPoint ) << " [mm]";
 
   double mtomm = units::m / units::mm;
   
@@ -481,6 +492,7 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
 {
   const double mmtolunits = units::mm / lunits;
 
+  // setup initial quantities
   double sx = startPoint.X(); double sy = startPoint.Y(); double sz = startPoint.Z();
   sx *= mmtolunits; sy *= mmtolunits; sz *= mmtolunits;
   double px = momentum.X(); double py = momentum.Y(); double pz = momentum.Z();
@@ -491,178 +503,114 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   fSxROOT = fSx * lunits / units::cm; fSyROOT = fSy * lunits / units::cm; fSzROOT = fSz * lunits / units::cm;
   fPx = px; fPy = py; fPz = pz;
 
-  // put first point slightly inside the bounding box
-  double firstZOffset = -0.1; // cm
-  firstZOffset *= units::cm / lunits;
-
-  double firstZ = fOz - (fLz/2.0 - firstZOffset);
-
-  // now find which point the line would hit this z at
-  double dz = firstZ - sz;
-  double tz = dz / pz;
-  double dx = tz * px;
-  double dy = tz * py;
-  double firstX = sx + dx;
-  double firstY = sy + dy;
-
-  // now we gotta return everything to cm for ROOT to work its magic.
-  double firstXROOT = firstX * lunits / units::cm,
-    firstYROOT = firstY * lunits / units::cm, firstZROOT = firstZ * lunits / units::cm;
-  
-  if( !gGeoManager )
-    TGeoManager * gm = TGeoManager::Import(fGeomFile.c_str());
-  gGeoManager->SetCurrentPoint( firstXROOT, firstYROOT, firstZROOT );
-  gGeoManager->SetCurrentDirection( px, py, pz );
-
-  LOG( "HNL", pINFO )
-    << "\nCurrent point     is: ( " << firstX << ", " << firstY << ", " << firstZ << " ) [" << lunitString.c_str() << "]"
-    << "\nFrom start point    : ( " << sx << ", " << sy << ", " << sz << " ) [" << lunitString.c_str() << "]"
-    << "\nIn ROOT, current is : ( " << firstXROOT << ", " << firstYROOT << ", " << firstZROOT << " ) [cm]"
-    << "\nIn ROOT, start is   : ( " << fSxROOT << ", " << fSyROOT << ", " << fSzROOT << " ) [cm]"
-    << "\nCurrent direction is: ( " << px << ", " << py << ", " << pz << " ) [GeV/GeV]";
-
-  std::string pathString = this->CheckGeomPoint( firstXROOT, firstYROOT, firstZROOT );
-
-  assert( pathString.find("/", 1) == string::npos ); // need to be in TOP volume but outside any other volume so we can enter this.
-
-  double stepmax = 1.0e+6; // cm 
-  stepmax *= genie::units::cm / lunits;
-
-  LOG( "HNL", pDEBUG )
-    << "Starting to search for intersections...";
-  
-  // enter the volume.
-  TGeoNode * nextNode = gGeoManager->FindNextBoundaryAndStep( stepmax );
-  
-  if( (gGeoManager->GetCurrentPoint())[0] == firstXROOT && 
-      (gGeoManager->GetCurrentPoint())[1] == firstYROOT && 
-      (gGeoManager->GetCurrentPoint())[2] == firstZROOT )
-    nextNode = gGeoManager->FindNextBoundaryAndStep();
-
-  pathString = this->CheckGeomPoint( (gGeoManager->GetCurrentPoint())[0], 
-				     (gGeoManager->GetCurrentPoint())[1], 
-				     (gGeoManager->GetCurrentPoint())[2] );
-
-  LOG( "HNL", pDEBUG )
-    << "Current point is ( " << (gGeoManager->GetCurrentPoint())[0] << ", "
-    << (gGeoManager->GetCurrentPoint())[1] << ", "
-    << (gGeoManager->GetCurrentPoint())[2] << " ), and current direction is ( "
-    << (gGeoManager->GetCurrentDirection())[0] << ", " 
-    << (gGeoManager->GetCurrentDirection())[1] << ", " 
-    << (gGeoManager->GetCurrentDirection())[2] << " )"; 
-
-  if( nextNode == NULL )
-    return false; 
+  double firstXROOT = fSxROOT, firstYROOT = fSyROOT, firstZROOT = fSzROOT;
 
   TVector3 dumori(0.0, 0.0, 0.0);
 
-  // entered the detector, let's save this point
+  // we will demand that this is inside the required geometry.
+  gGeoManager->SetCurrentPoint( firstXROOT, firstYROOT, firstZROOT );
+  gGeoManager->SetCurrentDirection( px, py, pz );
+  
+  LOG( "HNL", pINFO )
+    << "Starting to figure out entrances:"
+    << "\nStarting point is ( " << fSx << ", " << fSy << ", " << fSz << " ) [ " << lunitString.c_str() << " ]"
+    << "\nStarting dirn  is ( " << fPx << ", " << fPy << ", " << fPz << " ) ";
+
+  std::string pathString = this->CheckGeomPoint( firstXROOT, firstYROOT, firstZROOT );
+  LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
+
+  LOG( "HNL", pDEBUG ) << "Starting to search for intersections...";
+
+  // we are inside the top volume. We want to exit it twice, once going backwards and once forwards.
+  // The track enters in the former point and exits in the latter.
+
+  // -- Entry point
+  gGeoManager->SetCurrentPoint( firstXROOT, firstYROOT, firstZROOT );
+  gGeoManager->SetCurrentDirection( -px, -py, -pz );
+
+  pathString = this->CheckGeomPoint( (gGeoManager->GetCurrentPoint())[0],
+				     (gGeoManager->GetCurrentPoint())[1],
+				     (gGeoManager->GetCurrentPoint())[2] );
+
+  entryPoint.SetXYZ( firstXROOT, firstYROOT, firstZROOT );
+  const double smallStep = std::max( 0.1, 1.0e-3 * std::min( fLxROOT, std::min( fLyROOT, fLzROOT ) ) ); // cm --> have mm precision
+  while( pathString.find( fTopVolume.c_str() ) != string::npos ){
+    double newX = entryPoint.X() + (gGeoManager->GetCurrentDirection())[0] * smallStep;
+    double newY = entryPoint.Y() + (gGeoManager->GetCurrentDirection())[1] * smallStep;
+    double newZ = entryPoint.Z() + (gGeoManager->GetCurrentDirection())[2] * smallStep;
+
+    pathString = this->CheckGeomPoint( newX, newY, newZ );
+    if( pathString.find( fTopVolume.c_str() ) != string::npos )
+      entryPoint.SetXYZ( newX, newY, newZ );
+  } // exit out
+
+  // Let's save this point
   fEx = ( gGeoManager->GetCurrentPoint() )[0] * genie::units::cm / lunits;
   fEy = ( gGeoManager->GetCurrentPoint() )[1] * genie::units::cm / lunits;
   fEz = ( gGeoManager->GetCurrentPoint() )[2] * genie::units::cm / lunits;
-  entryPoint.SetXYZ( fEx, fEy, fEz );
 
   fExROOT = ( gGeoManager->GetCurrentPoint() )[0];
   fEyROOT = ( gGeoManager->GetCurrentPoint() )[1];
   fEzROOT = ( gGeoManager->GetCurrentPoint() )[2];
 
-  LOG( "HNL", pDEBUG )
-    << "Current point is ( " << (gGeoManager->GetCurrentPoint())[0] << ", "
-    << (gGeoManager->GetCurrentPoint())[1] << ", "
-    << (gGeoManager->GetCurrentPoint())[2] << " ), and current direction is ( "
-    << (gGeoManager->GetCurrentDirection())[0] << ", " 
-    << (gGeoManager->GetCurrentDirection())[1] << ", " 
-    << (gGeoManager->GetCurrentDirection())[2] << " )"; 
-
-  TVector3 entryPoint_user( fExROOT * units::cm / units::m, 
-			    fEyROOT * units::cm / units::m, 
+  TVector3 entryPoint_user( fExROOT * units::cm / units::m,
+			    fEyROOT * units::cm / units::m,
 			    fEzROOT * units::cm / units::m ); // USER, m
+
   TVector3 entryPoint_near = this->ApplyUserRotation( entryPoint_user, dumori, fDetRotation, true );
   entryPoint_near.SetXYZ( entryPoint_near.X() + (fCx + fDetTranslation.at(0)),
 			  entryPoint_near.Y() + (fCy + fDetTranslation.at(1)),
 			  entryPoint_near.Z() + (fCz + fDetTranslation.at(2)) );
 
-  /*
   LOG( "HNL", pDEBUG )
     << "\nEntry point found at ( " << fEx << ", " << fEy << ", " << fEz << " ) [" << lunitString.c_str() << "]"
     << "\nIn ROOT, entry at    ( " << fExROOT << ", " << fEyROOT << ", " << fEzROOT << " ) [cm]"; 
-  */
 
-  // now propagate until we exit again
-  
-  int bdIdx = 0;
-  const int bdIdxMax = 1e+4;
+  // now go back to the beginning, reset the direction to go forwards, and try again.
+  gGeoManager->SetCurrentPoint( firstXROOT, firstYROOT, firstZROOT );
+  gGeoManager->SetCurrentDirection( px, py, pz );
 
-  double sfx = 0.0, sfy = 0.0, sfz = 0.0; // coords of the "safe" points in user units
-  double sfxROOT = 0.0, sfyROOT = 0.0, sfzROOT = 0.0; // same, in cm
+  pathString = this->CheckGeomPoint( (gGeoManager->GetCurrentPoint())[0],
+				     (gGeoManager->GetCurrentPoint())[1],
+				     (gGeoManager->GetCurrentPoint())[2] );
 
-  // do one big step first
-  // then if not outside yet, step by ever smaller steps until some threshold
-  Double_t sNext = std::min( std::max( fLx, std::max( fLy, fLz ) ), 10.0 * lunits / units::cm ) / 2.0;
-  Double_t sNextROOT = sNext * lunits / units::cm;
-  gGeoManager->SetStep( sNextROOT );
-  gGeoManager->Step();
-  
-  // FindNextBoundaryAndStep() sets step size to distance to next boundary and executes that step
-  // so one "step" here is actually one big step + one small step
-  while( gGeoManager->FindNextBoundaryAndStep() && bdIdx < bdIdxMax ){
-    const Double_t * currPoint = gGeoManager->GetCurrentPoint();
+  // -- Exit point
 
-    sfxROOT = currPoint[0]; sfyROOT = currPoint[1]; sfzROOT = currPoint[2];
-    if( sNextROOT >= 2.0 * lunits / units::cm ) sNextROOT *= 0.5;
-    gGeoManager->SetStep( sNextROOT );
-    gGeoManager->Step();
-    bdIdx++;
-  }
-  if( bdIdx == bdIdxMax ){
-    LOG( "HNL", pWARN )
-      << "Failed to exit this volume. Dropping this trajectory.";
-    return false;
-  }
+  exitPoint.SetXYZ( firstXROOT, firstYROOT, firstZROOT );
+  pathString = this->CheckGeomPoint( (gGeoManager->GetCurrentPoint())[0],
+				     (gGeoManager->GetCurrentPoint())[1],
+				     (gGeoManager->GetCurrentPoint())[2] );
+  while( pathString.find( fTopVolume.c_str() ) != string::npos ){
+    double newX = exitPoint.X() + (gGeoManager->GetCurrentDirection())[0] * smallStep;
+    double newY = exitPoint.Y() + (gGeoManager->GetCurrentDirection())[1] * smallStep;
+    double newZ = exitPoint.Z() + (gGeoManager->GetCurrentDirection())[2] * smallStep;
 
-  // guard against small detectors
-  if( ( sfxROOT == 0.0 && sfyROOT == 0.0 && sfzROOT == 0.0 ) ||
-      ( sfxROOT == fExROOT && sfyROOT == fEyROOT && sfzROOT == fEzROOT ) ){
-    // set this to go 5 cm after the start.
-    LOG( "HNL", pWARN )
-      << "This section is smaller than 5 cm. Are you sure you want this decay volume? Proceeding anyway.";
-    gGeoManager->SetCurrentPoint( fExROOT, fEyROOT, fEzROOT );
-    gGeoManager->SetStep( 5.0 ); // ROOT units are cm!
-    gGeoManager->Step();
-    const Double_t * currPoint = gGeoManager->GetCurrentPoint();
-    sfxROOT = currPoint[0]; sfyROOT = currPoint[1]; sfzROOT = currPoint[2];
-  }
-  
-  sfx = sfxROOT * units::cm / lunits; sfy = sfyROOT * units::cm / lunits; sfz = sfzROOT * units::cm / lunits;
+    pathString = this->CheckGeomPoint( newX, newY, newZ );
+    if( pathString.find( fTopVolume.c_str() ) != string::npos )
+      exitPoint.SetXYZ( newX, newY, newZ );
+  } // exit out
 
-  // exited the detector, let's save this point
-  fXx = sfx; fXxROOT = sfxROOT;
-  fXy = sfy; fXyROOT = sfyROOT;
-  fXz = sfz; fXzROOT = sfzROOT;
-  exitPoint.SetXYZ( fXx, fXy, fXz );
+  // Let's save this point
+  fXx = ( gGeoManager->GetCurrentPoint() )[0] * genie::units::cm / lunits;
+  fXy = ( gGeoManager->GetCurrentPoint() )[1] * genie::units::cm / lunits;
+  fXz = ( gGeoManager->GetCurrentPoint() )[2] * genie::units::cm / lunits;
 
-  TVector3 exitPoint_user( fXxROOT * units::cm / units::m, 
-			   fXyROOT * units::cm / units::m, 
+  fXxROOT = ( gGeoManager->GetCurrentPoint() )[0];
+  fXyROOT = ( gGeoManager->GetCurrentPoint() )[1];
+  fXzROOT = ( gGeoManager->GetCurrentPoint() )[2];
+
+  TVector3 exitPoint_user( fXxROOT * units::cm / units::m,
+			   fXyROOT * units::cm / units::m,
 			   fXzROOT * units::cm / units::m ); // USER, m
+
   TVector3 exitPoint_near = this->ApplyUserRotation( exitPoint_user, dumori, fDetRotation, true );
   exitPoint_near.SetXYZ( exitPoint_near.X() + (fCx + fDetTranslation.at(0)),
 			 exitPoint_near.Y() + (fCy + fDetTranslation.at(1)),
 			 exitPoint_near.Z() + (fCz + fDetTranslation.at(2)) );
 
   LOG( "HNL", pDEBUG )
-    << "Current point is ( " << (gGeoManager->GetCurrentPoint())[0] << ", "
-    << (gGeoManager->GetCurrentPoint())[1] << ", "
-    << (gGeoManager->GetCurrentPoint())[2] << " ), and current direction is ( "
-    << (gGeoManager->GetCurrentDirection())[0] << ", " 
-    << (gGeoManager->GetCurrentDirection())[1] << ", " 
-    << (gGeoManager->GetCurrentDirection())[2] << " )"; 
-
-  /*
-  LOG( "HNL", pINFO )
-    << "\nExit point found at ( " << fXx << ", " << fXy << ", " << fXz << " ) ["
-    << lunitString.c_str() << "]"
+    << "\nExit point found at ( " << fXx << ", " << fXy << ", " << fXz << " ) [" << lunitString.c_str() << "]"
     << "\nIn ROOT, exit at    ( " << fXxROOT << ", " << fXyROOT << ", " << fXzROOT << " ) [cm]"; 
-  */
 
   return true;
   
@@ -763,9 +711,10 @@ TVector3 VertexGenerator::ApplyUserRotation( TVector3 vec, TVector3 oriVec, std:
   return nvec;
 }
 //____________________________________________________________________________
-void VertexGenerator::SetGeomFile( string geomfile ) const
+void VertexGenerator::SetGeomFile( string geomfile, string topVolume ) const
 {
   fGeomFile = geomfile;
+  fTopVolume = topVolume;
 }
 //____________________________________________________________________________
 std::string VertexGenerator::CheckGeomPoint( Double_t x, Double_t y, Double_t z ) const
@@ -775,7 +724,7 @@ std::string VertexGenerator::CheckGeomPoint( Double_t x, Double_t y, Double_t z 
   point[0] = x;
   point[1] = y;
   point[2] = z;
-  TGeoVolume *vol = gGeoManager->GetTopVolume();
+  TGeoVolume *vol = gGeoManager->GetVolume(fTopVolume.c_str()); //gGeoManager->GetTopVolume();
   TGeoNode *node = gGeoManager->FindNode(point[0], point[1], point[2]);
   gGeoManager->MasterToLocal(point, local);
   return gGeoManager->GetPath();

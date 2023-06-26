@@ -64,7 +64,7 @@ namespace hnl {
     void Configure(const Registry & config);
     void Configure(string config);
 
-    void SetGeomFile( std::string geomfile ) const;
+    void SetGeomFile( std::string geomfile, std::string topVolume ) const;
 
   private:
 
@@ -156,6 +156,7 @@ namespace hnl {
     mutable double kNewSpeedOfLight = genie::units::kSpeedOfLight * ( genie::units::m / lunits ) / ( genie::units::s / tunits );
 
     mutable string fGeomFile = "";
+    mutable string fTopVolume = "";
     mutable TGeoManager * fGeoManager = 0;
     mutable TGeoVolume * fGeoVolume = 0;
     
