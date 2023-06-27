@@ -151,12 +151,6 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   // update the weight
   event_rec->SetWeight( event_rec->Weight() * weight );
 
-  LOG( "HNL", pDEBUG ) 
-    << "BEFORE decay point dump, we have:"
-    << "\nEntry point: " << utils::print::Vec3AsString( &entryPoint ) << " [mm]"
-    << "\nMomentum: " << utils::print::Vec3AsString( &momentum ) << " [GeV]"
-    << "\nTravel length: " << elapsed_length << " [mm]";
-
   TVector3 decayPoint = this->GetDecayPoint( elapsed_length, entryPoint, momentum ); // USER, mm
 
   // write out vtx in [m, ns]
@@ -255,6 +249,7 @@ double VertexGenerator::CalcTravelLength( double betaMag, double CoMLifetime, do
   double elapsed_time = rest_time * gamma;
   double elapsed_length = elapsed_time * betaMag * kNewSpeedOfLight;
 
+  /*
   LOG( "HNL", pDEBUG )
     << "\nbetaMag, maxLength, CoMLifetime = " << betaMag << ", " << maxLength << ", " << CoMLifetime
     << "\nbetaMag = " << betaMag << " ==> gamma = " << gamma
@@ -265,6 +260,7 @@ double VertexGenerator::CalcTravelLength( double betaMag, double CoMLifetime, do
     << " ==> elapsed_time [" << tunitString.c_str()
     << "] = " << elapsed_time << " ==> elapsed_length [" << lunitString.c_str()
     << "] = " << elapsed_length;
+  */
 
   return elapsed_length;
 }
@@ -285,12 +281,6 @@ TVector3 VertexGenerator::GetDecayPoint( double travelLength, TVector3 & entryPo
   fDzROOT = fDz * lunits / units::cm;
 
   TVector3 decayPoint( dx, dy, dz );
-  LOG( "HNL", pDEBUG )
-    << "Dumping info on decay point:"
-    << "\nEntry point is " << utils::print::Vec3AsString( &entryPoint ) << " [mm]"
-    << "\nDirection is ( " << px << ", " << py << ", " << pz << " ) [GeV/GeV]"
-    << "\nTravel length is " << travelLength << " [mm]"
-    << "\n==> decay point is " << utils::print::Vec3AsString( &decayPoint ) << " [mm]";
   return decayPoint;
 }
 //____________________________________________________________________________
@@ -446,8 +436,10 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
   isParticleGun = (event_rec->Particle(0)->FirstMother() < -1); // hack
   isUsingRootGeom = true;
 
+  /*
   LOG( "HNL", pDEBUG ) << "isParticleGun = " << (int) isParticleGun
 		       << " with first mother " << event_rec->Particle(0)->FirstMother();
+  */
 
   //uMult = ( isUsingDk2nu ) ? units::m / units::mm : units::cm / units::mm;
   //uMult = units::m / units::mm;
