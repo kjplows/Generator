@@ -214,8 +214,9 @@ namespace genie{
 
       mutable std::vector< double > fB2UTranslation, fB2URotation;
       mutable std::vector< double > fDetRotation; // rotation of detector wrt tgt hall
-      mutable std::vector< double > fDetOffset; // offset of det centre wrt geom file origin
+      mutable std::vector< double > fDetOffset; // offset of det centre wrt geom file origin [m]
       mutable double fCx, fCy, fCz;   // BBox centre wrt HNL prod [m]
+      mutable double fTx, fTy, fTz;   // translation of volume wrt top volume origin [m]
       mutable double fAx1, fAz, fAx2; // Euler angles, extrinsic x-z-x. Tgt-hall to beam
       mutable double fBx1, fBz, fBx2; // Tgt-hall to detector frame
 

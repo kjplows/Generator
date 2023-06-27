@@ -52,8 +52,22 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
     gGeoManager = TGeoManager::Import( fGeomFile.c_str() );
     
     LOG( "HNL", pDEBUG ) << "Using volume \"" << fTopVolume << "\" as top volume...";
+    // first, go get the top volume of the entire geom so we can pick up translation components
+    TGeoVolume * main_volume = gGeoManager->GetTopVolume();
     TGeoVolume * top_volume = gGeoManager->GetVolume( fTopVolume.c_str() );
     assert( top_volume );
+    // now get the translation of the top volume
+    if( main_volume != top_volume ) {
+      main_volume->FindMatrixOfDaughterVolume(top_volume);
+      TGeoHMatrix * hmat = gGeoManager->GetHMatrix();
+      Double_t * tran = hmat->GetTranslation();
+      fTx = tran[0] * units::cm / units::m;
+      fTy = tran[1] * units::cm / units::m;
+      fTz = tran[2] * units::cm / units::m;
+      LOG( "HNL", pDEBUG )
+	<< "Got translation of volume with name " << top_volume->GetName() << " which is ( " 
+	<< fTx << ", " << fTy << ", " << fTz << " ) [m]";
+    }
     gGeoManager->SetTopVolume(top_volume);
     TGeoShape * ts = top_volume->GetShape();
     TGeoBBox * box = (TGeoBBox *) ts;
@@ -1360,16 +1374,35 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
   /*
   double ox = fCx + fDetOffset.at(0), oy = fCy + fDetOffset.at(1), oz = fCz + fDetOffset.at(2); // NEAR, m
   */
-  double ox = fCx, oy = fCy, oz = fCz; // NEAR, m
+  double ox = fCx, oy = fCy, oz = fCz; // NEAR, m -- this is for ROOT file origin system
+
+  // ensure we always roll inside the BBox when taking detector offset + translation into account
+  /*
+  double xBack = (fDetOffset.at(0)+fTx)-fLxR/2.0; double xFront = (fDetOffset.at(0)+fTx)+fLxR/2.0;
+  double yBack = (fDetOffset.at(1)+fTy)-fLyR/2.0; double yFront = (fDetOffset.at(1)+fTy)+fLyR/2.0;
+  double zBack = (fDetOffset.at(2)+fTz)-fLzR/2.0; double zFront = (fDetOffset.at(2)+fTz)+fLzR/2.0;
+  */
+  double xBack = -fLxR/2.0, xFront = fLxR/2.0;
+  double yBack = -fLyR/2.0, yFront = fLyR/2.0;
+  double zBack = -fLzR/2.0, zFront = fLzR/2.0;
   
+  /*
   double rx = (rnd->RndGen()).Uniform( -fLx/2.0, fLx/2.0 ), 
     ry = (rnd->RndGen()).Uniform( -fLy/2.0, fLy/2.0 ),
     rz = (rnd->RndGen()).Uniform( -fLz/2.0, fLz/2.0 ); // USER, m
+  */
+  double rx = (rnd->RndGen()).Uniform( xBack, xFront ),
+    ry = (rnd->RndGen()).Uniform( yBack, yFront ),
+    rz = (rnd->RndGen()).Uniform( zBack, zFront ); // USER, m
+  // add volume translation
+  // rx += fTx; ry += fTy; rz += fTz; // USER, m
 
   double ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
   double uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
   double uz = (rz + fDetOffset.at(2)) * units::m / units::cm;
   TVector3 checkPoint( ux, uy, uz ); // USER, cm
+
+  std::string pathString = this->CheckGeomPoint( ux, uy, uz );
   
   TVector3 originPoint( -ox, -oy, -oz );
   TVector3 dumori( 0.0, 0.0, 0.0 );
@@ -1381,22 +1414,31 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
       << "\nChecking point " << utils::print::Vec3AsString(&checkPoint) << " [cm, user]";
 
     // check if the point is inside the geometry, otherwise do it again
-    std::string pathString = this->CheckGeomPoint( ux, uy, uz ); int iNode = 1; // 1 past beginning
+    pathString = this->CheckGeomPoint( ux, uy, uz ); int iNode = 1; // 1 past beginning
+    LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
     int iBad = 0;
     while( pathString.find( fTopVolume.c_str(), iNode ) == string::npos && iBad < 10 ){
+      /*
       rx = (rnd->RndGen()).Uniform( -fLx/2.0, fLx/2.0 ); ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
       ry = (rnd->RndGen()).Uniform( -fLy/2.0, fLy/2.0 ); uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
       rz = (rnd->RndGen()).Uniform( -fLz/2.0, fLz/2.0 ); uz = (rz + fDetOffset.at(2)) * units::m / units::cm;
+      */
+      rx = (rnd->RndGen()).Uniform( xBack, xFront ); ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
+      ry = (rnd->RndGen()).Uniform( yBack, yFront ); uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
+      rz = (rnd->RndGen()).Uniform( zBack, zFront ); ux = (rz + fDetOffset.at(2)) * units::m / units::cm;
       checkPoint.SetXYZ( ux, uy, uz );
+      LOG( "HNL", pDEBUG )
+	<< "\nChecking point " << utils::print::Vec3AsString(&checkPoint) << " [cm, user]";
       pathString = this->CheckGeomPoint( ux, uy, uz ); iNode = 1;
+      LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
       iBad++;
     }
-    LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
     assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos );
   }
 
   // turn u back into [m] from [cm]
   ux *= units::cm / units::m; uy *= units::cm / units::m; uz *= units::cm / units::m;
+  ux += fTx; uy += fTy; uz += fTz; // add in volume translation
   // return the absolute point in space [NEAR, m] that we're pointing to!
   checkPoint.SetXYZ( ux, uy, uz );
   checkPoint = this->ApplyUserRotation( checkPoint, dumori, fDetRotation, true ); // det --> tgt-hall
@@ -2137,6 +2179,8 @@ void FluxCreator::LoadConfig(void)
   fCx = fB2UTranslation.at(0);
   fCy = fB2UTranslation.at(1);
   fCz = fB2UTranslation.at(2);
+
+  fTx = 0.0; fTy = 0.0; fTz = 0.0;
   
   fAx1 = fB2URotation.at(0);
   fAz  = fB2URotation.at(1);

@@ -165,10 +165,11 @@ namespace hnl {
     mutable bool isUsingRootGeom = false;
     mutable double uMult = 1.0, xMult = 1.0; // these need to be different.
 
-    mutable double fCx, fCy, fCz; // translation: from beamline origin to user origin
-    mutable double fUx, fUy, fUz; // translation: from user origin to detector centre
+    mutable double fCx, fCy, fCz;   // translation: from beamline origin to user origin [m]
+    mutable double fTx, fTy, fTz;   // translation of volume wrt top volume origin [m]
+    mutable double fUx, fUy, fUz;   // translation: from user origin to detector centre [m]
     mutable double fAx1, fAz, fAx2; // rotation: from target-hall frame to beam frame
-    mutable double fBx1, fBz, fBx2;  // rotation: from target-hall frame to user frame
+    mutable double fBx1, fBz, fBx2; // rotation: from target-hall frame to user frame
     mutable std::vector< double > fB2UTranslation, fB2URotation, fDetTranslation, fDetRotation;
 
   }; // class VertexGenerator
