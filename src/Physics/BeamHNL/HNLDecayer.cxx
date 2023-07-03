@@ -228,7 +228,8 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
 
   // Generate a decay
   bool decayFailed = false;
-  if( doPol && fCurrDecayMode != kHNLDcyNuNuNu ){
+  //if( doPol && fCurrDecayMode != kHNLDcyNuNuNu ){
+  if( doPol && ( fCurrDecayMode == kHNLDcyPiE || fCurrDecayMode == kHNLDcyPiMu || fCurrDecayMode == kHNLDcyPi0Nu ) ){
     // if polarisation is on we must calculate the polarisation modulus for comparison
     // for now, assume 2-body production and 2-body decay describes the pol modulus
     // see arXiv:1805.06419[hep-ph]
