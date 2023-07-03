@@ -55,7 +55,7 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
     // first, go get the top volume of the entire geom so we can pick up translation components
     TGeoVolume * main_volume = gGeoManager->GetTopVolume();
     TGeoVolume * top_volume = gGeoManager->GetVolume( fTopVolume.c_str() );
-    assert( top_volume );
+    assert( top_volume && "Top volume exists" );
     // now get the translation of the top volume
     if( main_volume != top_volume ) {
       main_volume->FindMatrixOfDaughterVolume(top_volume);
@@ -310,7 +310,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 
   // now calculate which decay channel produces the HNL.
   dynamicScores = this->GetProductionProbs( decay_ptype );
-  assert( dynamicScores.size() > 0 );
+  assert( dynamicScores.size() > 0 && "HNL can be produced in some way" );
   
   if( dynamicScores.find( kHNLProdNull ) != dynamicScores.end() ){ // exists kin allowed channel but 0 coupling
     this->FillNonsense( iEntry, gnmf ); return gnmf;
@@ -336,7 +336,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
       imap++; pdit++;
     }
   }
-  assert( imap < dynamicScores.size() ); // should have decayed to *some* HNL
+  assert( imap < dynamicScores.size() && "HNL has been produced" ); // should have decayed to *some* HNL
   prodChan = (*pdit).first;
 
   // bookkeep this
@@ -464,7 +464,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
     }
   }
 
-  assert( boost_correction > 0.0 && boost_correction_two > 0.0 );
+  assert( boost_correction > 0.0 && boost_correction_two > 0.0 && "HNL boost factor physical" );
 
   // so now we have the random decay. Direction = parent direction, energy = what we calculated
   double EHNL = p4HNL_rest.E() * boost_correction;
@@ -777,7 +777,7 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
   // recurse over files in this directory and add to chain
 
   std::list<TString> files = this->RecurseOverDir( finpath );
-  assert( files.size() > 0 );
+  assert( files.size() > 0 && "Flux input files found" );
   int nFiles = 0;
 
   std::list<TString>::iterator itFiles = files.begin();  
@@ -796,7 +796,7 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
 
   if( !ctree ){ LOG( "HNL", pFATAL ) << "Could not open flux tree!"; }
   if( !cmeta ){ LOG( "HNL", pFATAL ) << "Could not open meta tree!"; }
-  assert( ctree && cmeta );
+  assert( ctree && cmeta && "Could open flux and meta trees" );
 
   const int nEntriesInMeta = cmeta->GetEntries();
   int nEntries = ctree->GetEntries();
@@ -1278,7 +1278,7 @@ TLorentzVector FluxCreator::HNLEnergy( HNLProd_t hnldm, TLorentzVector p4par ) c
      double w = fPhaseSpaceGenerator.Generate();
      wmax = TMath::Max(wmax,w);
   }
-  assert(wmax>0);
+  assert(wmax>0 && "Phase space generator works");
   wmax *= 2;
 
   LOG("HNL", pNOTICE)
@@ -1372,9 +1372,15 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
   double ox = fCx, oy = fCy, oz = fCz; // NEAR, m -- this is for ROOT file origin system
 
   // ensure we always roll inside the BBox when taking detector offset + translation into account
+  /*
   double xBack = fDetOffset.at(0)-fLx/2.0; double xFront = fDetOffset.at(0)+fLx/2.0;
   double yBack = fDetOffset.at(1)-fLy/2.0; double yFront = fDetOffset.at(1)+fLy/2.0;
   double zBack = fDetOffset.at(2)-fLz/2.0; double zFront = fDetOffset.at(2)+fLz/2.0;
+  */
+
+  double xBack = -fLx/2.0; double xFront = fLx/2.0;
+  double yBack = -fLy/2.0; double yFront = fLy/2.0;
+  double zBack = -fLz/2.0; double zFront = fLz/2.0;
 
   if( xBack < -fLxR/2.0 ) xBack  = -fLxR/2.0;
   if( xFront > fLxR/2.0 ) xFront = fLxR/2.0;
@@ -1382,6 +1388,10 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
   if( yFront > fLyR/2.0 ) yFront = fLyR/2.0;
   if( zBack < -fLzR/2.0 ) zBack  = -fLzR/2.0;
   if( zFront > fLzR/2.0 ) zFront = fLzR/2.0;
+
+  LOG( "HNL", pDEBUG )
+    << "Box is generated: [" << xBack << ", " << xFront << "] x [" 
+    << yBack << ", " << yFront << "] x [" << zBack << ", " << zFront << "] [m]";
 
   /*
   double xBack = -fLx/2.0, xFront = fLx/2.0;
@@ -1398,9 +1408,9 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
     ry = (rnd->RndGen()).Uniform( yBack, yFront ),
     rz = (rnd->RndGen()).Uniform( zBack, zFront ); // USER, m
 
-  double ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
-  double uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
-  double uz = (rz + fDetOffset.at(2)) * units::m / units::cm;
+  double ux = (rx) * units::m / units::cm;
+  double uy = (ry) * units::m / units::cm;
+  double uz = (rz) * units::m / units::cm;
   TVector3 checkPoint( ux, uy, uz ); // USER, cm
 
   std::string pathString = this->CheckGeomPoint( ux, uy, uz );
@@ -1424,9 +1434,9 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
       ry = (rnd->RndGen()).Uniform( -fLy/2.0, fLy/2.0 ); uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
       rz = (rnd->RndGen()).Uniform( -fLz/2.0, fLz/2.0 ); uz = (rz + fDetOffset.at(2)) * units::m / units::cm;
       */
-      rx = (rnd->RndGen()).Uniform( xBack, xFront ); ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
-      ry = (rnd->RndGen()).Uniform( yBack, yFront ); uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
-      rz = (rnd->RndGen()).Uniform( zBack, zFront ); ux = (rz + fDetOffset.at(2)) * units::m / units::cm;
+      rx = (rnd->RndGen()).Uniform( xBack, xFront ); ux = (rx) * units::m / units::cm;
+      ry = (rnd->RndGen()).Uniform( yBack, yFront ); uy = (ry) * units::m / units::cm;
+      rz = (rnd->RndGen()).Uniform( zBack, zFront ); uz = (rz) * units::m / units::cm;
       checkPoint.SetXYZ( ux, uy, uz );
       LOG( "HNL", pDEBUG )
 	<< "\nChecking point " << utils::print::Vec3AsString(&checkPoint) << " [cm, user]";
@@ -1434,11 +1444,13 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
       LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
       iBad++;
     }
-    assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos );
+    assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos &&
+	    "Vertex for flux generation inside top volume");
   }
 
   // turn u back into [m] from [cm]
   ux *= units::cm / units::m; uy *= units::cm / units::m; uz *= units::cm / units::m;
+  ux += fDetOffset.at(0); uy += fDetOffset.at(1); uz += fDetOffset.at(2); // add in detector offset
   ux += fTx; uy += fTy; uz += fTz; // add in volume translation
   // return the absolute point in space [NEAR, m] that we're pointing to!
   checkPoint.SetXYZ( ux, uy, uz );
@@ -1458,7 +1470,7 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
 //----------------------------------------------------------------------------
 double FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool seekingMax ) const
 {
-  TVector3 ppar = p4par.Vect(); assert( ppar.Mag() > 0.0 );
+  TVector3 ppar = p4par.Vect(); assert( ppar.Mag() > 0.0 && "Parent 3-momentum > 0.0" );
   TVector3 pparUnit = ppar.Unit();
   // let face be planar and perpendicular to vector Q
   // assuming Q = ( 0, 0, 1 ) == face perpendicular to z
@@ -1490,7 +1502,7 @@ double FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool s
   double fLT = IPdev.Mag();
   double dist = atilde.Mag();
   
-  assert( fLT > 0.0 );
+  assert( fLT > 0.0 && "Non-zero sweep to box centre" );
   double detRadius = std::max( fLx, fLy ) / 2.0;
 
   if( parentHitsCentre ){
@@ -1505,7 +1517,7 @@ double FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool s
 
     double rprod = r1Vec.X() * r2Vec.X() + r1Vec.Y() * r2Vec.Y() + r1Vec.Z() * r2Vec.Z();
 
-    assert( std::abs( rprod ) < controls::kASmallNum );
+    assert( std::abs( rprod ) < controls::kASmallNum && "Parent hits centre" );
 
     // four IP with det. All have distance detRadius from centre.
     TVector3 p1( detO.X() + detRadius*r1Vec.X(),
@@ -1556,7 +1568,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   // implementation of GetAngDeviation that uses ROOT geometry. More robust than analytical geom
   // (fewer assumptions about detector position)
 
-  TVector3 ppar = p4par.Vect(); assert( ppar.Mag() > 0.0 );
+  TVector3 ppar = p4par.Vect(); assert( ppar.Mag() > 0.0 && "Parent 3-momentum > 0.0" );
   TVector3 pparUnit = ppar.Unit();
 
   const double sx1 = TMath::Sin(fBx1), cx1 = TMath::Cos(fBx1);
@@ -1583,7 +1595,8 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 		    (detO.Y()) * units::m / units::cm,
 		    (detO.Z()) * units::m / units::cm );
   double inProd = zun[0] * detO_cm.X() + zun[1] * detO_cm.Y() + zun[2] * detO_cm.Z(); // cm
-  assert( pparUnit.X() * zun[0] + pparUnit.Y() * zun[1] + pparUnit.Z() * zun[2] != 0.0 );
+  assert( pparUnit.X() * zun[0] + pparUnit.Y() * zun[1] + pparUnit.Z() * zun[2] != 0.0 &&
+	  "Parent has some component of its momentum along the z-axis");
   inProd /= ( pparUnit.X() * zun[0] + pparUnit.Y() * zun[1] + pparUnit.Z() * zun[2] );
 
   // using vector formulation, find point of closest approach between parent momentum from
@@ -1649,7 +1662,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   const double sweepVect[3] = { (fCx) * units::m / units::cm - startPoint[0],
 				(fCy) * units::m / units::cm - startPoint[1],
 				(fCz) * units::m / units::cm - startPoint[2] }; // NEAR, cm
-  const double swvMag = std::sqrt( sweepVect[0]*sweepVect[0] + sweepVect[1]*sweepVect[1] + sweepVect[2]*sweepVect[2] ); assert( swvMag > 0.0 );
+  const double swvMag = std::sqrt( sweepVect[0]*sweepVect[0] + sweepVect[1]*sweepVect[1] + sweepVect[2]*sweepVect[2] ); assert( swvMag > 0.0 && "Sweep is non-zero" );
 
   // Note the geometry manager works in the *detector frame*. Transform to that.
   /*
@@ -1889,12 +1902,12 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   TVector3 startVec_near = this->ApplyUserRotation( startVec, detori, fDetRotation, false ); // NEAR, cm
 
   double minusNum = startVec.X() * minusVec.X() + startVec.Y() * minusVec.Y() + startVec.Z() * minusVec.Z(); // USER AND USER
-  double minusDen = startVec.Mag() * minusVec.Mag(); assert( minusDen > 0.0 ); // USER AND USER
+  double minusDen = startVec.Mag() * minusVec.Mag(); assert( minusDen > 0.0 && "Zeta-minus denominator sensible" ); // USER AND USER
 
   zm = TMath::ACos( minusNum / minusDen ) * TMath::RadToDeg();
 
   double plusNum = startVec.X() * plusVec.X() + startVec.Y() * plusVec.Y() + startVec.Z() * plusVec.Z(); // USER AND USER
-  double plusDen = startVec.Mag() * plusVec.Mag(); assert( plusDen > 0.0 ); // USER AND USER
+  double plusDen = startVec.Mag() * plusVec.Mag(); assert( plusDen > 0.0 && "Zeta-plus denominator sensible" ); // USER AND USER
 
   zp = TMath::ACos( plusNum / plusDen ) * TMath::RadToDeg();
 
@@ -1927,7 +1940,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
    * and return the ratio over the relevant measure for a SM neutrino
    */
 
-  assert( zm >= 0.0 && zp >= zm );
+  assert( zm >= 0.0 && zp >= zm && "Zeta-plus >= zeta-minus >= 0.0" );
   if( zp == zm ) return 1.0;
 
   double M = p4HNL.M();
@@ -2034,7 +2047,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
     return 1.0 / ( xpart * ypart );
   }
 
-  assert( range2 > 0.0 );
+  assert( range2 > 0.0 && "SM neutrino is geom-accepted" );
 
   return range1 / range2;
 
@@ -2103,7 +2116,7 @@ TVector3 FluxCreator::ApplyUserRotation( TVector3 vec, TVector3 oriVec, std::vec
   
   vx -= ox; vy -= oy; vz -= oz; // make this rotation about detector origin
 
-  assert( rotVec.size() == 3 ); // want 3 Euler angles, otherwise this is unphysical.
+  assert( rotVec.size() == 3 && "3 Euler angles" ); // want 3 Euler angles, otherwise this is unphysical.
   double Ax2 = ( doBackwards ) ? -rotVec.at(2) : rotVec.at(2);
   double Az  = ( doBackwards ) ? -rotVec.at(1) : rotVec.at(1);
   double Ax1 = ( doBackwards ) ? -rotVec.at(0) : rotVec.at(0);
@@ -2249,6 +2262,10 @@ void FluxCreator::ImportBoundingBox( TGeoBBox * box ) const
     fLy = std::min( testRadius, fLyR );
     fLz = std::min( testRadius, fLzR );
   }
+
+  LOG( "HNL", pDEBUG )
+    << "\nfL{x,y,z}  = " << fLx << ", " << fLy << ", " << fLz
+    << "\nfL{x,y,z}R = " << fLxR << ", " << fLyR << ", " << fLzR;
 }
 //____________________________________________________________________________
 std::string FluxCreator::CheckGeomPoint( Double_t x, Double_t y, Double_t z ) const

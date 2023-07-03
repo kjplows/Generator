@@ -195,6 +195,7 @@ TGeoManager *    gOptRootGeoManager = 0;                 // the workhorse geomet
 TGeoVolume  *    gOptRootGeoVolume  = 0;
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
+bool             gOptTopVolSelected = false;             // did the user ask for a specific top volume?
 string           gOptTopVolName = kDefOptTopVolName;     // input geometry top event generation volume
 double           gOptGeomLUnits = 0;                     // input geometry length units
 long int         gOptRanSeed = -1;                       // random number seed
@@ -369,7 +370,7 @@ int main(int argc, char ** argv)
     
     if( ievent < gOptFirstEvent ){ ievent++; continue; }
     
-    assert( ievent >= gOptFirstEvent && gOptFirstEvent >= 0 );
+    assert( ievent >= gOptFirstEvent && gOptFirstEvent >= 0 && "First event >= 0" );
     
     LOG("gevgen_hnl", pNOTICE)
       << " *** Generating event............ " << (ievent-gOptFirstEvent);
@@ -410,7 +411,7 @@ int main(int argc, char ** argv)
        iflux++;
      } else { // monoenergetic HNL. Add it with energy and momentum pointing on z axis
        
-       assert( gOptEnergyHNL > gOptMassHNL );
+       assert( gOptEnergyHNL > gOptMassHNL && "HNL E > M" );
        double HNLP = std::sqrt( gOptEnergyHNL*gOptEnergyHNL - gOptMassHNL*gOptMassHNL );
        TLorentzVector probeP4( 0.0, 0.0, HNLP, gOptEnergyHNL );
        TLorentzVector v4( 0.0, 0.0, 0.0, 0.0 );
@@ -418,7 +419,7 @@ int main(int argc, char ** argv)
        event->AddParticle( ptHNL );
 
      }
-     assert( gOptEnergyHNL > gOptMassHNL );
+     assert( gOptEnergyHNL > gOptMassHNL && "HNL E > M" );
      
      int hpdg = genie::kPdgHNL;
      int typeMod = 1;
@@ -429,7 +430,8 @@ int main(int argc, char ** argv)
      // int target = SelectInitState();
      int decay  = (int) gOptDecayMode;
      
-     assert( gOptECoupling >= 0.0 && gOptMCoupling >= 0.0 && gOptTCoupling >= 0.0 );
+     assert( gOptECoupling >= 0.0 && gOptMCoupling >= 0.0 && gOptTCoupling >= 0.0 &&
+	     "Non-trivial lepton mixings");
      
      // RETHERE assuming all these HNL have K+- parent. This is wrong 
      // (but not very wrong for interesting masses)
@@ -604,9 +606,14 @@ void InitBoundingBox(void)
   }
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
+  if( !gOptTopVolSelected ){
+    TGeoVolume * main_volume = gOptRootGeoManager->GetTopVolume();
+    gOptTopVolName = main_volume->GetName();
+    LOG("gevgen_hnl", pINFO) << "Using top volume name " << gOptTopVolName;
+  }
 
   TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
-  assert( top_volume );
+  assert( top_volume && "Top volume exists" );
   TGeoShape * ts  = top_volume->GetShape();
 
   TGeoBBox *  box = (TGeoBBox *)ts;
@@ -809,7 +816,7 @@ int SelectDecayMode( std::vector< HNLDecayMode_t > * intChannels, SimpleHNL sh )
        itint != intMap.end() ; ++itint ){
     gammaInt += (*itint).second;
   }
-  assert( gammaInt > 0.0 && gammaAll >= gammaInt );
+  assert( gammaInt > 0.0 && gammaAll >= gammaInt && "Gamma total >= Gamma simulated > 0.0" );
   decayMod = gammaInt / gammaAll;
 
   // get probability that channels in intAndValidChannels will be selected
@@ -939,7 +946,7 @@ void GetCommandLineArgs(int argc, char ** argv)
       PrintSyntax();
       exit(0);
     } //-E
-    assert(gOptEnergyHNL > gOptMassHNL);
+    assert(gOptEnergyHNL > gOptMassHNL && "HNL E > M");
   }
 
   gOptIsMonoEnFlux = isMonoEnergeticFlux;
@@ -1028,12 +1035,13 @@ void GetCommandLineArgs(int argc, char ** argv)
 
      // check for top volume selection
      if( parser.OptionExists("top_volume") ) {
+       gOptTopVolSelected = true;
        gOptTopVolName = parser.ArgAsString("top_volume");
        LOG("gevgen_hnl", pINFO)
 	 << "Using the following volume as top: " << gOptTopVolName;
      } else {
        LOG("gevgen_hnl", pINFO)
-	 << "Using default top_volume name \"" << kDefOptTopVolName << "\"";
+	 << "Using default top_volume";
      } // --top_volume
 
   } // using root geom?

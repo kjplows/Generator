@@ -57,7 +57,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
     
     TGeoVolume * main_volume = fGeoManager->GetTopVolume();
     TGeoVolume * top_volume = fGeoManager->GetVolume( fTopVolume.c_str() );
-    assert( top_volume );
+    assert( top_volume && "Top volume exists" );
     // now get the translation of the top volume
     if( main_volume != top_volume ) {
       main_volume->FindMatrixOfDaughterVolume(top_volume);
@@ -89,7 +89,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   
   bool didIntersectDet = this->VolumeEntryAndExitPoints( startPoint, momentum, entryPoint, exitPoint, fGeoManager, fGeoVolume );
 
-  if( !isParticleGun && isUsingDk2nu ) assert( didIntersectDet ); // forced to hit detector somewhere!
+  if( !isParticleGun && isUsingDk2nu ) assert( didIntersectDet && "Forced to hit detector somewhere" ); // forced to hit detector somewhere!
   else {
     std::vector< double > * newProdVtx = new std::vector< double >();
     newProdVtx->emplace_back( startPoint.X() );
@@ -164,7 +164,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   // the validation app doesn't run the Decayer. So we will insert two neutrinos (not a valid
   // decay mode), to store entry and exit point
   if( !isUsingDk2nu ){
-    assert( !event_rec->Particle(1) );
+    assert( !event_rec->Particle(1) && "Event record only has HNL if gevald_hnl -M 3" );
     
     TLorentzVector tmpp4( 0.0, 0.0, 0.0, 0.5 );
     TLorentzVector ex4( 0.0, 0.0, 0.0, 0.0 );
@@ -230,7 +230,7 @@ double VertexGenerator::CalcTravelLength( double betaMag, double CoMLifetime, do
   // t   = time-of-flight (in rest frame)
   // tau = CoMLifetime
 
-  assert( betaMag > 0.0 && betaMag < 1.0 ); // massive moving particle
+  assert( betaMag > 0.0 && betaMag < 1.0 && "HNL is massive and moving" ); // massive moving particle
   double maxLabTime = maxLength / ( betaMag * kNewSpeedOfLight );
   double gamma = std::sqrt( 1.0 / ( 1.0 - betaMag * betaMag ) );
   double maxRestTime = maxLabTime / gamma ; // this is how "wide" the detector looks like
@@ -317,7 +317,8 @@ bool VertexGenerator::SDVEntryAndExitPoints( TVector3 & startPoint, TVector3 mom
 					    TVector3 & entryPoint, TVector3 & exitPoint ) const
 {
   assert( fOx == 0.0 && fOy == 0.0 && fOz == 0.0 && 
-	  fLx == 1000.0 && fLy == 1000.0 && fLz == 1000.0 ); // SDV, mm
+	  fLx == 1000.0 && fLy == 1000.0 && fLz == 1000.0 &&
+	  "Decay volume is unit-m side, centred at origin"); // SDV, mm
   fSx = startPoint.X(); fSy = startPoint.Y(); fSz = startPoint.Z(); // mm
   fPx = momentum.X(); fPy = momentum.Y(); fPz = momentum.Z(); // GeV
   double fP2 = fPx*fPx + fPy*fPy + fPz*fPz; double fP = std::sqrt(fP2); // GeV
@@ -448,9 +449,10 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
 
   fCoMLifetime = event_rec->Probability();
 
-  assert( event_rec->Particle(0) );
+  assert( event_rec->Particle(0) && "Event record has HNL" );
 
   TVector3 dumori(0.0, 0.0, 0.0); // tgt-hall frame origin is 0
+  /*
   TVector3 detori( (fCx + fDetTranslation.at(0)) * units::m / units::cm,
 		   (fCy + fDetTranslation.at(1)) * units::m / units::cm,
 		   (fCz + fDetTranslation.at(2)) * units::m / units::cm ); // for rotations of the detector
@@ -458,6 +460,13 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
     detori.SetXYZ( fDetTranslation.at(0) * units::m / units::mm,
 		   fDetTranslation.at(1) * units::m / units::mm,
 		   fDetTranslation.at(2) * units::m / units::mm );
+  }
+  */
+  TVector3 detori( (fCx) * units::m / units::cm,
+		   (fCy) * units::m / units::cm,
+		   (fCz) * units::m / units::cm ); // for rotations of the detector
+  if( isParticleGun ){
+    detori.SetXYZ( 0.0, 0.0, 0.0 );
   }
 
   TLorentzVector * x4HNL = event_rec->Particle(0)->GetX4(); // NEAR, cm ns
@@ -526,6 +535,10 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   double firstXROOT = fSxROOT - fTx * units::m / units::cm, 
     firstYROOT = fSyROOT - fTy * units::m / units::cm, 
     firstZROOT = fSzROOT - fTz * units::m / units::cm;
+  // also offset the detector offset and reapply once we're done
+  firstXROOT -= fDetTranslation.at(0) * units::m / units::cm;
+  firstYROOT -= fDetTranslation.at(1) * units::m / units::cm;
+  firstZROOT -= fDetTranslation.at(2) * units::m / units::cm;
 
   TVector3 dumori(0.0, 0.0, 0.0);
 
@@ -536,8 +549,9 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   LOG( "HNL", pINFO )
     << "Starting to figure out entrances:"
     << "\nStarting point is ( " << fSx << ", " << fSy << ", " << fSz << " ) [ " << lunitString.c_str() << " ]"
-    << "\nIn our volume this becomes ( " << fSx - fTx * units::m / lunits << ", " 
-    << fSy - fTy * units::m / lunits << ", " << fSz - fTz * units::m / lunits << " ) [ " 
+    << "\nIn our volume this becomes ( " << fSx - fTx - fDetTranslation.at(0) * units::m / lunits << ", " 
+    << fSy - fTy - fDetTranslation.at(1) * units::m / lunits << ", " 
+    << fSz - fTz - fDetTranslation.at(2) * units::m / lunits << " ) [ " 
     << lunitString.c_str() << " ]"
     << "\nStarting dirn  is ( " << fPx << ", " << fPy << ", " << fPz << " ) ";
 
@@ -578,8 +592,12 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   fEyROOT = ( gGeoManager->GetCurrentPoint() )[1];
   fEzROOT = ( gGeoManager->GetCurrentPoint() )[2];
 
-  fEx += fTx * units::m / lunits; fEy += fTy * units::m / lunits; fEz += fTz * units::m / lunits;
-  fExROOT += fTx * units::m / units::cm; fEyROOT += fTy * units::m / units::cm; fEzROOT += fTz * units::m / units::cm;
+  fEx += (fTx + fDetTranslation.at(0)) * units::m / lunits; 
+  fEy += (fTy + fDetTranslation.at(1)) * units::m / lunits; 
+  fEz += (fTz + fDetTranslation.at(2)) * units::m / lunits;
+  fExROOT += (fTx + fDetTranslation.at(0)) * units::m / units::cm; 
+  fEyROOT += (fTy + fDetTranslation.at(1)) * units::m / units::cm; 
+  fEzROOT += (fTz + fDetTranslation.at(2)) * units::m / units::cm;
 
   entryPoint.SetXYZ( fEx, fEy, fEz ); // ensure correct units
 
@@ -629,8 +647,12 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   fXyROOT = ( gGeoManager->GetCurrentPoint() )[1];
   fXzROOT = ( gGeoManager->GetCurrentPoint() )[2];
 
-  fXx += fTx * units::m / lunits; fXy += fTy * units::m / lunits; fXz += fTz * units::m / lunits;
-  fXxROOT += fTx * units::m / units::cm; fXyROOT += fTy * units::m / units::cm; fXzROOT += fTz * units::m / units::cm;
+  fXx += (fTx + fDetTranslation.at(0)) * units::m / lunits; 
+  fXy += (fTy + fDetTranslation.at(1)) * units::m / lunits; 
+  fXz += (fTz + fDetTranslation.at(2)) * units::m / lunits;
+  fXxROOT += (fTx + fDetTranslation.at(0)) * units::m / units::cm; 
+  fXyROOT += (fTy + fDetTranslation.at(1)) * units::m / units::cm; 
+  fXzROOT += (fTz + fDetTranslation.at(2)) * units::m / units::cm;
 
   exitPoint.SetXYZ( fXx, fXy, fXz ); // ensure correct units
 
@@ -724,7 +746,7 @@ TVector3 VertexGenerator::ApplyUserRotation( TVector3 vec, TVector3 oriVec, std:
   
   vx -= ox; vy -= oy; vz -= oz; // make this rotation about detector origin
 
-  assert( rotVec.size() == 3 ); // want 3 Euler angles, otherwise this is unphysical.
+  assert( rotVec.size() == 3 && "3 Euler angles" ); // want 3 Euler angles, otherwise this is unphysical.
   double Ax2 = ( doBackwards ) ? -rotVec.at(2) : rotVec.at(2);
   double Az  = ( doBackwards ) ? -rotVec.at(1) : rotVec.at(1);
   double Ax1 = ( doBackwards ) ? -rotVec.at(0) : rotVec.at(0);

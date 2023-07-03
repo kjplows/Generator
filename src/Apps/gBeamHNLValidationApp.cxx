@@ -240,6 +240,7 @@ double           gOptGeomTUnits = 0;                     // input geometry time 
 TGeoManager *    gOptRootGeoManager = 0;                 // the workhorse geometry manager
 TGeoVolume  *    gOptRootGeoVolume  = 0;
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
+bool             gOptTopVolSelected = false;             // did the user ask for a specific top volume?
 string           gOptTopVolName = kDefOptTopVolName;     // input geometry top event generation volume
 
 // Geometry bounding box and origin - read from the input geometry file (if any)
@@ -283,7 +284,7 @@ int main(int argc, char ** argv)
 #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
 int TestFluxFromDk2nu()
 {
-  assert( !gOptIsMonoEnFlux && gOptIsUsingDk2nu );
+  assert( !gOptIsMonoEnFlux && gOptIsUsingDk2nu && "Provided input flux files" );
 
   string foutName("test_flux_dk2nu.root");
   
@@ -307,14 +308,18 @@ int TestFluxFromDk2nu()
       << "The specified ROOT geometry doesn't exist! Initialization failed!";
     exit(1);
   }
+  if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
+  if( !gOptTopVolSelected ){
+    TGeoVolume * main_volume = gOptRootGeoManager->GetTopVolume();
+    gOptTopVolName = main_volume->GetName();
+    LOG("gevald_hnl", pINFO) << "Using top volume name " << gOptTopVolName;
+  }
   fluxCreator->SetGeomFile( gOptRootGeom, gOptTopVolName );
 
   int maxFluxEntries = -1;
 
-  if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
-
   TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
-  assert( top_volume );
+  assert( top_volume && "Top volume exists" );
   TGeoShape * ts  = top_volume->GetShape();
   __attribute__((unused)) TGeoBBox *  box = (TGeoBBox *)ts;
 
@@ -561,9 +566,14 @@ int TestDecay(void)
   }
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
+  if( !gOptTopVolSelected ){
+    TGeoVolume * main_volume = gOptRootGeoManager->GetTopVolume();
+    gOptTopVolName = main_volume->GetName();
+    LOG("gevald_hnl", pINFO) << "Using top volume name " << gOptTopVolName;
+  }
   
   TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
-  assert( top_volume );
+  assert( top_volume && "Top volume exists" );
   TGeoShape * ts  = top_volume->GetShape();
   __attribute__((unused)) TGeoBBox *  box = (TGeoBBox *)ts;
   
@@ -579,8 +589,8 @@ int TestDecay(void)
   std::map< HNLDecayMode_t, double > valMap = sh.GetValidChannels();
   //const double CoMLifetime = sh.GetCoMLifetime();
 
-  assert( valMap.size() > 0 ); // must be able to decay to something!
-  assert( (*valMap.begin()).first == kHNLDcyNuNuNu );
+  assert( valMap.size() > 0 && "Exists kinematically accessible decay channel" ); // must be able to decay to something!
+  assert( (*valMap.begin()).first == kHNLDcyNuNuNu && "Lightest decay channel vvv is accessible" );
 
   LOG( "gevald_hnl", pINFO )
     << "\n\nTesting decay modes for the HNL."
@@ -597,7 +607,7 @@ int TestDecay(void)
   //gOptEnergyHNL = utils::hnl::GetCfgDouble( "HNL", "ParticleGun", "PG-Energy" );
   gOptEnergyHNL = hnlgen->GetPGunEnergy();
   double p3HNL = std::sqrt( gOptEnergyHNL * gOptEnergyHNL - gCfgMassHNL * gCfgMassHNL );
-  assert( p3HNL >= 0.0 );
+  assert( p3HNL >= 0.0 && "HNL 3-momentum >= 0.0" );
   TLorentzVector * p4HNL = new TLorentzVector( p3HNL * gCfgHNLCx, 
 					       p3HNL * gCfgHNLCy, 
 					       p3HNL * gCfgHNLCz, gOptEnergyHNL );
@@ -877,13 +887,12 @@ int TestGeom(void)
       << "The specified ROOT geometry doesn't exist! Initialization failed!";
     exit(1);
   }
-  
-  gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str());
-  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
-  assert( top_volume );
 
   // Read geometry bounding box - for vertex position generation
+  gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str());
   InitBoundingBox();
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
+  assert( top_volume && "Top volume exists" );
   
   const Algorithm * algHNLGen = AlgFactory::Instance()->GetAlgorithm("genie::hnl::Decayer", "Default");
   const Algorithm * algVtxGen = AlgFactory::Instance()->GetAlgorithm("genie::hnl::VertexGenerator", "Default");
@@ -900,7 +909,7 @@ int TestGeom(void)
   //gOptEnergyHNL = utils::hnl::GetCfgDouble( "HNL", "ParticleGun", "PG-Energy" );
   gOptEnergyHNL = hnlgen->GetPGunEnergy();
   double p3HNL = std::sqrt( gOptEnergyHNL * gOptEnergyHNL - gCfgMassHNL * gCfgMassHNL );
-  assert( p3HNL >= 0.0 );
+  assert( p3HNL >= 0.0 && "HNL 3-momentum >= 0.0" );
   TLorentzVector * p4HNL = new TLorentzVector( p3HNL * gCfgHNLCx, 
 					       p3HNL * gCfgHNLCy, 
 					       p3HNL * gCfgHNLCz, gOptEnergyHNL );
@@ -932,7 +941,7 @@ int TestGeom(void)
   const double PGdy = utils::hnl::GetCfgDouble( "HNL", "ParticleGun", "PG-OriginDY" );
   const double PGdz = utils::hnl::GetCfgDouble( "HNL", "ParticleGun", "PG-OriginDZ" ); // m
   */
-  assert( PGdx > 0.0 && PGdy > 0.0 && PGdz > 0.0 );
+  assert( PGdx > 0.0 && PGdy > 0.0 && PGdz > 0.0 && "HNL origin vertex box CommonHNL.xml::PGd{x,y,z} is non-trivial" );
 
   double c2 = std::sqrt( std::pow( gCfgHNLCx, 2.0 ) + std::pow( gCfgHNLCy, 2.0 ) + std::pow( gCfgHNLCz, 2.0 ) );
   const double PGcx = gCfgHNLCx / c2;
@@ -1152,9 +1161,14 @@ void InitBoundingBox(void)
   }
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
+  if( !gOptTopVolSelected ){
+    TGeoVolume * main_volume = gOptRootGeoManager->GetTopVolume();
+    gOptTopVolName = main_volume->GetName();
+    LOG("gevald_hnl", pINFO) << "Using top volume name " << gOptTopVolName;
+  }
 
   TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
-  assert( top_volume );
+  assert( top_volume && "Top volume exists" );
   TGeoShape * ts  = top_volume->GetShape();
   TGeoBBox *  box = (TGeoBBox *)ts;
 
@@ -1350,12 +1364,13 @@ void GetCommandLineArgs(int argc, char ** argv)
   if( gOptUsingRootGeom ) {
     // check for top volume selection
     if( parser.OptionExists("top_volume") ) {
+      gOptTopVolSelected = true;
       gOptTopVolName = parser.ArgAsString("top_volume");
       LOG("gevgen_hnl", pINFO)
 	<< "Using the following volume as top: " << gOptTopVolName;
     } else {
       LOG("gevgen_hnl", pINFO)
-	<< "Using default top_volume name \"" << kDefOptTopVolName << "\"";
+	<< "Using default top_volume";
     } // --top_volume
   }
 

@@ -184,15 +184,15 @@ double BRCalculator::KScale_PseudoscalarToLepton( const double mP, const double 
 }
 //----------------------------------------------------------------------------
 double BRCalculator::DWidth_PseudoscalarToLepton( const double mP, const double M, const double Ua42, const double ma ) const {
-  assert( M + ma <= mP );
+  assert( M + ma <= mP && "Decay P --> N4 + l_a accessible" );
 
   double KScale = KScale_PseudoscalarToLepton( mP, M, ma );
   return Ua42 * KScale;
 }
 //----------------------------------------------------------------------------
 double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const double M, const double ma ) const {
-  assert( mP == mK || mP == mK0 ); // RETHERE remove this when/if heavier pseudoscalars are considered
-  assert( ma == mE || ma == mMu );
+  assert( mP == mK || mP == mK0 && "P --> N4 + l_a + pi: P == K or K0" ); // RETHERE remove this when/if heavier pseudoscalars are considered
+  assert( ma == mE || ma == mMu && "l_a == e, mu" );
   
   std::map< double, double > scaleMap = ( ma == mE ) ? kscale_K3e : kscale_K3mu;
 
@@ -203,7 +203,7 @@ double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const doubl
   std::map< double, double >::iterator scpit = std::prev( scmit, 1 );
   //LOG( "HNL", pDEBUG )
   //  << "Requested map for M = " << M << ": iter at ( " << (*scpit).first << ", " << (*scmit).first << " ]";
-  assert( scmit != scaleMap.end() );
+  assert( scmit != scaleMap.end() && "Exists point to interpolate BR of P --> N4 + l_a + pi" );
   // if coincide then return scale there
   if( scaleMap.find( M ) != scaleMap.end() ) return (*scmit).second;
   // otherwise transform scmit-1 and scmit second to log, do a linear extrapolation and return
@@ -214,7 +214,7 @@ double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const doubl
 }
 //----------------------------------------------------------------------------
 double BRCalculator::DWidth_PseudoscalarToPiLepton( const double mP, const double M, const double Ua42, const double ma ) const {
-  assert( M + ma + mPi0 <= mP );
+  assert( M + ma + mPi0 <= mP && "P --> N4 + pi0 + l_a accessbile" );
 
   double KScale = KScale_PseudoscalarToPiLepton( mP, M, ma );
   return Ua42 * KScale;
@@ -227,7 +227,7 @@ double BRCalculator::KScale_MuonToNuAndElectron( const double M ) const {
   std::map< double, double >::iterator scpit = std::prev( scmit, 1 );
   //LOG( "HNL", pDEBUG )
   //  << "Requested map for M = " << M << ": iter at ( " << (*scpit).first << ", " << (*scmit).first << " ]";
-  assert( scmit != scaleMap.end() );
+  assert( scmit != scaleMap.end() && "Exists point to interpolate BR of mu --> v + N4 + e" );
 
   if( scaleMap.find( M ) != scaleMap.end() ) return (*scmit).second;
 
@@ -238,7 +238,7 @@ double BRCalculator::KScale_MuonToNuAndElectron( const double M ) const {
 }
 //----------------------------------------------------------------------------
 double BRCalculator::DWidth_MuonToNuAndElectron( const double M, const double Ue42, const double Umu42, const double Ut42 ) const {
-  assert( M + mE <= mMu );
+  assert( M + mE <= mMu && "mu --> v + N4 + e is accessible" );
 
   double KScale = KScale_MuonToNuAndElectron( M );
   return ( Ue42 + Umu42 + Ut42 ) * KScale;

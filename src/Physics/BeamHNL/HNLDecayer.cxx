@@ -147,7 +147,7 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
     pdgv.push_back( newpdgc );
   }
 
-  assert ( pdgv.size() > 1);
+  assert ( pdgv.size() > 1 && "At least 1 SM decay product" );
 
   // if user wants to include polarisation effects, start prep now
   /*
@@ -184,7 +184,7 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
 
   int hnl_id = 0;
   GHepParticle * hnl = event->Particle(hnl_id);
-  assert(hnl);
+  assert(hnl && "HNL exists in event record");
   TLorentzVector * p4d = hnl->GetP4(); TVector3 HNLBVec = p4d->BoostVector();
   TLorentzVector * p4d_rest = (TLorentzVector *) p4d->Clone(); p4d_rest->Boost( -HNLBVec );
   TLorentzVector * v4d = hnl->GetX4();
@@ -220,7 +220,7 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
      double w = fPhaseSpaceGenerator.Generate();
      wmax = TMath::Max(wmax,w);
   }
-  assert(wmax>0);
+  assert(wmax>0 && "Phase-space decayer works");
   wmax *= 2;
 
   LOG("HNL", pNOTICE)
@@ -293,12 +293,13 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
   event->Particle( 0 )->SetFirstMother(-1); // why do I need to do this explicitly?
   event->Particle( 0 )->SetLastMother(-1);
 
-  assert( event->Probe() );
+  assert( event->Probe() && "Probe particle exists" );
   if( !event->FinalStatePrimaryLepton() ){ // no charged lepton means invisible or pi0 nu or test
     LOG( "HNL", pWARN )
       << "No final state primary lepton for this event.";
     assert( fCurrDecayMode == kHNLDcyPi0Nu || fCurrDecayMode == kHNLDcyNuNuNu
-	    || fCurrDecayMode == kHNLDcyPi0Pi0Nu || fCurrDecayMode == kHNLDcyTEST );
+	    || fCurrDecayMode == kHNLDcyPi0Pi0Nu || fCurrDecayMode == kHNLDcyTEST &&
+	    "No FS primary lepton only for decay modes N4 --> pi0 v, v v v, pi0 pi0 v, TEST");
   }
   //assert( event->FinalStatePrimaryLepton() );
   
@@ -330,7 +331,7 @@ std::vector< double > * Decayer::GenerateDecayPosition( GHepRecord * /* event */
     << "\nYou are seeing this message because the input dk2nu files did not give position information (for some reason)..."
     << "\nDistributing the production vertex at some point in a 1m-side box. This is not good, and results will likely be unphysical.";
   fProdVtxHist = new TH3D( "dummy", "dummy", 100, -0.5, 0.5, 100, -0.5, 0.5, 100, -0.5, 0.5 );
-  assert( fProdVtxHist );
+  assert( fProdVtxHist && "Input HNL production vertex histogram" );
   
   RandomGen * rnd = RandomGen::Instance();
   double pvx = (rnd->RndGen()).Uniform( -0.5, 0.5 );
@@ -381,16 +382,16 @@ void Decayer::UpdateEventRecord(GHepRecord * event) const
 
   interaction->KinePtr()->Sett( 0.0, true );
   interaction->KinePtr()->SetW( interaction->InitStatePtr()->Probe()->Mass(), true );
-  TLorentzVector * p4HNL = event->Particle(0)->GetP4(); assert( p4HNL );
+  TLorentzVector * p4HNL = event->Particle(0)->GetP4(); assert( p4HNL && "Can get 4-momentum of probe" );
   // primary lepton is FirstDaughter() of Probe()
   // need Probe() as a GHepParticle(), not a TParticlePDG()!
   // get from event record position 0
   TLorentzVector * p4FSL = 0;
   if( event->FinalStatePrimaryLepton() ){
     int iFSL = event->Particle(0)->FirstDaughter();
-    assert( event->Particle( iFSL ) );
+    assert( event->Particle( iFSL ) && "Event record has first daughter of HNL" );
     p4FSL = ( event->Particle( iFSL ) )->GetP4(); 
-    assert( p4FSL );
+    assert( p4FSL && "Can get 4-momentum of first daughter" );
     TLorentzVector p4DIF( p4HNL->Px() - p4FSL->Px(),
 			  p4HNL->Py() - p4FSL->Py(),
 			  p4HNL->Pz() - p4FSL->Pz(),
@@ -455,7 +456,7 @@ void Decayer::LoadConfig(void)
   // call GetHNLInstance here, to get lifetime
   SimpleHNL sh = this->GetHNLInstance();
   double CoMLifetime = sh.GetCoMLifetime();
-  assert( CoMLifetime > 0.0 );
+  assert( CoMLifetime > 0.0 && "HNL rest-frame lifetime > 9.0" );
 
   // also read in particle gun parameters
   this->GetParam( "PG-OriginX", fPGOx );
