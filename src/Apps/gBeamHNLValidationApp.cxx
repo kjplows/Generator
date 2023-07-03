@@ -1039,12 +1039,14 @@ int TestGeom(void)
     TVector3 startPoint, momentum;
     TVector3 entryPoint, exitPoint, decayPoint;
 
-    startPoint.SetXYZ( use_ox, use_oy, use_oz ); // mm
+    startPoint.SetXYZ( use_ox * units::mm / units::m, 
+		       use_oy * units::mm / units::m,
+		       use_oz * units::mm / units::m ); // m
     momentum.SetXYZ( p4HNL->Px(), p4HNL->Py(), p4HNL->Pz() );
 
-    use_start[0] = use_ox;
-    use_start[1] = use_oy;
-    use_start[2] = use_oz;
+    use_start[0] = use_ox * units::mm / units::m;
+    use_start[1] = use_oy * units::mm / units::m;
+    use_start[2] = use_oz * units::mm / units::m; // m
 
     use_momentum[0] = p4HNL->Px();
     use_momentum[1] = p4HNL->Py();
@@ -1053,7 +1055,7 @@ int TestGeom(void)
 
     LOG( "gevald_hnl", pDEBUG )
       << "Set start point for this trajectory = " << utils::print::Vec3AsString( &startPoint )
-      << " [mm]";
+      << " [m]";
     LOG( "gevald_hnl", pDEBUG )
       << "Set momentum for this trajectory = " << utils::print::Vec3AsString( &momentum )
       << " [GeV/c]";
@@ -1064,8 +1066,8 @@ int TestGeom(void)
     GHepParticle ptHNL( genie::kPdgHNL, kIStInitialState, -1, -1, -1, -1, tmpMom, tmpVtx );
     event->AddParticle( ptHNL );
     LOG( "gevald_hnl", pDEBUG )
-      << "\nProbe x4 = " << utils::print::X4AsString( event->Particle(0)->X4() )
-      << "\nProbe p4 = " << utils::print::P4AsString( event->Particle(0)->P4() );
+      << "\nProbe x4 = " << utils::print::X4AsString( event->Particle(0)->X4() ) << " [m]"
+      << "\nProbe p4 = " << utils::print::P4AsString( event->Particle(0)->P4() ) << " [GeV/c]";
 
     event->Particle(0)->SetFirstMother(-2);
     vtxGen->ProcessEventRecord(event);
@@ -1085,9 +1087,9 @@ int TestGeom(void)
       use_exit[1]  = exitPoint.Y();
       use_exit[2]  = exitPoint.Z();
       
-      use_decay[0] = decayPoint.X();
-      use_decay[1] = decayPoint.Y();
-      use_decay[2] = decayPoint.Z();
+      use_decay[0] = decayPoint.X() * units::m / units::mm;
+      use_decay[1] = decayPoint.Y() * units::m / units::mm;
+      use_decay[2] = decayPoint.Z() * units::m / units::mm;
 
       double devX = decayPoint.X() * units::m / units::mm - entryPoint.X();
       double devY = decayPoint.Y() * units::m / units::mm - entryPoint.Y();

@@ -76,7 +76,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
     
     this->ImportBoundingBox( box );
     
-    this->ImportBoundingBox(box);
+    //this->ImportBoundingBox(box);
   }
 
   this->SetStartingParameters( event_rec );
@@ -479,9 +479,15 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
 			 xHNL_user.Z() - (fCz) * units::m / units::cm,
 			 x4HNL->T() ); // USER, cm ns
   } else {
+    /*
     x4HNL_user->SetXYZT( xHNL_user.X() - fDetTranslation.at(0) * units::m / units::mm,
 			 xHNL_user.Y() - fDetTranslation.at(1) * units::m / units::mm,
 			 xHNL_user.Z() - fDetTranslation.at(2) * units::m / units::mm,
+			 x4HNL->T() ); // USER, mm ns
+    */
+    x4HNL_user->SetXYZT( xHNL_user.X() * units::m / units::mm,
+			 xHNL_user.Y() * units::m / units::mm,
+			 xHNL_user.Z() * units::m / units::mm,
 			 x4HNL->T() ); // USER, mm ns
   }
 
@@ -549,9 +555,10 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   LOG( "HNL", pINFO )
     << "Starting to figure out entrances:"
     << "\nStarting point is ( " << fSx << ", " << fSy << ", " << fSz << " ) [ " << lunitString.c_str() << " ]"
-    << "\nIn our volume this becomes ( " << fSx - fTx - fDetTranslation.at(0) * units::m / lunits << ", " 
-    << fSy - fTy - fDetTranslation.at(1) * units::m / lunits << ", " 
-    << fSz - fTz - fDetTranslation.at(2) * units::m / lunits << " ) [ " 
+    << "\nIn our volume this becomes ( " 
+    << fSx - (fTx + fDetTranslation.at(0)) * units::m / lunits << ", " 
+    << fSy - (fTy + fDetTranslation.at(1)) * units::m / lunits << ", " 
+    << fSz - (fTz + fDetTranslation.at(2)) * units::m / lunits << " ) [ " 
     << lunitString.c_str() << " ]"
     << "\nStarting dirn  is ( " << fPx << ", " << fPy << ", " << fPz << " ) ";
 
@@ -559,6 +566,61 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
 
   LOG( "HNL", pDEBUG ) << "Starting to search for intersections...";
+
+  if( isParticleGun ) {
+    // We start outside the detector. First, write out the starting point in top_volume coordinates
+    RandomGen * rnd = RandomGen::Instance();
+    LOG( "HNL" , pDEBUG )
+      << "isParticleGun!!"
+      << "\nstartPoint = ( " << (gGeoManager->GetCurrentPoint())[0]
+      << ", " << (gGeoManager->GetCurrentPoint())[1] << ", " << (gGeoManager->GetCurrentPoint())[2]
+      << " ) [top_volume, cm]"
+      << "\nDirection = ( " << (gGeoManager->GetCurrentDirection())[0]
+      << ", " << (gGeoManager->GetCurrentDirection())[1] 
+      << ", " << (gGeoManager->GetCurrentDirection())[2] << " ) [GeV/GeV]";
+
+    assert( (gGeoManager->GetCurrentDirection())[2] != 0.0 && "HNL propagates along USER z" );
+
+    // roll a random point along z that's inside the detector.
+    // Find out the x and y coordinates it should have.
+    // If it's inside the detector, set as a new starting point and continue. Else bail.
+
+    double xBack = -fLxROOT/2.0; double xFront = fLxROOT/2.0;
+    double yBack = -fLyROOT/2.0; double yFront = fLyROOT/2.0;
+    double zBack = -fLzROOT/2.0; double zFront = fLzROOT/2.0; // USER cm
+
+    double zTest = (rnd->RndGen()).Uniform( zBack, zFront ); // USER cm
+
+    double dz = zTest - (gGeoManager->GetCurrentPoint())[2]; // cm
+    double dxdz = (gGeoManager->GetCurrentDirection())[0]/(gGeoManager->GetCurrentDirection())[2];
+    double dydz = (gGeoManager->GetCurrentDirection())[1]/(gGeoManager->GetCurrentDirection())[2];
+    double dx = dxdz * dz; // cm
+    double dy = dydz * dz; // cm
+    double xTest = (gGeoManager->GetCurrentPoint())[0] + dx;
+    double yTest = (gGeoManager->GetCurrentPoint())[1] + dy;
+
+    LOG( "HNL", pDEBUG )
+      << "\nzTest = " << zTest << " [top_volume, cm]"
+      << "\ndxdz, dydz = " << dxdz << ", " << dydz << " [top_volume, GeV/GeV]"
+      << "\nxTest, yTest = " << xTest << ", " << yTest << " [top_volume, cm]";
+
+    // now check to see if this is within the geometry
+    pathString = this->CheckGeomPoint( xTest, yTest, zTest );
+    LOG( "HNL", pDEBUG )
+      << "Here is the pathString: " << pathString;
+    if( pathString.find( fTopVolume.c_str() ) == string::npos ){
+      LOG( "HNL", pDEBUG )
+	<< "This trajectory does NOT intersect the detector. Bailing...";
+      return false;
+    } else { // we are ok! Set the new starting point and continue to find entry and exit points.
+      LOG( "HNL", pDEBUG )
+	<< "This trajectory DOES intersect the detector. Good!";
+      gGeoManager->SetCurrentPoint( xTest, yTest, zTest );
+      firstXROOT = xTest; firstYROOT = yTest; firstZROOT = zTest;
+      LOG( "HNL", pDEBUG )
+	<< "New starting point is at ( " << xTest << ", " << yTest << ", " << zTest << " ) [top_volume, cm]";
+    }
+  } // if( isParticleGun )
 
   // we are inside the top volume. We want to exit it twice, once going backwards and once forwards.
   // The track enters in the former point and exits in the latter.
@@ -583,7 +645,7 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
       entryPoint.SetXYZ( newX, newY, newZ );
   } // exit out
 
-  // Let's save this point
+    // Let's save this point
   fEx = ( gGeoManager->GetCurrentPoint() )[0] * genie::units::cm / lunits;
   fEy = ( gGeoManager->GetCurrentPoint() )[1] * genie::units::cm / lunits;
   fEz = ( gGeoManager->GetCurrentPoint() )[2] * genie::units::cm / lunits;
@@ -638,7 +700,7 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
       exitPoint.SetXYZ( newX, newY, newZ );
   } // exit out
 
-  // Let's save this point
+    // Let's save this point
   fXx = ( gGeoManager->GetCurrentPoint() )[0] * genie::units::cm / lunits;
   fXy = ( gGeoManager->GetCurrentPoint() )[1] * genie::units::cm / lunits;
   fXz = ( gGeoManager->GetCurrentPoint() )[2] * genie::units::cm / lunits;
