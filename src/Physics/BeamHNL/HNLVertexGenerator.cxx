@@ -871,7 +871,6 @@ TGeoMatrix * VertexGenerator::FindFullTransformation( TGeoVolume * top_vol, TGeo
   std::string top_path( top_node->GetName() ); paths.emplace_back( top_path );
   TGeoMatrix * top_mat = top_node->GetMatrix(); mats.emplace_back( top_mat );
 
-  bool foundPath = false;
   std::string test = paths.front();
   // strip all slashes from test
   while( test.find("/") != string::npos ){
@@ -884,6 +883,9 @@ TGeoMatrix * VertexGenerator::FindFullTransformation( TGeoVolume * top_vol, TGeo
 
   LOG( "HNL", pNOTICE )
     << "Looking for this targetPath: " << targetPath;
+
+  // could be we hit the top volume, in which case we skip the loop
+  bool foundPath = (strcmp( test.c_str(), targetPath.c_str() ) == 0);
 
   //while( test.find( targetPath.c_str() ) == string::npos ){ // still looking for the path.
   while( strcmp( test.c_str(), targetPath.c_str() ) != 0 && !foundPath ){ // still looking
