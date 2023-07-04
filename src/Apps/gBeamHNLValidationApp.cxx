@@ -876,8 +876,10 @@ int TestGeom(void)
   outTree->Branch( "lifetime_LAB", &use_lifetime,    "lifetime_LAB/D"    );
   outTree->Branch( "lifetime_CM",  &use_CMlifetime,  "lifetime_CM/D"     );
 
+  double gMaxCoupling = std::max( gCfgECoupling, std::max( gCfgMCoupling, gCfgTCoupling ) );
+  double gLog = static_cast<double>(static_cast<int>(std::log10(gMaxCoupling) - 0.5)); // rounding
   TH1D hWeight( "hWeight", "Log_{10} ( P( decay in detector ) )", 
-		160, -15.0, 1.0  );
+		120, gLog-0.5, gLog+0.1  ); // (160, -15.0, 1.0) --> bin width in 0.1 decade
   TH1D hLength( "hLength", "Length travelled in detector / max possible length in detector",
 		100, 0., 1.0 );
 
@@ -972,17 +974,47 @@ int TestGeom(void)
 
   // first make the points
   const int NCARTESIAN = 5;
-  const int NSPHERICAL = 9;
+  const int NSPHERICAL = 21; //9;
   const int NMAX = NCARTESIAN * NCARTESIAN * NCARTESIAN * NSPHERICAL * NSPHERICAL;
 
   double arr_ox[ NCARTESIAN ] = { PGox - PGdx, PGox - PGdx/2.0, PGox, PGox + PGdx/2.0, PGox + PGdx };
   double arr_oy[ NCARTESIAN ] = { PGoy - PGdy, PGoy - PGdy/2.0, PGoy, PGoy + PGdy/2.0, PGoy + PGdy };
   double arr_oz[ NCARTESIAN ] = { PGoz - PGdz, PGoz - PGdz/2.0, PGoz, PGoz + PGdz/2.0, PGoz + PGdz };
 
+  /*
   double arr_theta[ NSPHERICAL ] = { PGtheta - PGdtheta, PGtheta - 3.0/4.0 * PGdtheta, PGtheta - 1.0/2.0 * PGdtheta, PGtheta - 1.0/4.0 * PGdtheta, PGtheta, PGtheta + 1.0/4.0 * PGdtheta, PGtheta + 1.0/2.0 * PGdtheta, PGtheta + 3.0/4.0 * PGdtheta, PGtheta + PGdtheta };
   double arr_phi[ NSPHERICAL ] = { PGphi - PGdphi, PGphi - 3.0/4.0 * PGdphi, PGphi - 1.0/2.0 * PGdphi, PGphi - 1.0/4.0 * PGdphi, PGphi, PGphi + 1.0/4.0 * PGdphi, PGphi + 1.0/2.0 * PGdphi, PGphi + 3.0/4.0 * PGdphi, PGphi + PGdphi };
+  */
 
-  // so now we have NCARTESIAN ^3 x NSPHERICAL ^2 points to iterate over. That's 10125 events for 5 and 9
+  double arr_theta[ NSPHERICAL ] = {
+    PGtheta - 10.0 / 10.0 * PGdtheta, PGtheta - 9.0 / 10.0 * PGdtheta,
+    PGtheta - 8.0 / 10.0 * PGdtheta, PGtheta - 7.0 / 10.0 * PGdtheta,
+    PGtheta - 6.0 / 10.0 * PGdtheta, PGtheta - 5.0 / 10.0 * PGdtheta,
+    PGtheta - 4.0 / 10.0 * PGdtheta, PGtheta - 3.0 / 10.0 * PGdtheta,
+    PGtheta - 2.0 / 10.0 * PGdtheta, PGtheta - 1.0 / 10.0 * PGdtheta,
+    PGtheta,
+    PGtheta + 1.0 / 10.0 * PGdtheta, PGtheta + 2.0 / 10.0 * PGdtheta,
+    PGtheta + 3.0 / 10.0 * PGdtheta, PGtheta + 4.0 / 10.0 * PGdtheta,
+    PGtheta + 5.0 / 10.0 * PGdtheta, PGtheta + 6.0 / 10.0 * PGdtheta,
+    PGtheta + 7.0 / 10.0 * PGdtheta, PGtheta + 8.0 / 10.0 * PGdtheta,
+    PGtheta + 9.0 / 10.0 * PGdtheta, PGtheta + 10.0 / 10.0 * PGdtheta
+  };
+
+  double arr_phi[ NSPHERICAL ] = {
+    PGphi - 10.0 / 10.0 * PGdphi, PGphi - 9.0 / 10.0 * PGdphi,
+    PGphi - 8.0 / 10.0 * PGdphi, PGphi - 7.0 / 10.0 * PGdphi,
+    PGphi - 6.0 / 10.0 * PGdphi, PGphi - 5.0 / 10.0 * PGdphi,
+    PGphi - 4.0 / 10.0 * PGdphi, PGphi - 3.0 / 10.0 * PGdphi,
+    PGphi - 2.0 / 10.0 * PGdphi, PGphi - 1.0 / 10.0 * PGdphi,
+    PGphi,
+    PGphi + 1.0 / 10.0 * PGdphi, PGphi + 2.0 / 10.0 * PGdphi,
+    PGphi + 3.0 / 10.0 * PGdphi, PGphi + 4.0 / 10.0 * PGdphi,
+    PGphi + 5.0 / 10.0 * PGdphi, PGphi + 6.0 / 10.0 * PGdphi,
+    PGphi + 7.0 / 10.0 * PGdphi, PGphi + 8.0 / 10.0 * PGdphi,
+    PGphi + 9.0 / 10.0 * PGdphi, PGphi + 10.0 / 10.0 * PGdphi
+  };
+
+  // so now we have NCARTESIAN ^3 x NSPHERICAL ^2 points to iterate over. That's 10125 events for 5 and 9, or 55125 for 5 and 21
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
   
@@ -994,6 +1026,9 @@ int TestGeom(void)
   while( true ){
 
     if( ievent == NMAX ) break;
+
+    int irat = ievent / ( NMAX / 1000 );    
+    std::cerr << 0.1 * irat << " % " << " ( " << ievent << " / " << NMAX << " processed ) \r" << std::flush;
 
     LOG( "gevald_hnl", pDEBUG )
       << "*** Building event = " << ievent;
