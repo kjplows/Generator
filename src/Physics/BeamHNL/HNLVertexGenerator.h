@@ -20,6 +20,7 @@
 
 #include <cmath>
 #include <cassert>
+#include <list>
 
 #include <TVector3.h>
 //#ifdef __GENIE_GEOM_DRIVERS_ENABLED__ // why do we crash with this guard on?
@@ -73,6 +74,7 @@ namespace hnl {
 #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
     // use bounding box origin & sides
     void ImportBoundingBox( TGeoBBox * box ) const;
+    TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const;
 #endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
 
     void SetStartingParameters( GHepRecord * event_rec ) const;

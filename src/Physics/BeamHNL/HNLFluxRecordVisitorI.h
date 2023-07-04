@@ -64,6 +64,10 @@ namespace genie {
       FluxRecordVisitorI(string name);
       FluxRecordVisitorI(string name, string config);
 
+#ifdef __GENIE_GEOM_DRIVERS_ENABLED__
+      virtual TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const = 0;
+#endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
+
     };
 
   } // namespace hnl

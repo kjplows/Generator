@@ -58,9 +58,10 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
     assert( top_volume && "Top volume exists" );
     // now get the translation of the top volume
     if( main_volume != top_volume ) {
-      main_volume->FindMatrixOfDaughterVolume(top_volume);
-      TGeoHMatrix * hmat = gGeoManager->GetHMatrix();
-      Double_t * tran = hmat->GetTranslation();
+      //main_volume->FindMatrixOfDaughterVolume(top_volume);
+      //TGeoHMatrix * hmat = gGeoManager->GetHMatrix();
+      TGeoMatrix * hmat = this->FindFullTransformation( main_volume, top_volume );
+      const Double_t * tran = hmat->GetTranslation();
       fTx = tran[0] * units::cm / units::m;
       fTy = tran[1] * units::cm / units::m;
       fTz = tran[2] * units::cm / units::m;
@@ -2279,4 +2280,146 @@ std::string FluxCreator::CheckGeomPoint( Double_t x, Double_t y, Double_t z ) co
   TGeoNode *node = gGeoManager->FindNode(point[0], point[1], point[2]);
   gGeoManager->MasterToLocal(point, local);
   return gGeoManager->GetPath();
+}
+//____________________________________________________________________________
+TGeoMatrix * FluxCreator::FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const
+{
+  // Recurses over the ROOT file geometry structure to find the target volume tar_vol.
+  // Returns the full transformation matrix of the daughter volume as a composition of matrices
+
+  std::list<TGeoNode *> nodes; // to parse hierarchy (i.e. daughters)
+  std::list<std::string> paths; // store path of nodes checked
+  std::list<TGeoMatrix *> mats; // compositions of matrices here!
+
+  assert( top_vol && tar_vol && "Top and target volumes both accessible" );
+
+  std::string targetPath( tar_vol->GetName() );
+
+  // Start by grabbing the daughter structure of the top volume and parse until found
+  TGeoNode * top_node = top_vol->GetNode(0); nodes.emplace_back( top_node );
+  std::string top_path( top_node->GetName() ); paths.emplace_back( top_path );
+  TGeoMatrix * top_mat = top_node->GetMatrix(); mats.emplace_back( top_mat );
+
+  std::string test = paths.front();
+  // strip all slashes from test
+  while( test.find("/") != string::npos ){
+    int idx = test.find("/");
+    test = test.substr(idx+1);
+  }
+  // and strip tailing underscore
+  int ididx = test.find("_", test.size()-3);
+  test = test.substr( 0, ididx );
+
+  //while( test.find( targetPath.c_str() ) == string::npos ){ // still looking for the path.
+  while( strcmp( test.c_str(), targetPath.c_str() ) != 0 ){ // still looking for the path.
+    LOG( "HNL", pDEBUG )
+      << "Test string is " << test << ", targetPath is " << targetPath;
+
+    TGeoNode * node = nodes.front();
+    std::string path = paths.front();
+    TGeoMatrix * mat = mats.front();
+
+    assert( node  && "Node is not null" );
+    assert( mat && "Matrix is not null" );
+    LOG( "HNL", pDEBUG ) << "Got node, path, and matrix...";
+
+    int nDaughters = node->GetNdaughters();
+    LOG( "HNL", pDEBUG ) << "Node with name " << path << " has " << nDaughters << " daughters...";
+    for( int iDaughter = 0; iDaughter < nDaughters; iDaughter++ ){
+      TGeoNode * dNode = node->GetDaughter(iDaughter);
+      assert( dNode && "Daughter node not null" );
+      std::string dPath( path );
+      dPath.append( "/" ); dPath.append( dNode->GetName() );
+      TGeoMatrix * nodeMat = dNode->GetMatrix();
+
+      LOG( "HNL", pDEBUG ) << "Got node, path, and matrix for daughter node "
+			   << iDaughter << " / " << nDaughters-1 << "...";
+
+      // construct the full updated matrix from multiplying dMat on the left of mat
+      const Double_t * nodeRot = nodeMat->GetRotationMatrix();
+      const Double_t * nodeTra = nodeMat->GetTranslation();
+      
+      const Double_t * baseRot = mat->GetRotationMatrix();
+      const Double_t * baseTra = mat->GetTranslation();
+
+      const Double_t compTra[3] = { baseTra[0] + nodeTra[0], 
+				    baseTra[1] + nodeTra[1],
+				    baseTra[2] + nodeTra[2] }; // this was easy.
+      const Double_t compRot[9] = { nodeRot[0] * baseRot[0] + nodeRot[1] * baseRot[3] + nodeRot[2] * baseRot[6],
+				    nodeRot[0] * baseRot[1] + nodeRot[1] * baseRot[4] + nodeRot[2] * baseRot[7],
+				    nodeRot[0] * baseRot[2] + nodeRot[1] * baseRot[5] + nodeRot[2] * baseRot[8],
+				    nodeRot[3] * baseRot[0] + nodeRot[4] * baseRot[3] + nodeRot[5] * baseRot[6],
+				    nodeRot[3] * baseRot[1] + nodeRot[4] * baseRot[4] + nodeRot[5] * baseRot[7],
+				    nodeRot[3] * baseRot[2] + nodeRot[4] * baseRot[5] + nodeRot[5] * baseRot[8],
+				    nodeRot[6] * baseRot[0] + nodeRot[7] * baseRot[3] + nodeRot[8] * baseRot[6],
+				    nodeRot[6] * baseRot[1] + nodeRot[7] * baseRot[4] + nodeRot[8] * baseRot[7],
+				    nodeRot[6] * baseRot[2] + nodeRot[7] * baseRot[5] + nodeRot[8] * baseRot[8] }; // less easy but ok.
+
+      // construct a TGeoMatrix * from these quantities...
+      TGeoHMatrix * hmat = new TGeoHMatrix( dPath.c_str() );
+      hmat->SetTranslation( compTra );
+      hmat->SetRotation( compRot );
+      TGeoMatrix * dMat = dynamic_cast< TGeoMatrix * >( hmat );
+
+      LOG( "HNL", pDEBUG )
+	<< "\nNode with name " << targetPath << " not yet found."
+	<< "\nParsing node with name " << dPath << "..."
+	<< "\n\nThis node had the following translations: ( " 
+	<< nodeTra[0] << ", " << nodeTra[1] << ", " << nodeTra[2] << " )"
+	<< " composed onto ( " << baseTra[0] << ", " << baseTra[1] << ", " << baseTra[2] << " ),"
+	<< "\ngiving a final translation ( " << compTra[0] << ", " << compTra[1] << ", " 
+	<< compTra[2] << " )."
+	<< "\n\nThis node had the following rotation matrix: ( ( " 
+	<< nodeRot[0] << ", " << nodeRot[1] << ", " << nodeRot[2] << " ), ( "
+	<< nodeRot[3] << ", " << nodeRot[4] << ", " << nodeRot[5] << " ), ( "
+	<< nodeRot[6] << ", " << nodeRot[7] << ", " << nodeRot[8] << " ) ),"
+	<< "\ncomposed onto ( ( "
+	<< baseRot[0] << ", " << baseRot[1] << ", " << baseRot[2] << " ), ( "
+	<< baseRot[3] << ", " << baseRot[4] << ", " << baseRot[5] << " ), ( "
+	<< baseRot[6] << ", " << baseRot[7] << ", " << baseRot[8] << " ) ),"
+	<< "\ngiving a final rotation ( ( "
+	<< compRot[0] << ", " << compRot[1] << ", " << compRot[2] << " ), ( "
+	<< compRot[3] << ", " << compRot[4] << ", " << compRot[5] << " ), ( "
+	<< compRot[6] << ", " << compRot[7] << ", " << compRot[8] << " ) ).";
+
+      // add to list TAIL and strike away list HEAD
+      nodes.emplace_back( dNode );
+      paths.emplace_back( dPath );
+      mats.emplace_back( dMat );
+
+      // break if we found the target path to ensure the TAIL always points to desired node
+      //if( dPath.find( targetPath.c_str() ) ) break;
+      if( strcmp( dPath.c_str(), targetPath.c_str() ) == 0 ) break;
+    } // loop over daughters
+
+    nodes.pop_front();
+    paths.pop_front();
+    mats.pop_front();
+
+    test = paths.front();
+    while( test.find("/") != string::npos ){
+      int idx = test.find("/");
+      test = test.substr(idx+1);
+    }
+    ididx = test.find("_", test.size()-3);
+    test = test.substr( 0, ididx );
+  } // while path not found
+
+  // found the path! The matrix is at the end.
+  TGeoMatrix * final_mat = mats.back();
+
+  const Double_t * final_tra = final_mat->GetTranslation();
+  const Double_t * final_rot = final_mat->GetRotationMatrix();
+
+  LOG( "HNL", pDEBUG )
+    << "Found the target volume! Here is its path and full matrix:"
+    << "\nPath: " << paths.back()
+    << "\nTranslations: ( " << final_tra[0] << ", " << final_tra[1] << ", " << final_tra[2]
+    << " ) [cm]"
+    << "\nRotation matrix: ( ( " 
+    << final_rot[0] << ", " << final_rot[1] << ", " << final_rot[2] << " ), ( "
+    << final_rot[3] << ", " << final_rot[4] << ", " << final_rot[5] << " ), ( "
+    << final_rot[6] << ", " << final_rot[7] << ", " << final_rot[8] << " ) )";
+
+  return final_mat;
 }
