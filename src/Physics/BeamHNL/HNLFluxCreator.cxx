@@ -2300,6 +2300,7 @@ TGeoMatrix * FluxCreator::FindFullTransformation( TGeoVolume * top_vol, TGeoVolu
   std::string top_path( top_node->GetName() ); paths.emplace_back( top_path );
   TGeoMatrix * top_mat = top_node->GetMatrix(); mats.emplace_back( top_mat );
 
+  bool foundPath = false;
   std::string test = paths.front();
   // strip all slashes from test
   while( test.find("/") != string::npos ){
@@ -2307,21 +2308,20 @@ TGeoMatrix * FluxCreator::FindFullTransformation( TGeoVolume * top_vol, TGeoVolu
     test = test.substr(idx+1);
   }
   // and strip tailing underscore
-  int ididx = test.find("_", test.size()-3);
+  int ididx = test.rfind("_");
   test = test.substr( 0, ididx );
 
-  //while( test.find( targetPath.c_str() ) == string::npos ){ // still looking for the path.
-  while( strcmp( test.c_str(), targetPath.c_str() ) != 0 ){ // still looking for the path.
-    LOG( "HNL", pDEBUG )
-      << "Test string is " << test << ", targetPath is " << targetPath;
+  LOG( "HNL", pNOTICE )
+    << "Looking for this targetPath: " << targetPath;
 
+  //while( test.find( targetPath.c_str() ) == string::npos ){ // still looking for the path.
+  while( strcmp( test.c_str(), targetPath.c_str() ) != 0 && !foundPath ){ // still looking
     TGeoNode * node = nodes.front();
     std::string path = paths.front();
     TGeoMatrix * mat = mats.front();
 
     assert( node  && "Node is not null" );
     assert( mat && "Matrix is not null" );
-    LOG( "HNL", pDEBUG ) << "Got node, path, and matrix...";
 
     int nDaughters = node->GetNdaughters();
     LOG( "HNL", pDEBUG ) << "Node with name " << path << " has " << nDaughters << " daughters...";
@@ -2361,6 +2361,7 @@ TGeoMatrix * FluxCreator::FindFullTransformation( TGeoVolume * top_vol, TGeoVolu
       hmat->SetRotation( compRot );
       TGeoMatrix * dMat = dynamic_cast< TGeoMatrix * >( hmat );
 
+      /*
       LOG( "HNL", pDEBUG )
 	<< "\nNode with name " << targetPath << " not yet found."
 	<< "\nParsing node with name " << dPath << "..."
@@ -2381,6 +2382,7 @@ TGeoMatrix * FluxCreator::FindFullTransformation( TGeoVolume * top_vol, TGeoVolu
 	<< compRot[0] << ", " << compRot[1] << ", " << compRot[2] << " ), ( "
 	<< compRot[3] << ", " << compRot[4] << ", " << compRot[5] << " ), ( "
 	<< compRot[6] << ", " << compRot[7] << ", " << compRot[8] << " ) ).";
+      */
 
       // add to list TAIL and strike away list HEAD
       nodes.emplace_back( dNode );
@@ -2389,29 +2391,46 @@ TGeoMatrix * FluxCreator::FindFullTransformation( TGeoVolume * top_vol, TGeoVolu
 
       // break if we found the target path to ensure the TAIL always points to desired node
       //if( dPath.find( targetPath.c_str() ) ) break;
-      if( strcmp( dPath.c_str(), targetPath.c_str() ) == 0 ) break;
+      while( dPath.find("/") != string::npos ){
+	int idx = dPath.find("/");
+	dPath = dPath.substr(idx+1);
+      }
+      ididx = dPath.rfind("_");
+      dPath = dPath.substr( 0, ididx );
+      if( strcmp( dPath.c_str(), targetPath.c_str() ) == 0 ){ foundPath = true; break; }
     } // loop over daughters
 
-    nodes.pop_front();
-    paths.pop_front();
-    mats.pop_front();
+    if( !foundPath ){ // prevent popping out of last element!
+      nodes.pop_front();
+      paths.pop_front();
+      mats.pop_front();
 
-    test = paths.front();
-    while( test.find("/") != string::npos ){
-      int idx = test.find("/");
-      test = test.substr(idx+1);
+      test = paths.front();
+      while( test.find("/") != string::npos ){
+	int idx = test.find("/");
+	test = test.substr(idx+1);
+      }
+      ididx = test.rfind("_");
+      test = test.substr( 0, ididx );
     }
-    ididx = test.find("_", test.size()-3);
-    test = test.substr( 0, ididx );
   } // while path not found
 
+  std::string final_path = paths.back();
+  while( final_path.find("/") != string::npos ){
+    int idx = final_path.find("/");
+    final_path = final_path.substr(idx+1);
+  }
+  ididx = final_path.rfind("_");
+  final_path = final_path.substr( 0, ididx );
+  assert( strcmp( final_path.c_str(), targetPath.c_str() ) == 0 && foundPath &&
+	  "Found the target volume's path in the ROOT geometry hierarchy" );
   // found the path! The matrix is at the end.
   TGeoMatrix * final_mat = mats.back();
 
   const Double_t * final_tra = final_mat->GetTranslation();
   const Double_t * final_rot = final_mat->GetRotationMatrix();
 
-  LOG( "HNL", pDEBUG )
+  LOG( "HNL", pINFO )
     << "Found the target volume! Here is its path and full matrix:"
     << "\nPath: " << paths.back()
     << "\nTranslations: ( " << final_tra[0] << ", " << final_tra[1] << ", " << final_tra[2]
