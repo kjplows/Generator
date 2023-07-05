@@ -132,6 +132,8 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 	if( fLPz >= 0.0 ) evrec->SetXSec( 1.0 );
 	else evrec->SetXSec( -1.0 );
 	evrec->Particle(0)->SetPosition( tmpx4 );
+
+	delete vx4;
 	
       } // if( fGnmf.fgXYWgt >= 0 )
     } // if( iCurrEntry > fFirstEntry )
@@ -843,7 +845,7 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
     if( rootElements->GetEntries() == 0 ) continue;
     else rootElements->ls();
 
-    TSystemFile * elem;
+    //TSystemFile * elem;
     TIter next(rootElements);
     TObject * sFile;
     TIter sNext( rootElements );
@@ -851,7 +853,7 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
     // put all the files in the list, and all the directories in the dirs list.
     // for names, add the full path (== dirPath + "/" + name of next dir)
     // TSystemDirectory inherits from TSystemFile
-    while( sFile = sNext() ){
+    while( (sFile = sNext()) != NULL ){ // you read that right, this is one =.
       TString fullPath = dirPath + "/" + sFile->GetName() ;
       if( dynamic_cast< TSystemDirectory * >( sFile ) ) {
 	dirs.emplace_back( sFile );
@@ -1576,8 +1578,8 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   const double sz = TMath::Sin(fBz), cz = TMath::Cos(fBz);
   const double sx2 = TMath::Sin(fBx2), cx2 = TMath::Cos(fBx2);
 
-  const double xun[3] = { cz, -cx1*sz, sx1*sz };
-  const double yun[3] = { sz*cx2, cx1*cz*cx2 - sx1*sx2, -sx1*cz*cx2 - cx1*sx2 };
+  //const double xun[3] = { cz, -cx1*sz, sx1*sz };
+  //const double yun[3] = { sz*cx2, cx1*cz*cx2 - sx1*sx2, -sx1*cz*cx2 - cx1*sx2 };
   const double zun[3] = { sz*sx2, cx1*cz*sx2 + sx1*cx2, -sx1*cz*sx2 + cx1*cx2 };
 
   /*
@@ -1705,7 +1707,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 
   gGeoManager->SetCurrentPoint( detStartPoint.X(), detStartPoint.Y(), detStartPoint.Z() );
   gGeoManager->SetCurrentDirection( detSweepVect.X() / swvMag, detSweepVect.Y() / swvMag, detSweepVect.Z() / swvMag );
-  const double sStepSize = 0.05 * std::min( std::min( fLx, fLy ), fLz );
+  //const double sStepSize = 0.05 * std::min( std::min( fLx, fLy ), fLz );
 
   // start stepping. Let's do this manually cause FindNextBoundaryAndStep() can be finicky.
   // if start inside detector, then only find exit point, otherwise find entry point.
@@ -1964,7 +1966,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
   if( zm < fHNL->GetMinimum() ){ // really good collimation, ignore checks on zm
     double z0 = fHNL->GetMinimum();
     if( ymax > zp && xmax < 180.0 ){ // >=2 pre-images, add them together
-      int nPreim = 0;
+      //int nPreim = 0;
 
       // RETHERE: Make this more sophisticated! Assumes 2 preimages, 1 before and 1 after max
       double xl1 = fHNL->GetX( z0, 0.0, xmax );
@@ -1972,7 +1974,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
       double xl2 = fHNL->GetX( z0, xmax, 180.0 );
       double xh2 = fHNL->GetX( zp, xmax, 180.0 );
 
-      range1 += std::abs( xl1 - xh1 ) + std::abs( xh2 - xl2 ); nPreim = 2;
+      range1 += std::abs( xl1 - xh1 ) + std::abs( xh2 - xl2 ); //nPreim = 2;
     } else if( ymax > zp && xmax == 180.0 ){ // 1 pre-image, SMv-like case
       double xl = fHNL->GetX( z0 ), xh = fHNL->GetX( zp );
       range1 = std::abs( xh - xl );
@@ -1985,7 +1987,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
     if( ymax <= zm ){ // 0 pre-images
       return 0.0;
     } else if( ymax > zp && xmax < 180.0 ){ // >=2 pre-images, add them together
-      int nPreim = 0;
+      //int nPreim = 0;
 
       // RETHERE: Make this more sophisticated! Assumes 2 preimages, 1 before and 1 after max
       double xl1 = fHNL->GetX( zm, 0.0, xmax );
@@ -1993,7 +1995,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
       double xl2 = fHNL->GetX( zm, xmax, 180.0 );
       double xh2 = fHNL->GetX( zp, xmax, 180.0 );
 
-      range1 += std::abs( xl1 - xh1 ) + std::abs( xh2 - xl2 ); nPreim = 2;
+      range1 += std::abs( xl1 - xh1 ) + std::abs( xh2 - xl2 ); //nPreim = 2;
     } else if( ymax > zp && xmax == 180.0 ){ // 1 pre-image, SMv-like case
       double xl = fHNL->GetX( zm ), xh = fHNL->GetX( zp );
       range1 = std::abs( xh - xl );

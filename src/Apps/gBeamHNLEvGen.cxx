@@ -208,11 +208,13 @@ double fox = 0; // origin - x
 double foy = 0; // origin - y
 double foz = 0; // origin - z
 
+/*
 double NTP_IS_E = 0., NTP_IS_PX = 0., NTP_IS_PY = 0., NTP_IS_PZ = 0.;
 double NTP_FS0_E = 0., NTP_FS0_PX = 0., NTP_FS0_PY = 0., NTP_FS0_PZ = 0.;
 double NTP_FS1_E = 0., NTP_FS1_PX = 0., NTP_FS1_PY = 0., NTP_FS1_PZ = 0.;
 double NTP_FS2_E = 0., NTP_FS2_PX = 0., NTP_FS2_PY = 0., NTP_FS2_PZ = 0.;
 int NTP_FS0_PDG = 0, NTP_FS1_PDG = 0, NTP_FS2_PDG = 0;
+*/
 
 // HNL lifetime in rest frame
 double CoMLifetime = -1.0; // GeV^{-1}
@@ -407,7 +409,7 @@ int main(int argc, char ** argv)
        if( ! event->Particle(0) ){ iflux++; delete event; continue; }
        
        // add position to generate in the event record for now
-       gOptEnergyHNL = event->Particle(0)->GetP4()->E();
+       gOptEnergyHNL = event->Particle(0)->E();
        iflux++;
      } else { // monoenergetic HNL. Add it with energy and momentum pointing on z axis
        
@@ -469,6 +471,7 @@ int main(int argc, char ** argv)
 				      retGnmf.targetPointUser.Y(),
 				      retGnmf.targetPointUser.Z(), 0.0 );
 
+     /*
      // add the FS 4-momenta to special branches
      // Quite inelegant. Gets the job done, though
      NTP_FS0_PDG = (event->Particle(1))->Pdg();
@@ -495,13 +498,14 @@ int main(int argc, char ** argv)
        NTP_FS2_PY = 0.0;
        NTP_FS2_PZ = 0.0;
      }
+     */
 
      // Generate (or read) a position for the decay vertex
      // also currently handles the geometrical weight
      TLorentzVector x4mm;
      if( gOptUsingRootGeom ){
-       TLorentzVector * p4HNL = event->Particle(0)->GetP4();
-       NTP_IS_E = p4HNL->E(); NTP_IS_PX = p4HNL->Px(); NTP_IS_PY = p4HNL->Py(); NTP_IS_PZ = p4HNL->Pz();
+       //TLorentzVector * p4HNL = event->Particle(0)->GetP4();
+       //NTP_IS_E = p4HNL->E(); NTP_IS_PX = p4HNL->Px(); NTP_IS_PY = p4HNL->Py(); NTP_IS_PZ = p4HNL->Pz();
        vtxGen->ProcessEventRecord( event );
        x4mm = *(event->Vertex());
      } else {

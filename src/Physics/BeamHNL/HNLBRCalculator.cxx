@@ -191,8 +191,8 @@ double BRCalculator::DWidth_PseudoscalarToLepton( const double mP, const double 
 }
 //----------------------------------------------------------------------------
 double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const double M, const double ma ) const {
-  assert( mP == mK || mP == mK0 && "P --> N4 + l_a + pi: P == K or K0" ); // RETHERE remove this when/if heavier pseudoscalars are considered
-  assert( ma == mE || ma == mMu && "l_a == e, mu" );
+  assert( (mP == mK || mP == mK0) && "P --> N4 + l_a + pi: P == K or K0" ); // RETHERE remove this when/if heavier pseudoscalars are considered
+  assert( (ma == mE || ma == mMu) && "l_a == e, mu" );
   
   std::map< double, double > scaleMap = ( ma == mE ) ? kscale_K3e : kscale_K3mu;
 

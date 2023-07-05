@@ -72,7 +72,7 @@ void Decayer::ProcessEventRecord(GHepRecord * event) const
 //____________________________________________________________________________
 void Decayer::AddInitialState(GHepRecord * event) const
 {
-  std::vector< double > * prodVtx = 0;
+  std::vector< double > prodVtx;
 
   Interaction * interaction = event->Summary();
   InitialState * init_state = interaction->InitStatePtr();
@@ -81,13 +81,16 @@ void Decayer::AddInitialState(GHepRecord * event) const
   if( event->Particle(0) ){
     // p4 was already set using HNLFluxCreator. No action needed.
     // Read event vertex == HNL production vertex. We will find the decay vertex later.
-    p4 = *( init_state->GetProbeP4() );
+    //p4 = *( init_state->GetProbeP4() );
+    TLorentzVector * pp4 = init_state->GetProbeP4();
+    p4 = *pp4;
+    delete pp4;
 
-    prodVtx = new std::vector< double >();
-    prodVtx->emplace_back( event->Vertex()->X() );
-    prodVtx->emplace_back( event->Vertex()->Y() );
-    prodVtx->emplace_back( event->Vertex()->Z() );
-    prodVtx->emplace_back( event->Vertex()->T() );
+    //prodVtx = new std::vector< double >();
+    prodVtx.emplace_back( event->Vertex()->X() );
+    prodVtx.emplace_back( event->Vertex()->Y() );
+    prodVtx.emplace_back( event->Vertex()->Z() );
+    prodVtx.emplace_back( event->Vertex()->T() );
   } else {
     std::vector< double > * p3HNL = this->GenerateMomentum( event );
 
@@ -99,17 +102,17 @@ void Decayer::AddInitialState(GHepRecord * event) const
     p4 = TLorentzVector( px, py, pz, E );
 
     if( !event->Vertex() || (event->Vertex()->Vect()).Mag() == 0.0 )
-      prodVtx = this->GenerateDecayPosition( event );
+      prodVtx = *(this->GenerateDecayPosition( event ));
     else{
-      prodVtx = new std::vector< double >();
-      prodVtx->emplace_back( event->Vertex()->X() );
-      prodVtx->emplace_back( event->Vertex()->Y() );
-      prodVtx->emplace_back( event->Vertex()->Z() );
-      prodVtx->emplace_back( event->Vertex()->T() );
+      //prodVtx = new std::vector< double >();
+      prodVtx.emplace_back( event->Vertex()->X() );
+      prodVtx.emplace_back( event->Vertex()->Y() );
+      prodVtx.emplace_back( event->Vertex()->Z() );
+      prodVtx.emplace_back( event->Vertex()->T() );
     }
   }
 
-  TLorentzVector v4( prodVtx->at(0), prodVtx->at(1), prodVtx->at(2), prodVtx->at(3) );
+  TLorentzVector v4( prodVtx.at(0), prodVtx.at(1), prodVtx.at(2), prodVtx.at(3) );
 
   init_state->SetProbeP4( p4 );
 
@@ -212,6 +215,7 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
      exception.SwitchOnFastForward();
      throw exception;
   }
+  delete p4d_rest;
 
   // Get the maximum weight
   //double wmax = fPhaseSpaceGenerator.GetWtMax();
@@ -298,8 +302,8 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
   if( !event->FinalStatePrimaryLepton() ){ // no charged lepton means invisible or pi0 nu or test
     LOG( "HNL", pWARN )
       << "No final state primary lepton for this event.";
-    assert( fCurrDecayMode == kHNLDcyPi0Nu || fCurrDecayMode == kHNLDcyNuNuNu
-	    || fCurrDecayMode == kHNLDcyPi0Pi0Nu || fCurrDecayMode == kHNLDcyTEST &&
+    assert( ( fCurrDecayMode == kHNLDcyPi0Nu || fCurrDecayMode == kHNLDcyNuNuNu
+	      || fCurrDecayMode == kHNLDcyPi0Pi0Nu || fCurrDecayMode == kHNLDcyTEST ) &&
 	    "No FS primary lepton only for decay modes N4 --> pi0 v, v v v, pi0 pi0 v, TEST");
   }
   //assert( event->FinalStatePrimaryLepton() );
@@ -546,10 +550,11 @@ void Decayer::ReadCreationInfo( GHepRecord * event ) const
     // now reset the x4 of the HNL to whatever the vertex is
     event->Particle(0)->SetPosition( vv->X(), vv->Y(), vv->Z(), vv->T() );
     event->SetXSec(0.0);
-  } else { return; }
+  } else { delete tmpx4; return; }
+  delete tmpx4;
 }
 //____________________________________________________________________________
-bool Decayer::UnpolarisedDecay( TGenPhaseSpace & fPSG, PDGCodeList pdgv, double wm ) const
+bool Decayer::UnpolarisedDecay( TGenPhaseSpace & fPSG, PDGCodeList /* pdgv */, double wm ) const
 {
 
   RandomGen * rnd = RandomGen::Instance();
@@ -612,7 +617,7 @@ bool Decayer::PolarisedDecay( TGenPhaseSpace & fPSG, PDGCodeList pdgv, double wm
 		   std::abs( pdgv.at(2) ) == kPdgNuMu );
   
   while( !isAccepted && iUPD < controls::kMaxUnweightDecayIterations ){
-    bool failed = this->UnpolarisedDecay( fPSG, pdgv, wm );
+    failed = this->UnpolarisedDecay( fPSG, pdgv, wm );
     
     // find charged lepton of FS. If two, take the leading one.
     // For now, this method doesn't handle vvv invisible decay mode.

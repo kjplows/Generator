@@ -190,7 +190,8 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
     (event_rec->Particle(1))->SetPosition( entryPoint.X(), entryPoint.Y(), entryPoint.Z(), event_rec->Particle(1)->Vt() );
     (event_rec->Particle(2))->SetPosition( exitPoint.X(), exitPoint.Y(), exitPoint.Z(), event_rec->Particle(2)->Vt() );
   }
-  
+
+  delete p4HNL;
 }
 //____________________________________________________________________________
 void VertexGenerator::EnforceUnits( std::string length_units, std::string angle_units, std::string time_units ) const{
@@ -508,7 +509,7 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
     << "\nx4HNL_user = " << utils::print::X4AsString( x4HNL_user ) << " [mm]"
     << "\nstartPoint = " << utils::print::Vec3AsString( &startPoint ) << " [mm]";
 
-  double mtomm = units::m / units::mm;
+  //double mtomm = units::m / units::mm;
   
   TLorentzVector * p4HNL = event_rec->Particle(0)->GetP4();
   TVector3 momentum( p4HNL->Px(), p4HNL->Py(), p4HNL->Pz() );
@@ -519,6 +520,11 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
   fSyROOT = fSy * units::mm / units::cm;
   fSzROOT = fSz * units::mm / units::cm;
   fPx = momentum.X(); fPy = momentum.Y(); fPz = momentum.Z();
+
+  delete p4HNL;
+  delete x4HNL;
+  delete x4HNL_user;
+  if( x4Flux ) delete x4Flux;
 }
 //____________________________________________________________________________
 bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 & momentum,
@@ -570,7 +576,7 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
 
   if( isParticleGun ) {
     // We start outside the detector. First, write out the starting point in top_volume coordinates
-    RandomGen * rnd = RandomGen::Instance();
+    //RandomGen * rnd = RandomGen::Instance();
     LOG( "HNL" , pDEBUG )
       << "isParticleGun!!"
       << "\nstartPoint = ( " << (gGeoManager->GetCurrentPoint())[0]
@@ -584,8 +590,8 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
 
     // Check along the detector for entering the detector geometry
 
-    double xBack = -fLxROOT/2.0; double xFront = fLxROOT/2.0;
-    double yBack = -fLyROOT/2.0; double yFront = fLyROOT/2.0;
+    //double xBack = -fLxROOT/2.0; double xFront = fLxROOT/2.0;
+    //double yBack = -fLyROOT/2.0; double yFront = fLyROOT/2.0;
     double zBack = -fLzROOT/2.0; double zFront = fLzROOT/2.0; // USER cm
 
     //double zTest = (rnd->RndGen()).Uniform( zBack, zFront ); // USER cm
