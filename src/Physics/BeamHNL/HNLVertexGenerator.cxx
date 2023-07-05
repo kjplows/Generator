@@ -582,15 +582,14 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
 
     assert( (gGeoManager->GetCurrentDirection())[2] != 0.0 && "HNL propagates along USER z" );
 
-    // roll a random point along z that's inside the detector.
-    // Find out the x and y coordinates it should have.
-    // If it's inside the detector, set as a new starting point and continue. Else bail.
+    // Check along the detector for entering the detector geometry
 
     double xBack = -fLxROOT/2.0; double xFront = fLxROOT/2.0;
     double yBack = -fLyROOT/2.0; double yFront = fLyROOT/2.0;
     double zBack = -fLzROOT/2.0; double zFront = fLzROOT/2.0; // USER cm
 
-    double zTest = (rnd->RndGen()).Uniform( zBack, zFront ); // USER cm
+    //double zTest = (rnd->RndGen()).Uniform( zBack, zFront ); // USER cm
+    double zTest = zBack + 0.01 * (zFront - zBack);
 
     double dz = zTest - (gGeoManager->GetCurrentPoint())[2]; // cm
     double dxdz = (gGeoManager->GetCurrentDirection())[0]/(gGeoManager->GetCurrentDirection())[2];
@@ -600,15 +599,22 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
     double xTest = (gGeoManager->GetCurrentPoint())[0] + dx;
     double yTest = (gGeoManager->GetCurrentPoint())[1] + dy;
 
-    LOG( "HNL", pDEBUG )
-      << "\nzTest = " << zTest << " [top_volume, cm]"
-      << "\ndxdz, dydz = " << dxdz << ", " << dydz << " [top_volume, GeV/GeV]"
-      << "\nxTest, yTest = " << xTest << ", " << yTest << " [top_volume, cm]";
-
     // now check to see if this is within the geometry
     pathString = this->CheckGeomPoint( xTest, yTest, zTest );
-    LOG( "HNL", pDEBUG )
-      << "Here is the pathString: " << pathString;
+    while( pathString.find( fTopVolume.c_str() ) == string::npos &&
+	   zTest < zFront ){
+      dz = zTest - (gGeoManager->GetCurrentPoint())[2]; // cm
+      dxdz = (gGeoManager->GetCurrentDirection())[0]/(gGeoManager->GetCurrentDirection())[2];
+      dydz = (gGeoManager->GetCurrentDirection())[1]/(gGeoManager->GetCurrentDirection())[2];
+      dx = dxdz * dz; // cm
+      dy = dydz * dz; // cm
+      xTest = (gGeoManager->GetCurrentPoint())[0] + dx;
+      yTest = (gGeoManager->GetCurrentPoint())[1] + dy;
+
+      pathString = this->CheckGeomPoint( xTest, yTest, zTest );
+
+      zTest += 0.01 * (zFront - zBack);
+    }
     if( pathString.find( fTopVolume.c_str() ) == string::npos ){
       LOG( "HNL", pDEBUG )
 	<< "This trajectory does NOT intersect the detector. Bailing...";
