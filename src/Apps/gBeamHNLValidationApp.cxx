@@ -1160,6 +1160,9 @@ int TestGeom(void)
     }
     outTree->Fill();
     ievent++;
+
+    delete interaction;
+    delete event;
   }
 
   // save to file and exit
