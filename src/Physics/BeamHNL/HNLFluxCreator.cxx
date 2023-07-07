@@ -483,6 +483,10 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   double FDz = fDvec_beam.Z();
 
   TVector3 absolutePoint = this->PointToRandomPointInBBox( ); // in NEAR coords, m
+  if( absolutePoint.X() == 999.9 && absolutePoint.Y() == 999.9 && absolutePoint.Z() == 999.9 ){
+    this->FillNonsense( iEntry, gnmf ); return gnmf;
+  }
+  
   TVector3 fRVec_beam( absolutePoint.X() - FDx, absolutePoint.Y() - FDy, absolutePoint.Z() - FDz ); // NEAR, m
   // rotate it and get unit
   TVector3 fRVec_unit = (this->ApplyUserRotation( fRVec_beam )).Unit(); // BEAM, m/m
@@ -1431,7 +1435,7 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
     pathString = this->CheckGeomPoint( ux, uy, uz ); int iNode = 1; // 1 past beginning
     LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
     int iBad = 0;
-    while( pathString.find( fTopVolume.c_str(), iNode ) == string::npos && iBad < 10 ){
+    while( pathString.find( fTopVolume.c_str(), iNode ) == string::npos && iBad < 100 ){
       /*
       rx = (rnd->RndGen()).Uniform( -fLx/2.0, fLx/2.0 ); ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
       ry = (rnd->RndGen()).Uniform( -fLy/2.0, fLy/2.0 ); uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
@@ -1447,8 +1451,16 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
       LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
       iBad++;
     }
-    assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos &&
-	    "Vertex for flux generation inside top volume");
+    // weaker condition. Just bail if 100 tries don't get you inside the flux volume...
+    if( pathString.find( fTopVolume.c_str(), iNode ) == string::npos ){
+      LOG( "HNL", pWARN ) << "Could not place flux generation vertex inside the requested volume! Bailing on event";
+      checkPoint.SetXYZ( -999.9, -999.9, -999.9 );
+      fTargetPoint = checkPoint;
+      return checkPoint;
+    }
+
+    //assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos &&
+    //	    "Vertex for flux generation inside top volume");
   }
 
   // turn u back into [m] from [cm]
