@@ -1144,6 +1144,13 @@ int TestGeom(void)
 
     } else { // didn't intersect vertex, use nonsense
 
+      LOG( "gevald_hnl", pDEBUG ) << "No intersection for trajectory with origin"
+				  << " ( " << use_ox << ", " << use_oy << ", " << use_oz << " )"
+				  << " and direction (theta, phi) = ( "
+				  << use_theta << ", " << use_phi << " )";
+
+      use_wgt = -999.9;
+
       use_entry[0] = -999.9;
       use_entry[1] = -999.9;
       use_entry[2] = -999.9;
@@ -1161,7 +1168,7 @@ int TestGeom(void)
     outTree->Fill();
     ievent++;
 
-    delete interaction;
+    //delete interaction;
     delete event;
   }
 

@@ -522,9 +522,9 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
   fPx = momentum.X(); fPy = momentum.Y(); fPz = momentum.Z();
 
   delete p4HNL;
+  //if( x4Flux ) delete x4Flux;
   delete x4HNL;
   delete x4HNL_user;
-  if( x4Flux ) delete x4Flux;
 }
 //____________________________________________________________________________
 bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 & momentum,
