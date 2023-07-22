@@ -17,6 +17,7 @@
 		   [-g geometry (ROOT file)]
                    [-L geometry_length_units]
                    [-o output_event_file_prefix]
+		   [--top_volume top_volume_name]
                    [--seed random_number_seed]
                    [--message-thresholds xml_file]
                    [--event-record-print-level level]
@@ -28,6 +29,8 @@
 
            -h
               Prints out the gevgen_hnl syntax and exits.
+	   --info
+              Prints information about the HNL and exits.
            -r
               Specifies the MC run number [default: 1000].
            -n
@@ -54,8 +57,10 @@
               The default output filename is:
               gntp.[run_number].ghep.root
               This cmd line arguments lets you override 'gntp'
+	   --top_volume
+	      Sets the top volume to be used for event generation.
            --seed
-              Random number seed.
+              Random number seed. 
 
 \author  John Plows <komninos-john.plows \at cern.ch>
          University of Oxford
@@ -76,6 +81,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <iomanip>
 
 #include <TSystem.h>
 
@@ -132,6 +138,7 @@ using namespace genie::hnl::enums;
 // function prototypes
 void   GetCommandLineArgs (int argc, char ** argv);
 void   PrintSyntax        (void);
+void   PrintInfo          (void);
 
 int    SelectDecayMode    (std::vector<HNLDecayMode_t> *intChannels, SimpleHNL sh);
 const  EventRecordVisitorI * HNLGenerator(void);
@@ -153,6 +160,7 @@ string          kDefOptGeomDUnits   = "g_cm3"; // default geometry density units
 NtpMCFormat_t   kDefOptNtpFormat    = kNFGHEP; // default event tree format
 string          kDefOptEvFilePrefix = "gntp";
 string          kDefOptFluxFilePath = "./input-flux.root";
+string          kDefOptTopVolName   = "TOP"; // default top volume name 
 
 string          kDefOptSName   = "genie::EventGenerator";
 string          kDefOptSConfig = "BeamHNL";
@@ -182,6 +190,7 @@ HNLDecayMode_t   gOptDecayMode    = kHNLDcyNull;         // HNL decay mode
 std::vector< HNLDecayMode_t > gOptIntChannels;           // decays to un-inhibit
 
 string           gOptEvFilePrefix = kDefOptEvFilePrefix; // event file prefix
+
 bool             gOptUsingRootGeom = false;              // using root geom or target mix?
 string           gOptRootGeom;                           // input ROOT file with realistic detector geometry
 
@@ -190,7 +199,8 @@ TGeoManager *    gOptRootGeoManager = 0;                 // the workhorse geomet
 TGeoVolume  *    gOptRootGeoVolume  = 0;
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
-string           gOptRootGeomTopVol = "";                // input geometry top event generation volume
+bool             gOptTopVolSelected = false;             // did the user ask for a specific top volume?
+string           gOptTopVolName = kDefOptTopVolName;     // input geometry top event generation volume
 double           gOptGeomLUnits = 0;                     // input geometry length units
 long int         gOptRanSeed = -1;                       // random number seed
 
@@ -202,11 +212,13 @@ double fox = 0; // origin - x
 double foy = 0; // origin - y
 double foz = 0; // origin - z
 
+/*
 double NTP_IS_E = 0., NTP_IS_PX = 0., NTP_IS_PY = 0., NTP_IS_PZ = 0.;
 double NTP_FS0_E = 0., NTP_FS0_PX = 0., NTP_FS0_PY = 0., NTP_FS0_PZ = 0.;
 double NTP_FS1_E = 0., NTP_FS1_PX = 0., NTP_FS1_PY = 0., NTP_FS1_PZ = 0.;
 double NTP_FS2_E = 0., NTP_FS2_PX = 0., NTP_FS2_PY = 0., NTP_FS2_PZ = 0.;
 int NTP_FS0_PDG = 0, NTP_FS1_PDG = 0, NTP_FS2_PDG = 0;
+*/
 
 // HNL lifetime in rest frame
 double CoMLifetime = -1.0; // GeV^{-1}
@@ -322,9 +334,9 @@ int main(int argc, char ** argv)
   int iflux = (gOptFirstEvent < 0) ? 0 : gOptFirstEvent; int ievent = iflux;
   int maxFluxEntries = -1;
   fluxCreator->SetInputFluxPath( gOptFluxFilePath );
-  fluxCreator->SetGeomFile( gOptRootGeom );
+  fluxCreator->SetGeomFile( gOptRootGeom, gOptTopVolName );
   fluxCreator->SetFirstFluxEntry( iflux );
-  vtxGen->SetGeomFile( gOptRootGeom );
+  vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
   
   bool tooManyEntries = false;
   while (1)
@@ -364,12 +376,13 @@ int main(int argc, char ** argv)
     
     if( ievent < gOptFirstEvent ){ ievent++; continue; }
     
-    assert( ievent >= gOptFirstEvent && gOptFirstEvent >= 0 );
+    assert( ievent >= gOptFirstEvent && gOptFirstEvent >= 0 && "First event >= 0" );
     
     LOG("gevgen_hnl", pNOTICE)
       << " *** Generating event............ " << (ievent-gOptFirstEvent);
     
     EventRecord * event = new EventRecord;
+    FluxContainer retGnmf;
     event->SetWeight(1.0);
     event->SetProbability( CoMLifetime );
     event->SetXSec( iflux ); // will be overridden, use as handy container
@@ -393,17 +406,18 @@ int main(int argc, char ** argv)
 	 break;
        }
        
-       FluxContainer retGnmf = fluxCreator->RetrieveFluxInfo();
+       retGnmf = fluxCreator->RetrieveFluxInfo();
        FillFlux( gnmf, retGnmf );
        
        // check to see if this was nonsense
        if( ! event->Particle(0) ){ iflux++; delete event; continue; }
        
-       gOptEnergyHNL = event->Particle(0)->GetP4()->E();
+       // add position to generate in the event record for now
+       gOptEnergyHNL = event->Particle(0)->E();
        iflux++;
      } else { // monoenergetic HNL. Add it with energy and momentum pointing on z axis
        
-       assert( gOptEnergyHNL > gOptMassHNL );
+       assert( gOptEnergyHNL > gOptMassHNL && "HNL E > M" );
        double HNLP = std::sqrt( gOptEnergyHNL*gOptEnergyHNL - gOptMassHNL*gOptMassHNL );
        TLorentzVector probeP4( 0.0, 0.0, HNLP, gOptEnergyHNL );
        TLorentzVector v4( 0.0, 0.0, 0.0, 0.0 );
@@ -411,7 +425,7 @@ int main(int argc, char ** argv)
        event->AddParticle( ptHNL );
 
      }
-     assert( gOptEnergyHNL > gOptMassHNL );
+     assert( gOptEnergyHNL > gOptMassHNL && "HNL E > M" );
      
      int hpdg = genie::kPdgHNL;
      int typeMod = 1;
@@ -422,7 +436,8 @@ int main(int argc, char ** argv)
      // int target = SelectInitState();
      int decay  = (int) gOptDecayMode;
      
-     assert( gOptECoupling >= 0.0 && gOptMCoupling >= 0.0 && gOptTCoupling >= 0.0 );
+     assert( gOptECoupling >= 0.0 && gOptMCoupling >= 0.0 && gOptTCoupling >= 0.0 &&
+	     "Non-trivial lepton mixings");
      
      // RETHERE assuming all these HNL have K+- parent. This is wrong 
      // (but not very wrong for interesting masses)
@@ -454,7 +469,13 @@ int main(int argc, char ** argv)
 
      // Simulate decay
      hnlgen->ProcessEventRecord(event);
+     
+     // for now, set the X4() of Particle(1) to be the point at which the flux needs to go.
+     event->Particle(1)->SetPosition( retGnmf.targetPointUser.X(), 
+				      retGnmf.targetPointUser.Y(),
+				      retGnmf.targetPointUser.Z(), 0.0 );
 
+     /*
      // add the FS 4-momenta to special branches
      // Quite inelegant. Gets the job done, though
      NTP_FS0_PDG = (event->Particle(1))->Pdg();
@@ -481,13 +502,14 @@ int main(int argc, char ** argv)
        NTP_FS2_PY = 0.0;
        NTP_FS2_PZ = 0.0;
      }
+     */
 
      // Generate (or read) a position for the decay vertex
      // also currently handles the geometrical weight
      TLorentzVector x4mm;
      if( gOptUsingRootGeom ){
-       TLorentzVector * p4HNL = event->Particle(0)->GetP4();
-       NTP_IS_E = p4HNL->E(); NTP_IS_PX = p4HNL->Px(); NTP_IS_PY = p4HNL->Py(); NTP_IS_PZ = p4HNL->Pz();
+       //TLorentzVector * p4HNL = event->Particle(0)->GetP4();
+       //NTP_IS_E = p4HNL->E(); NTP_IS_PX = p4HNL->Px(); NTP_IS_PY = p4HNL->Py(); NTP_IS_PZ = p4HNL->Pz();
        vtxGen->ProcessEventRecord( event );
        x4mm = *(event->Vertex());
      } else {
@@ -592,9 +614,14 @@ void InitBoundingBox(void)
   }
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
+  if( !gOptTopVolSelected ){
+    TGeoVolume * main_volume = gOptRootGeoManager->GetTopVolume();
+    gOptTopVolName = main_volume->GetName();
+    LOG("gevgen_hnl", pINFO) << "Using top volume name " << gOptTopVolName;
+  }
 
-  TGeoVolume * top_volume = gOptRootGeoManager->GetTopVolume();
-  assert( top_volume );
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
+  assert( top_volume && "Top volume exists" );
   TGeoShape * ts  = top_volume->GetShape();
 
   TGeoBBox *  box = (TGeoBBox *)ts;
@@ -797,7 +824,7 @@ int SelectDecayMode( std::vector< HNLDecayMode_t > * intChannels, SimpleHNL sh )
        itint != intMap.end() ; ++itint ){
     gammaInt += (*itint).second;
   }
-  assert( gammaInt > 0.0 && gammaAll >= gammaInt );
+  assert( gammaInt > 0.0 && gammaAll >= gammaInt && "Gamma total >= Gamma simulated > 0.0" );
   decayMod = gammaInt / gammaAll;
 
   // get probability that channels in intAndValidChannels will be selected
@@ -860,6 +887,13 @@ void GetCommandLineArgs(int argc, char ** argv)
   bool help = parser.OptionExists('h');
   if(help) {
     PrintSyntax();
+    exit(0);
+  }
+
+  // print HNL info?
+  bool printInfo = parser.OptionExists("info");
+  if(printInfo) {
+    PrintInfo();
     exit(0);
   }
 
@@ -927,7 +961,7 @@ void GetCommandLineArgs(int argc, char ** argv)
       PrintSyntax();
       exit(0);
     } //-E
-    assert(gOptEnergyHNL > gOptMassHNL);
+    assert(gOptEnergyHNL > gOptMassHNL && "HNL E > M");
   }
 
   gOptIsMonoEnFlux = isMonoEnergeticFlux;
@@ -995,34 +1029,45 @@ void GetCommandLineArgs(int argc, char ** argv)
 
      // length units:
      if( parser.OptionExists('L') ) {
-        LOG("gevgen_hnl", pDEBUG)
+        LOG("gevgen_hnl", pINFO)
            << "Checking for input geometry length units";
         lunits = parser.ArgAsString('L');
      } else {
-        LOG("gevgen_hnl", pDEBUG) << "Using default geometry length units";
+        LOG("gevgen_hnl", pINFO) << "Using default geometry length units";
         lunits = kDefOptGeomLUnits;
      } // -L
      // // density units:
      // if( parser.OptionExists('D') ) {
-     //    LOG("gevgen_hnl", pDEBUG)
+     //    LOG("gevgen_hnl", pINFO)
      //       << "Checking for input geometry density units";
      //    dunits = parser.ArgAsString('D');
      // } else {
-     //    LOG("gevgen_hnl", pDEBUG) << "Using default geometry density units";
+     //    LOG("gevgen_hnl", pINFO) << "Using default geometry density units";
      //    dunits = kDefOptGeomDUnits;
      // } // -D
      gOptGeomLUnits = utils::units::UnitFromString(lunits);
      // gOptGeomDUnits = utils::units::UnitFromString(dunits);
+
+     // check for top volume selection
+     if( parser.OptionExists("top_volume") ) {
+       gOptTopVolSelected = true;
+       gOptTopVolName = parser.ArgAsString("top_volume");
+       LOG("gevgen_hnl", pINFO)
+	 << "Using the following volume as top: " << gOptTopVolName;
+     } else {
+       LOG("gevgen_hnl", pINFO)
+	 << "Using default top_volume";
+     } // --top_volume
 
   } // using root geom?
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
   // event file prefix
   if( parser.OptionExists('o') ) {
-    LOG("gevgen_hnl", pDEBUG) << "Reading the event filename prefix";
+    LOG("gevgen_hnl", pINFO) << "Reading the event filename prefix";
     gOptEvFilePrefix = parser.ArgAsString('o');
   } else {
-    LOG("gevgen_hnl", pDEBUG)
+    LOG("gevgen_hnl", pINFO)
       << "Will set the default event filename prefix";
     gOptEvFilePrefix = kDefOptEvFilePrefix;
   } //-o
@@ -1044,7 +1089,7 @@ void GetCommandLineArgs(int argc, char ** argv)
   if (gOptUsingRootGeom) {
     gminfo << "Using ROOT geometry - file: " << gOptRootGeom
            << ", top volume: "
-           << ((gOptRootGeomTopVol.size()==0) ? "<master volume>" : gOptRootGeomTopVol)
+           << ((gOptTopVolName.size()==0) ? "<master volume>" : gOptTopVolName)
            << ", length  units: " << lunits;
            // << ", density units: " << dunits;
   }
@@ -1062,11 +1107,70 @@ void GetCommandLineArgs(int argc, char ** argv)
      << "\n @@ Statistics    : " << gOptNev << " events";
 }
 //_________________________________________________________________________________________
+void PrintInfo(void)
+{
+  // first, get an instance of the HNL Decayer
+  // this will let us get the partial decay widths
+  const Algorithm * alggen = AlgFactory::Instance()->GetAlgorithm("genie::hnl::Decayer", "Default");
+  const Decayer * hnlgen = dynamic_cast<const Decayer *>( alggen );
+
+  std::ostringstream asts;
+  asts << "I am printing information about this HNL.";
+
+  gOptMassHNL = hnlgen->GetHNLMass();
+  std::vector< double > U4l2s = hnlgen->GetHNLCouplings();
+  gOptECoupling  = U4l2s.at(0);
+  gOptMCoupling  = U4l2s.at(1);
+  gOptTCoupling  = U4l2s.at(2);
+  gOptIsMajorana = hnlgen->IsHNLMajorana();
+  
+  asts << "\n\nMass = " << gOptMassHNL << " (GeV/c^2)"
+       << "\nCouplings (e, mu, tau) = (" << gOptECoupling
+       << ", " << gOptMCoupling << ", " << gOptTCoupling << ")"
+       << "\nNature: " << ( gOptIsMajorana ? "MAJORANA" : "DIRAC" )
+       << "\n";
+
+  CoMLifetime = hnlgen->GetHNLLifetime(); // GeV^{-1}
+  // also transform to ns
+  double CoMLifetimeNs = CoMLifetime * 1.0 / ( units::ns * units::GeV );
+
+  // enumerate all the valid channels
+  std::map< HNLDecayMode_t, double > validChannels;
+  std::map< HNLDecayMode_t, double > interestingChannels;
+  hnlgen->GiveAccessibleChannels( validChannels, interestingChannels );
+
+  asts << "\n ==== SUMMARY OF KINEMATICALLY ACCESSIBLE DECAY CHANNELS ===="
+       << "\n( Note: channels to be simulated are marked with (*) )"
+       << "\n\n" << std::left << std::setw(20) << "Channel" << std::setw(10) << " " 
+       << std::setw(10) << std::left << "Decay width (GeV)"
+       << "\n" << std::setw(40) << "----------------------------------------";
+
+  std::map< HNLDecayMode_t, double >::iterator itValid = validChannels.begin();
+  for( ; itValid != validChannels.end() ; ++itValid ){
+    HNLDecayMode_t hnldm = (*itValid).first; 
+    double dmGam = (*itValid).second;
+
+    asts << "\n" << std::left << std::setw(20) << utils::hnl::AsString(hnldm)
+	 << std::setw(10) << " " << std::right << std::setw(10) << Form("%4.3e", dmGam);
+    
+    if( interestingChannels.find( hnldm ) != interestingChannels.end() )
+      asts << "  (*)"; // note this will be simulated!
+  }
+
+  asts << "\n" << std::setw(40) << "----------------------------------------\n"
+       << "\nTotal decay width (GeV)      = " << Form("%4.3e", 1.0 / CoMLifetime)
+       << "\nCentre-of-mass lifetime (ns) = " << Form("%4.3e", CoMLifetimeNs)
+       << "\n\n";
+
+  LOG( "gevgen_hnl", pFATAL ) << asts.str();
+}
+//_________________________________________________________________________________________
 void PrintSyntax(void)
 {
   LOG("gevgen_hnl", pFATAL)
    << "\n **Syntax**"
    << "\n gevgen_hnl [-h] "
+   << "\n            [--info]"
    << "\n            [-r run#]"
    << "\n             -n n_of_events"
    << "\n             -f path/to/flux/files"
@@ -1074,7 +1178,9 @@ void PrintSyntax(void)
    << "\n            [--firstEvent first_event_for_dk2nu_readin]"  
    << "\n            [-m decay_mode]"
    << "\n            [-g geometry (ROOT file)]"
+   << "\n            [--top_volume top-volume-in-ROOT-file]"
    << "\n            [-L length_units_at_geom]"
+   << "\n            [--info ]"
    << "\n            [-o output_event_file_prefix]"
    << "\n            [--seed random_number_seed]"
    << "\n            [--message-thresholds xml_file]"

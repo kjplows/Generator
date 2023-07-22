@@ -72,7 +72,7 @@ void Decayer::ProcessEventRecord(GHepRecord * event) const
 //____________________________________________________________________________
 void Decayer::AddInitialState(GHepRecord * event) const
 {
-  std::vector< double > * prodVtx = 0;
+  std::vector< double > prodVtx;
 
   Interaction * interaction = event->Summary();
   InitialState * init_state = interaction->InitStatePtr();
@@ -81,13 +81,16 @@ void Decayer::AddInitialState(GHepRecord * event) const
   if( event->Particle(0) ){
     // p4 was already set using HNLFluxCreator. No action needed.
     // Read event vertex == HNL production vertex. We will find the decay vertex later.
-    p4 = *( init_state->GetProbeP4() );
+    //p4 = *( init_state->GetProbeP4() );
+    TLorentzVector * pp4 = init_state->GetProbeP4();
+    p4 = *pp4;
+    delete pp4;
 
-    prodVtx = new std::vector< double >();
-    prodVtx->emplace_back( event->Vertex()->X() );
-    prodVtx->emplace_back( event->Vertex()->Y() );
-    prodVtx->emplace_back( event->Vertex()->Z() );
-    prodVtx->emplace_back( event->Vertex()->T() );
+    //prodVtx = new std::vector< double >();
+    prodVtx.emplace_back( event->Vertex()->X() );
+    prodVtx.emplace_back( event->Vertex()->Y() );
+    prodVtx.emplace_back( event->Vertex()->Z() );
+    prodVtx.emplace_back( event->Vertex()->T() );
   } else {
     std::vector< double > * p3HNL = this->GenerateMomentum( event );
 
@@ -99,17 +102,17 @@ void Decayer::AddInitialState(GHepRecord * event) const
     p4 = TLorentzVector( px, py, pz, E );
 
     if( !event->Vertex() || (event->Vertex()->Vect()).Mag() == 0.0 )
-      prodVtx = this->GenerateDecayPosition( event );
+      prodVtx = *(this->GenerateDecayPosition( event ));
     else{
-      prodVtx = new std::vector< double >();
-      prodVtx->emplace_back( event->Vertex()->X() );
-      prodVtx->emplace_back( event->Vertex()->Y() );
-      prodVtx->emplace_back( event->Vertex()->Z() );
-      prodVtx->emplace_back( event->Vertex()->T() );
+      //prodVtx = new std::vector< double >();
+      prodVtx.emplace_back( event->Vertex()->X() );
+      prodVtx.emplace_back( event->Vertex()->Y() );
+      prodVtx.emplace_back( event->Vertex()->Z() );
+      prodVtx.emplace_back( event->Vertex()->T() );
     }
   }
 
-  TLorentzVector v4( prodVtx->at(0), prodVtx->at(1), prodVtx->at(2), prodVtx->at(3) );
+  TLorentzVector v4( prodVtx.at(0), prodVtx.at(1), prodVtx.at(2), prodVtx.at(3) );
 
   init_state->SetProbeP4( p4 );
 
@@ -147,7 +150,7 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
     pdgv.push_back( newpdgc );
   }
 
-  assert ( pdgv.size() > 1);
+  assert ( pdgv.size() > 1 && "At least 1 SM decay product" );
 
   // if user wants to include polarisation effects, start prep now
   /*
@@ -184,7 +187,7 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
 
   int hnl_id = 0;
   GHepParticle * hnl = event->Particle(hnl_id);
-  assert(hnl);
+  assert(hnl && "HNL exists in event record");
   TLorentzVector * p4d = hnl->GetP4(); TVector3 HNLBVec = p4d->BoostVector();
   TLorentzVector * p4d_rest = (TLorentzVector *) p4d->Clone(); p4d_rest->Boost( -HNLBVec );
   TLorentzVector * v4d = hnl->GetX4();
@@ -212,6 +215,7 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
      exception.SwitchOnFastForward();
      throw exception;
   }
+  delete p4d_rest;
 
   // Get the maximum weight
   //double wmax = fPhaseSpaceGenerator.GetWtMax();
@@ -220,7 +224,7 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
      double w = fPhaseSpaceGenerator.Generate();
      wmax = TMath::Max(wmax,w);
   }
-  assert(wmax>0);
+  assert(wmax>0 && "Phase-space decayer works");
   wmax *= 2;
 
   LOG("HNL", pNOTICE)
@@ -228,7 +232,8 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
 
   // Generate a decay
   bool decayFailed = false;
-  if( doPol && fCurrDecayMode != kHNLDcyNuNuNu ){
+  //if( doPol && fCurrDecayMode != kHNLDcyNuNuNu ){
+  if( doPol && ( fCurrDecayMode == kHNLDcyPiE || fCurrDecayMode == kHNLDcyPiMu || fCurrDecayMode == kHNLDcyPi0Nu ) ){
     // if polarisation is on we must calculate the polarisation modulus for comparison
     // for now, assume 2-body production and 2-body decay describes the pol modulus
     // see arXiv:1805.06419[hep-ph]
@@ -293,12 +298,13 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
   event->Particle( 0 )->SetFirstMother(-1); // why do I need to do this explicitly?
   event->Particle( 0 )->SetLastMother(-1);
 
-  assert( event->Probe() );
+  assert( event->Probe() && "Probe particle exists" );
   if( !event->FinalStatePrimaryLepton() ){ // no charged lepton means invisible or pi0 nu or test
     LOG( "HNL", pWARN )
       << "No final state primary lepton for this event.";
-    assert( fCurrDecayMode == kHNLDcyPi0Nu || fCurrDecayMode == kHNLDcyNuNuNu
-	    || fCurrDecayMode == kHNLDcyPi0Pi0Nu || fCurrDecayMode == kHNLDcyTEST );
+    assert( ( fCurrDecayMode == kHNLDcyPi0Nu || fCurrDecayMode == kHNLDcyNuNuNu
+	      || fCurrDecayMode == kHNLDcyPi0Pi0Nu || fCurrDecayMode == kHNLDcyTEST ) &&
+	    "No FS primary lepton only for decay modes N4 --> pi0 v, v v v, pi0 pi0 v, TEST");
   }
   //assert( event->FinalStatePrimaryLepton() );
   
@@ -330,7 +336,7 @@ std::vector< double > * Decayer::GenerateDecayPosition( GHepRecord * /* event */
     << "\nYou are seeing this message because the input dk2nu files did not give position information (for some reason)..."
     << "\nDistributing the production vertex at some point in a 1m-side box. This is not good, and results will likely be unphysical.";
   fProdVtxHist = new TH3D( "dummy", "dummy", 100, -0.5, 0.5, 100, -0.5, 0.5, 100, -0.5, 0.5 );
-  assert( fProdVtxHist );
+  assert( fProdVtxHist && "Input HNL production vertex histogram" );
   
   RandomGen * rnd = RandomGen::Instance();
   double pvx = (rnd->RndGen()).Uniform( -0.5, 0.5 );
@@ -381,16 +387,16 @@ void Decayer::UpdateEventRecord(GHepRecord * event) const
 
   interaction->KinePtr()->Sett( 0.0, true );
   interaction->KinePtr()->SetW( interaction->InitStatePtr()->Probe()->Mass(), true );
-  TLorentzVector * p4HNL = event->Particle(0)->GetP4(); assert( p4HNL );
+  TLorentzVector * p4HNL = event->Particle(0)->GetP4(); assert( p4HNL && "Can get 4-momentum of probe" );
   // primary lepton is FirstDaughter() of Probe()
   // need Probe() as a GHepParticle(), not a TParticlePDG()!
   // get from event record position 0
   TLorentzVector * p4FSL = 0;
   if( event->FinalStatePrimaryLepton() ){
     int iFSL = event->Particle(0)->FirstDaughter();
-    assert( event->Particle( iFSL ) );
+    assert( event->Particle( iFSL ) && "Event record has first daughter of HNL" );
     p4FSL = ( event->Particle( iFSL ) )->GetP4(); 
-    assert( p4FSL );
+    assert( p4FSL && "Can get 4-momentum of first daughter" );
     TLorentzVector p4DIF( p4HNL->Px() - p4FSL->Px(),
 			  p4HNL->Py() - p4FSL->Py(),
 			  p4HNL->Pz() - p4FSL->Pz(),
@@ -455,7 +461,41 @@ void Decayer::LoadConfig(void)
   // call GetHNLInstance here, to get lifetime
   SimpleHNL sh = this->GetHNLInstance();
   double CoMLifetime = sh.GetCoMLifetime();
-  assert( CoMLifetime > 0.0 );
+  assert( CoMLifetime > 0.0 && "HNL rest-frame lifetime > 9.0" );
+
+  // set the maps straight
+  fValidChannelsMap = sh.GetValidChannels();
+  for( std::vector< HNLDecayMode_t >::iterator itInt = fIntChannels.begin();
+       itInt != fIntChannels.end() ; ++itInt ) {
+    int chanIdx = static_cast<int>( (*itInt) );
+    std::map<HNLDecayMode_t, double>::iterator chanIt;
+    switch( chanIdx ){
+    case static_cast<int>( kHNLDcyNuNuNu ): 
+      chanIt = fValidChannelsMap.find( kHNLDcyNuNuNu ); break;
+    case static_cast<int>( kHNLDcyNuEE ):
+      chanIt = fValidChannelsMap.find( kHNLDcyNuEE ); break;
+    case static_cast<int>( kHNLDcyNuMuE ):
+      chanIt = fValidChannelsMap.find( kHNLDcyNuMuE ); break;
+    case static_cast<int>( kHNLDcyPi0Nu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPi0Nu ); break;
+    case static_cast<int>( kHNLDcyPiE ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPiE ); break;
+    case static_cast<int>( kHNLDcyNuMuMu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyNuMuMu ); break;
+    case static_cast<int>( kHNLDcyPiMu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPiMu ); break;
+    case static_cast<int>( kHNLDcyPi0Pi0Nu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPi0Pi0Nu ); break;
+    case static_cast<int>( kHNLDcyPiPi0E ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPiPi0E ); break;
+    case static_cast<int>( kHNLDcyPiPi0Mu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPiPi0Mu ); break;
+    } // switch over channels
+
+    if( chanIt != fValidChannelsMap.end() )
+      fInterestingChannelsMap.insert( std::pair< HNLDecayMode_t, double >( (*chanIt).first, 
+									   (*chanIt).second ) );
+  }
 
   // also read in particle gun parameters
   this->GetParam( "PG-OriginX", fPGOx );
@@ -544,10 +584,11 @@ void Decayer::ReadCreationInfo( GHepRecord * event ) const
     // now reset the x4 of the HNL to whatever the vertex is
     event->Particle(0)->SetPosition( vv->X(), vv->Y(), vv->Z(), vv->T() );
     event->SetXSec(0.0);
-  } else { return; }
+  } else { delete tmpx4; return; }
+  delete tmpx4;
 }
 //____________________________________________________________________________
-bool Decayer::UnpolarisedDecay( TGenPhaseSpace & fPSG, PDGCodeList pdgv, double wm ) const
+bool Decayer::UnpolarisedDecay( TGenPhaseSpace & fPSG, PDGCodeList /* pdgv */, double wm ) const
 {
 
   RandomGen * rnd = RandomGen::Instance();
@@ -610,7 +651,7 @@ bool Decayer::PolarisedDecay( TGenPhaseSpace & fPSG, PDGCodeList pdgv, double wm
 		   std::abs( pdgv.at(2) ) == kPdgNuMu );
   
   while( !isAccepted && iUPD < controls::kMaxUnweightDecayIterations ){
-    bool failed = this->UnpolarisedDecay( fPSG, pdgv, wm );
+    failed = this->UnpolarisedDecay( fPSG, pdgv, wm );
     
     // find charged lepton of FS. If two, take the leading one.
     // For now, this method doesn't handle vvv invisible decay mode.
@@ -731,6 +772,14 @@ std::string Decayer::GetHNLInterestingChannels() const
     chanInt.append( Form("%d", fChanBits[iCBits]) );
   }
   return chanInt;
+}
+//____________________________________________________________________________
+void Decayer::GiveAccessibleChannels( std::map<HNLDecayMode_t, double> & vChan,
+				      std::map<HNLDecayMode_t, double> & iChan ) const
+{
+  vChan = fValidChannelsMap;
+  iChan = fInterestingChannelsMap;
+  return;
 }
 //____________________________________________________________________________
 std::vector< double > Decayer::GetPGunOrigin() const

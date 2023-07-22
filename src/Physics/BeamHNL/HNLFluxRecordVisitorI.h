@@ -54,7 +54,7 @@ namespace genie {
       virtual std::vector< double > GetDetRotation() const = 0;
       
       virtual void SetInputFluxPath( std::string finpath ) const = 0;
-      virtual void SetGeomFile( std::string geomfile ) const = 0;
+      virtual void SetGeomFile( std::string geomfile, std::string topVolume ) const = 0;
       virtual int GetNFluxEntries() const = 0;
       virtual void SetFirstFluxEntry( int iFirst ) const = 0;
 
@@ -63,6 +63,10 @@ namespace genie {
       FluxRecordVisitorI();
       FluxRecordVisitorI(string name);
       FluxRecordVisitorI(string name, string config);
+
+#ifdef __GENIE_GEOM_DRIVERS_ENABLED__
+      virtual TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const = 0;
+#endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
 
     };
 

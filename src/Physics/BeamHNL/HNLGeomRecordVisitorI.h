@@ -25,6 +25,8 @@
 #define _HNL_GEOM_RECORD_VISITOR_I_H_
 
 #include "Framework/EventGen/EventRecordVisitorI.h"
+#include "TGeoVolume.h"
+#include "TGeoMatrix.h"
 
 namespace genie {
 
@@ -42,13 +44,17 @@ namespace genie {
 
       virtual void ProcessEventRecord(GHepRecord * event_rec) const = 0;
 
-      virtual void SetGeomFile( std::string geomfile ) const = 0;
+      virtual void SetGeomFile( std::string geomfile, std::string topVolume ) const = 0;
 
     protected:
 
       GeomRecordVisitorI();
       GeomRecordVisitorI(string name);
       GeomRecordVisitorI(string name, string config);
+
+#ifdef __GENIE_GEOM_DRIVERS_ENABLED__
+      virtual TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const = 0;
+#endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
 
     };
 

@@ -51,8 +51,25 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
     
     gGeoManager = TGeoManager::Import( fGeomFile.c_str() );
     
-    TGeoVolume * top_volume = gGeoManager->GetTopVolume();
-    assert( top_volume );
+    LOG( "HNL", pDEBUG ) << "Using volume \"" << fTopVolume << "\" as top volume...";
+    // first, go get the top volume of the entire geom so we can pick up translation components
+    TGeoVolume * main_volume = gGeoManager->GetTopVolume();
+    TGeoVolume * top_volume = gGeoManager->GetVolume( fTopVolume.c_str() );
+    assert( top_volume && "Top volume exists" );
+    // now get the translation of the top volume
+    if( main_volume != top_volume ) {
+      //main_volume->FindMatrixOfDaughterVolume(top_volume);
+      //TGeoHMatrix * hmat = gGeoManager->GetHMatrix();
+      TGeoMatrix * hmat = this->FindFullTransformation( main_volume, top_volume );
+      const Double_t * tran = hmat->GetTranslation();
+      fTx = tran[0] * units::cm / units::m;
+      fTy = tran[1] * units::cm / units::m;
+      fTz = tran[2] * units::cm / units::m;
+      LOG( "HNL", pDEBUG )
+	<< "Got translation of volume with name " << top_volume->GetName() << " which is ( " 
+	<< fTx << ", " << fTy << ", " << fTz << " ) [m]";
+    }
+    gGeoManager->SetTopVolume(top_volume);
     TGeoShape * ts = top_volume->GetShape();
     TGeoBBox * box = (TGeoBBox *) ts;
     
@@ -115,6 +132,8 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 	if( fLPz >= 0.0 ) evrec->SetXSec( 1.0 );
 	else evrec->SetXSec( -1.0 );
 	evrec->Particle(0)->SetPosition( tmpx4 );
+
+	delete vx4;
 	
       } // if( fGnmf.fgXYWgt >= 0 )
     } // if( iCurrEntry > fFirstEntry )
@@ -294,7 +313,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 
   // now calculate which decay channel produces the HNL.
   dynamicScores = this->GetProductionProbs( decay_ptype );
-  assert( dynamicScores.size() > 0 );
+  assert( dynamicScores.size() > 0 && "HNL can be produced in some way" );
   
   if( dynamicScores.find( kHNLProdNull ) != dynamicScores.end() ){ // exists kin allowed channel but 0 coupling
     this->FillNonsense( iEntry, gnmf ); return gnmf;
@@ -309,16 +328,18 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   std::map< HNLProd_t, double >::iterator pdit = dynamicScores.begin();
   while( score >= s1 && pdit != dynamicScores.end() ){
     s1 += (*pdit).second;
+    /*
     if( parentMass > 0.495 ){
       LOG( "HNL", pDEBUG )
 	<< "(*pdit).first = " << utils::hnl::ProdAsString( (*pdit).first )
 	<< " : (*pdit).second = " << (*pdit).second;
     }
+    */
     if( score >= s1 ){
       imap++; pdit++;
     }
   }
-  assert( imap < dynamicScores.size() ); // should have decayed to *some* HNL
+  assert( imap < dynamicScores.size() && "HNL has been produced" ); // should have decayed to *some* HNL
   prodChan = (*pdit).first;
 
   // bookkeep this
@@ -446,7 +467,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
     }
   }
 
-  assert( boost_correction > 0.0 && boost_correction_two > 0.0 );
+  assert( boost_correction > 0.0 && boost_correction_two > 0.0 && "HNL boost factor physical" );
 
   // so now we have the random decay. Direction = parent direction, energy = what we calculated
   double EHNL = p4HNL_rest.E() * boost_correction;
@@ -462,6 +483,10 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   double FDz = fDvec_beam.Z();
 
   TVector3 absolutePoint = this->PointToRandomPointInBBox( ); // in NEAR coords, m
+  if( absolutePoint.X() == 999.9 && absolutePoint.Y() == 999.9 && absolutePoint.Z() == 999.9 ){
+    this->FillNonsense( iEntry, gnmf ); return gnmf;
+  }
+  
   TVector3 fRVec_beam( absolutePoint.X() - FDx, absolutePoint.Y() - FDy, absolutePoint.Z() - FDz ); // NEAR, m
   // rotate it and get unit
   TVector3 fRVec_unit = (this->ApplyUserRotation( fRVec_beam )).Unit(); // BEAM, m/m
@@ -759,7 +784,7 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
   // recurse over files in this directory and add to chain
 
   std::list<TString> files = this->RecurseOverDir( finpath );
-  assert( files.size() > 0 );
+  assert( files.size() > 0 && "Flux input files found" );
   int nFiles = 0;
 
   std::list<TString>::iterator itFiles = files.begin();  
@@ -778,7 +803,7 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
 
   if( !ctree ){ LOG( "HNL", pFATAL ) << "Could not open flux tree!"; }
   if( !cmeta ){ LOG( "HNL", pFATAL ) << "Could not open meta tree!"; }
-  assert( ctree && cmeta );
+  assert( ctree && cmeta && "Could open flux and meta trees" );
 
   const int nEntriesInMeta = cmeta->GetEntries();
   int nEntries = ctree->GetEntries();
@@ -796,7 +821,6 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
 {
   // grabs all the files (that are not directories) from the current dir recursively.
   
-  LOG( "HNL", pDEBUG ) << "Entering HNLFluxCreator::RecurseOverDir()...";
   TSystemDirectory topDir( finpath.c_str(), finpath.c_str() );
   std::list<TString> files; int nFiles = 0;
   std::list<TString> dirNames;
@@ -818,20 +842,14 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
     
     // first, strip the first two elements . and ..
     TList * rootElements = currDir->GetListOfFiles(); rootElements->Sort();
-    LOG( "HNL", pDEBUG )
-      << "Pre-sanitisation, dir structure is...";
     rootElements->ls();
     rootElements->Remove( rootElements->First() ); // .
     rootElements->Remove( rootElements->First() ); // ..
 
     if( rootElements->GetEntries() == 0 ) continue;
-    else {
-      LOG( "HNL", pDEBUG )
-	<< "Post-sanitisation, dir structure is: ";
-      rootElements->ls();
-    }
+    else rootElements->ls();
 
-    TSystemFile * elem;
+    //TSystemFile * elem;
     TIter next(rootElements);
     TObject * sFile;
     TIter sNext( rootElements );
@@ -839,7 +857,7 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
     // put all the files in the list, and all the directories in the dirs list.
     // for names, add the full path (== dirPath + "/" + name of next dir)
     // TSystemDirectory inherits from TSystemFile
-    while( sFile = sNext() ){
+    while( (sFile = sNext()) != NULL ){ // you read that right, this is one =.
       TString fullPath = dirPath + "/" + sFile->GetName() ;
       if( dynamic_cast< TSystemDirectory * >( sFile ) ) {
 	dirs.emplace_back( sFile );
@@ -1267,7 +1285,7 @@ TLorentzVector FluxCreator::HNLEnergy( HNLProd_t hnldm, TLorentzVector p4par ) c
      double w = fPhaseSpaceGenerator.Generate();
      wmax = TMath::Max(wmax,w);
   }
-  assert(wmax>0);
+  assert(wmax>0 && "Phase space generator works");
   wmax *= 2;
 
   LOG("HNL", pNOTICE)
@@ -1358,16 +1376,51 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
   /*
   double ox = fCx + fDetOffset.at(0), oy = fCy + fDetOffset.at(1), oz = fCz + fDetOffset.at(2); // NEAR, m
   */
-  double ox = fCx, oy = fCy, oz = fCz; // NEAR, m
+  double ox = fCx, oy = fCy, oz = fCz; // NEAR, m -- this is for ROOT file origin system
+
+  // ensure we always roll inside the BBox when taking detector offset + translation into account
+  /*
+  double xBack = fDetOffset.at(0)-fLx/2.0; double xFront = fDetOffset.at(0)+fLx/2.0;
+  double yBack = fDetOffset.at(1)-fLy/2.0; double yFront = fDetOffset.at(1)+fLy/2.0;
+  double zBack = fDetOffset.at(2)-fLz/2.0; double zFront = fDetOffset.at(2)+fLz/2.0;
+  */
+
+  double xBack = -fLx/2.0; double xFront = fLx/2.0;
+  double yBack = -fLy/2.0; double yFront = fLy/2.0;
+  double zBack = -fLz/2.0; double zFront = fLz/2.0;
+
+  if( xBack < -fLxR/2.0 ) xBack  = -fLxR/2.0;
+  if( xFront > fLxR/2.0 ) xFront = fLxR/2.0;
+  if( yBack < -fLyR/2.0 ) yBack  = -fLyR/2.0;
+  if( yFront > fLyR/2.0 ) yFront = fLyR/2.0;
+  if( zBack < -fLzR/2.0 ) zBack  = -fLzR/2.0;
+  if( zFront > fLzR/2.0 ) zFront = fLzR/2.0;
+
+  LOG( "HNL", pDEBUG )
+    << "Box is generated: [" << xBack << ", " << xFront << "] x [" 
+    << yBack << ", " << yFront << "] x [" << zBack << ", " << zFront << "] [m]";
+
+  /*
+  double xBack = -fLx/2.0, xFront = fLx/2.0;
+  double yBack = -fLy/2.0, yFront = fLy/2.0;
+  double zBack = -fLz/2.0, zFront = fLz/2.0;
+  */
   
+  /*
   double rx = (rnd->RndGen()).Uniform( -fLx/2.0, fLx/2.0 ), 
     ry = (rnd->RndGen()).Uniform( -fLy/2.0, fLy/2.0 ),
     rz = (rnd->RndGen()).Uniform( -fLz/2.0, fLz/2.0 ); // USER, m
+  */
+  double rx = (rnd->RndGen()).Uniform( xBack, xFront ),
+    ry = (rnd->RndGen()).Uniform( yBack, yFront ),
+    rz = (rnd->RndGen()).Uniform( zBack, zFront ); // USER, m
 
-  double ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
-  double uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
-  double uz = (rz + fDetOffset.at(2)) * units::m / units::cm;
+  double ux = (rx) * units::m / units::cm;
+  double uy = (ry) * units::m / units::cm;
+  double uz = (rz) * units::m / units::cm;
   TVector3 checkPoint( ux, uy, uz ); // USER, cm
+
+  std::string pathString = this->CheckGeomPoint( ux, uy, uz );
   
   TVector3 originPoint( -ox, -oy, -oz );
   TVector3 dumori( 0.0, 0.0, 0.0 );
@@ -1376,24 +1429,44 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
     //double ux = rx - ox, uy = ry - oy, uz = rz - oz;
 
     LOG( "HNL", pDEBUG )
-      << "\nChecking point " << utils::print::Vec3AsString(&checkPoint) << " [m, user]";
+      << "\nChecking point " << utils::print::Vec3AsString(&checkPoint) << " [cm, user]";
 
     // check if the point is inside the geometry, otherwise do it again
-    std::string pathString = this->CheckGeomPoint( ux, uy, uz ); int iNode = 1; // 1 past beginning
+    pathString = this->CheckGeomPoint( ux, uy, uz ); int iNode = 1; // 1 past beginning
+    LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
     int iBad = 0;
-    while( pathString.find( "/", iNode ) == string::npos && iBad < 10 ){
+    while( pathString.find( fTopVolume.c_str(), iNode ) == string::npos && iBad < 100 ){
+      /*
       rx = (rnd->RndGen()).Uniform( -fLx/2.0, fLx/2.0 ); ux = (rx + fDetOffset.at(0)) * units::m / units::cm;
       ry = (rnd->RndGen()).Uniform( -fLy/2.0, fLy/2.0 ); uy = (ry + fDetOffset.at(1)) * units::m / units::cm;
       rz = (rnd->RndGen()).Uniform( -fLz/2.0, fLz/2.0 ); uz = (rz + fDetOffset.at(2)) * units::m / units::cm;
+      */
+      rx = (rnd->RndGen()).Uniform( xBack, xFront ); ux = (rx) * units::m / units::cm;
+      ry = (rnd->RndGen()).Uniform( yBack, yFront ); uy = (ry) * units::m / units::cm;
+      rz = (rnd->RndGen()).Uniform( zBack, zFront ); uz = (rz) * units::m / units::cm;
       checkPoint.SetXYZ( ux, uy, uz );
+      LOG( "HNL", pDEBUG )
+	<< "\nChecking point " << utils::print::Vec3AsString(&checkPoint) << " [cm, user]";
       pathString = this->CheckGeomPoint( ux, uy, uz ); iNode = 1;
+      LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
       iBad++;
     }
-    assert( pathString.find( "/", iNode ) != string::npos );
+    // weaker condition. Just bail if 100 tries don't get you inside the flux volume...
+    if( pathString.find( fTopVolume.c_str(), iNode ) == string::npos ){
+      LOG( "HNL", pWARN ) << "Could not place flux generation vertex inside the requested volume! Bailing on event";
+      checkPoint.SetXYZ( -999.9, -999.9, -999.9 );
+      fTargetPoint = checkPoint;
+      return checkPoint;
+    }
+
+    //assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos &&
+    //	    "Vertex for flux generation inside top volume");
   }
 
   // turn u back into [m] from [cm]
   ux *= units::cm / units::m; uy *= units::cm / units::m; uz *= units::cm / units::m;
+  ux += fDetOffset.at(0); uy += fDetOffset.at(1); uz += fDetOffset.at(2); // add in detector offset
+  ux += fTx; uy += fTy; uz += fTz; // add in volume translation
   // return the absolute point in space [NEAR, m] that we're pointing to!
   checkPoint.SetXYZ( ux, uy, uz );
   checkPoint = this->ApplyUserRotation( checkPoint, dumori, fDetRotation, true ); // det --> tgt-hall
@@ -1412,7 +1485,7 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
 //----------------------------------------------------------------------------
 double FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool seekingMax ) const
 {
-  TVector3 ppar = p4par.Vect(); assert( ppar.Mag() > 0.0 );
+  TVector3 ppar = p4par.Vect(); assert( ppar.Mag() > 0.0 && "Parent 3-momentum > 0.0" );
   TVector3 pparUnit = ppar.Unit();
   // let face be planar and perpendicular to vector Q
   // assuming Q = ( 0, 0, 1 ) == face perpendicular to z
@@ -1444,7 +1517,7 @@ double FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool s
   double fLT = IPdev.Mag();
   double dist = atilde.Mag();
   
-  assert( fLT > 0.0 );
+  assert( fLT > 0.0 && "Non-zero sweep to box centre" );
   double detRadius = std::max( fLx, fLy ) / 2.0;
 
   if( parentHitsCentre ){
@@ -1459,7 +1532,7 @@ double FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool s
 
     double rprod = r1Vec.X() * r2Vec.X() + r1Vec.Y() * r2Vec.Y() + r1Vec.Z() * r2Vec.Z();
 
-    assert( std::abs( rprod ) < controls::kASmallNum );
+    assert( std::abs( rprod ) < controls::kASmallNum && "Parent hits centre" );
 
     // four IP with det. All have distance detRadius from centre.
     TVector3 p1( detO.X() + detRadius*r1Vec.X(),
@@ -1510,21 +1583,23 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   // implementation of GetAngDeviation that uses ROOT geometry. More robust than analytical geom
   // (fewer assumptions about detector position)
 
-  TVector3 ppar = p4par.Vect(); assert( ppar.Mag() > 0.0 );
+  TVector3 ppar = p4par.Vect(); assert( ppar.Mag() > 0.0 && "Parent 3-momentum > 0.0" );
   TVector3 pparUnit = ppar.Unit();
 
   const double sx1 = TMath::Sin(fBx1), cx1 = TMath::Cos(fBx1);
   const double sz = TMath::Sin(fBz), cz = TMath::Cos(fBz);
   const double sx2 = TMath::Sin(fBx2), cx2 = TMath::Cos(fBx2);
 
-  const double xun[3] = { cz, -cx1*sz, sx1*sz };
-  const double yun[3] = { sz*cx2, cx1*cz*cx2 - sx1*sx2, -sx1*cz*cx2 - cx1*sx2 };
+  //const double xun[3] = { cz, -cx1*sz, sx1*sz };
+  //const double yun[3] = { sz*cx2, cx1*cz*cx2 - sx1*sx2, -sx1*cz*cx2 - cx1*sx2 };
   const double zun[3] = { sz*sx2, cx1*cz*sx2 + sx1*cx2, -sx1*cz*sx2 + cx1*cx2 };
 
+  /*
   LOG("HNL", pDEBUG)
     << "\nxun = ( " << xun[0] << ", " << xun[1] << ", " << xun[2] << " )"
     << "\nyun = ( " << yun[0] << ", " << yun[1] << ", " << yun[2] << " )"
     << "\nzun = ( " << zun[0] << ", " << zun[1] << ", " << zun[2] << " )";
+  */
 
   /*
   TVector3 detO_cm( (detO.X() + fDetOffset.at(0)) * units::m / units::cm, 
@@ -1535,7 +1610,8 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 		    (detO.Y()) * units::m / units::cm,
 		    (detO.Z()) * units::m / units::cm );
   double inProd = zun[0] * detO_cm.X() + zun[1] * detO_cm.Y() + zun[2] * detO_cm.Z(); // cm
-  assert( pparUnit.X() * zun[0] + pparUnit.Y() * zun[1] + pparUnit.Z() * zun[2] != 0.0 );
+  assert( pparUnit.X() * zun[0] + pparUnit.Y() * zun[1] + pparUnit.Z() * zun[2] != 0.0 &&
+	  "Parent has some component of its momentum along the z-axis");
   inProd /= ( pparUnit.X() * zun[0] + pparUnit.Y() * zun[1] + pparUnit.Z() * zun[2] );
 
   // using vector formulation, find point of closest approach between parent momentum from
@@ -1583,9 +1659,11 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 				   aConst[1] + nMult * zConstMult * nConst[1],
 				   aConst[2] + nMult * zConstMult * nConst[2] }; // NEAR
 
+  /*
   LOG( "HNL", pDEBUG )
     << "\ndetO_cm = " << utils::print::Vec3AsString( &detO_cm )
     << "\npparUnit = " << utils::print::Vec3AsString( &pparUnit );
+  */
 
   const double startPoint[3] = { startPoint_m[0] * units::m / units::cm,
 				 startPoint_m[1] * units::m / units::cm,
@@ -1599,7 +1677,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   const double sweepVect[3] = { (fCx) * units::m / units::cm - startPoint[0],
 				(fCy) * units::m / units::cm - startPoint[1],
 				(fCz) * units::m / units::cm - startPoint[2] }; // NEAR, cm
-  const double swvMag = std::sqrt( sweepVect[0]*sweepVect[0] + sweepVect[1]*sweepVect[1] + sweepVect[2]*sweepVect[2] ); assert( swvMag > 0.0 );
+  const double swvMag = std::sqrt( sweepVect[0]*sweepVect[0] + sweepVect[1]*sweepVect[1] + sweepVect[2]*sweepVect[2] ); assert( swvMag > 0.0 && "Sweep is non-zero" );
 
   // Note the geometry manager works in the *detector frame*. Transform to that.
   /*
@@ -1625,7 +1703,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 
   // first check that detStartPoint is not already in the detector! If it is, we should flag this now.
   std::string detPathString = this->CheckGeomPoint( detStartPoint.X(), detStartPoint.Y(), detStartPoint.Z() ); int iDNode = 1; // 1 past beginning
-  bool startsInsideDet = ( detPathString.find("/", iDNode) != string::npos );
+  bool startsInsideDet = ( detPathString.find(fTopVolume.c_str(), iDNode) != string::npos );
 
   TLorentzVector detPpar_4v( detPpar.X(), detPpar.Y(), detPpar.Z(), p4par.E() );
   
@@ -1641,7 +1719,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 
   gGeoManager->SetCurrentPoint( detStartPoint.X(), detStartPoint.Y(), detStartPoint.Z() );
   gGeoManager->SetCurrentDirection( detSweepVect.X() / swvMag, detSweepVect.Y() / swvMag, detSweepVect.Z() / swvMag );
-  const double sStepSize = 0.05 * std::min( std::min( fLx, fLy ), fLz );
+  //const double sStepSize = 0.05 * std::min( std::min( fLx, fLy ), fLz );
 
   // start stepping. Let's do this manually cause FindNextBoundaryAndStep() can be finicky.
   // if start inside detector, then only find exit point, otherwise find entry point.
@@ -1674,7 +1752,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 				  currz + largeStep * curdz );
 
     /* // this is the very correct, very slow way of doing it
-    while( detPathString.find("/", iDNode) != string::npos ){
+    while( detPathString.find(fTopVolume.c_str(), iDNode) != string::npos ){
       gGeoManager->SetCurrentPoint( (gGeoManager->GetCurrentPoint())[0] + (gGeoManager->GetCurrentDirection())[0] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[1] + (gGeoManager->GetCurrentDirection())[1] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[2] + (gGeoManager->GetCurrentDirection())[2] * sStepSize );
@@ -1715,7 +1793,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 				  currz + largeStep * curdz );
 
     /* // slow but correct
-    while( detPathString.find("/", iDNode) == string::npos ){
+    while( detPathString.find(fTopVolume.c_str(), iDNode) == string::npos ){
       gGeoManager->SetCurrentPoint( (gGeoManager->GetCurrentPoint())[0] + (gGeoManager->GetCurrentDirection())[0] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[1] + (gGeoManager->GetCurrentDirection())[1] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[2] + (gGeoManager->GetCurrentDirection())[2] * sStepSize );
@@ -1747,7 +1825,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
     gGeoManager->SetCurrentPoint( -currx, -curry, -currz );
 
     /* // slow but correct
-    while( detPathString.find("/", iDNode) != string::npos ){
+    while( detPathString.find(fTopVolume.c_str(), iDNode) != string::npos ){
       gGeoManager->SetCurrentPoint( (gGeoManager->GetCurrentPoint())[0] + (gGeoManager->GetCurrentDirection())[0] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[1] + (gGeoManager->GetCurrentDirection())[1] * sStepSize,
 				    (gGeoManager->GetCurrentPoint())[2] + (gGeoManager->GetCurrentDirection())[2] * sStepSize );
@@ -1839,12 +1917,12 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   TVector3 startVec_near = this->ApplyUserRotation( startVec, detori, fDetRotation, false ); // NEAR, cm
 
   double minusNum = startVec.X() * minusVec.X() + startVec.Y() * minusVec.Y() + startVec.Z() * minusVec.Z(); // USER AND USER
-  double minusDen = startVec.Mag() * minusVec.Mag(); assert( minusDen > 0.0 ); // USER AND USER
+  double minusDen = startVec.Mag() * minusVec.Mag(); assert( minusDen > 0.0 && "Zeta-minus denominator sensible" ); // USER AND USER
 
   zm = TMath::ACos( minusNum / minusDen ) * TMath::RadToDeg();
 
   double plusNum = startVec.X() * plusVec.X() + startVec.Y() * plusVec.Y() + startVec.Z() * plusVec.Z(); // USER AND USER
-  double plusDen = startVec.Mag() * plusVec.Mag(); assert( plusDen > 0.0 ); // USER AND USER
+  double plusDen = startVec.Mag() * plusVec.Mag(); assert( plusDen > 0.0 && "Zeta-plus denominator sensible" ); // USER AND USER
 
   zp = TMath::ACos( plusNum / plusDen ) * TMath::RadToDeg();
 
@@ -1877,7 +1955,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
    * and return the ratio over the relevant measure for a SM neutrino
    */
 
-  assert( zm >= 0.0 && zp >= zm );
+  assert( zm >= 0.0 && zp >= zm && "Zeta-plus >= zeta-minus >= 0.0" );
   if( zp == zm ) return 1.0;
 
   double M = p4HNL.M();
@@ -1900,7 +1978,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
   if( zm < fHNL->GetMinimum() ){ // really good collimation, ignore checks on zm
     double z0 = fHNL->GetMinimum();
     if( ymax > zp && xmax < 180.0 ){ // >=2 pre-images, add them together
-      int nPreim = 0;
+      //int nPreim = 0;
 
       // RETHERE: Make this more sophisticated! Assumes 2 preimages, 1 before and 1 after max
       double xl1 = fHNL->GetX( z0, 0.0, xmax );
@@ -1908,7 +1986,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
       double xl2 = fHNL->GetX( z0, xmax, 180.0 );
       double xh2 = fHNL->GetX( zp, xmax, 180.0 );
 
-      range1 += std::abs( xl1 - xh1 ) + std::abs( xh2 - xl2 ); nPreim = 2;
+      range1 += std::abs( xl1 - xh1 ) + std::abs( xh2 - xl2 ); //nPreim = 2;
     } else if( ymax > zp && xmax == 180.0 ){ // 1 pre-image, SMv-like case
       double xl = fHNL->GetX( z0 ), xh = fHNL->GetX( zp );
       range1 = std::abs( xh - xl );
@@ -1921,7 +1999,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
     if( ymax <= zm ){ // 0 pre-images
       return 0.0;
     } else if( ymax > zp && xmax < 180.0 ){ // >=2 pre-images, add them together
-      int nPreim = 0;
+      //int nPreim = 0;
 
       // RETHERE: Make this more sophisticated! Assumes 2 preimages, 1 before and 1 after max
       double xl1 = fHNL->GetX( zm, 0.0, xmax );
@@ -1929,7 +2007,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
       double xl2 = fHNL->GetX( zm, xmax, 180.0 );
       double xh2 = fHNL->GetX( zp, xmax, 180.0 );
 
-      range1 += std::abs( xl1 - xh1 ) + std::abs( xh2 - xl2 ); nPreim = 2;
+      range1 += std::abs( xl1 - xh1 ) + std::abs( xh2 - xl2 ); //nPreim = 2;
     } else if( ymax > zp && xmax == 180.0 ){ // 1 pre-image, SMv-like case
       double xl = fHNL->GetX( zm ), xh = fHNL->GetX( zp );
       range1 = std::abs( xh - xl );
@@ -1984,7 +2062,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
     return 1.0 / ( xpart * ypart );
   }
 
-  assert( range2 > 0.0 );
+  assert( range2 > 0.0 && "SM neutrino is geom-accepted" );
 
   return range1 / range2;
 
@@ -2053,7 +2131,7 @@ TVector3 FluxCreator::ApplyUserRotation( TVector3 vec, TVector3 oriVec, std::vec
   
   vx -= ox; vy -= oy; vz -= oz; // make this rotation about detector origin
 
-  assert( rotVec.size() == 3 ); // want 3 Euler angles, otherwise this is unphysical.
+  assert( rotVec.size() == 3 && "3 Euler angles" ); // want 3 Euler angles, otherwise this is unphysical.
   double Ax2 = ( doBackwards ) ? -rotVec.at(2) : rotVec.at(2);
   double Az  = ( doBackwards ) ? -rotVec.at(1) : rotVec.at(1);
   double Ax1 = ( doBackwards ) ? -rotVec.at(0) : rotVec.at(0);
@@ -2134,6 +2212,8 @@ void FluxCreator::LoadConfig(void)
   fCx = fB2UTranslation.at(0);
   fCy = fB2UTranslation.at(1);
   fCz = fB2UTranslation.at(2);
+
+  fTx = 0.0; fTy = 0.0; fTz = 0.0;
   
   fAx1 = fB2URotation.at(0);
   fAz  = fB2URotation.at(1);
@@ -2172,10 +2252,11 @@ void FluxCreator::LoadConfig(void)
   fIsConfigLoaded = true;
 }
 //____________________________________________________________________________
-void FluxCreator::SetGeomFile( string geomfile ) const
+void FluxCreator::SetGeomFile( string geomfile, string topVolume ) const
 {
   LOG( "HNL", pDEBUG ) << "Setting geometry file to " << geomfile;
   fGeomFile = geomfile;
+  fTopVolume = topVolume;
 }
 //____________________________________________________________________________
 void FluxCreator::SetFirstFluxEntry( int iFirst ) const
@@ -2196,6 +2277,10 @@ void FluxCreator::ImportBoundingBox( TGeoBBox * box ) const
     fLy = std::min( testRadius, fLyR );
     fLz = std::min( testRadius, fLzR );
   }
+
+  LOG( "HNL", pDEBUG )
+    << "\nfL{x,y,z}  = " << fLx << ", " << fLy << ", " << fLz
+    << "\nfL{x,y,z}R = " << fLxR << ", " << fLyR << ", " << fLzR;
 }
 //____________________________________________________________________________
 std::string FluxCreator::CheckGeomPoint( Double_t x, Double_t y, Double_t z ) const
@@ -2209,4 +2294,167 @@ std::string FluxCreator::CheckGeomPoint( Double_t x, Double_t y, Double_t z ) co
   TGeoNode *node = gGeoManager->FindNode(point[0], point[1], point[2]);
   gGeoManager->MasterToLocal(point, local);
   return gGeoManager->GetPath();
+}
+//____________________________________________________________________________
+TGeoMatrix * FluxCreator::FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const
+{
+  // Recurses over the ROOT file geometry structure to find the target volume tar_vol.
+  // Returns the full transformation matrix of the daughter volume as a composition of matrices
+
+  std::list<TGeoNode *> nodes; // to parse hierarchy (i.e. daughters)
+  std::list<std::string> paths; // store path of nodes checked
+  std::list<TGeoMatrix *> mats; // compositions of matrices here!
+
+  assert( top_vol && tar_vol && "Top and target volumes both accessible" );
+
+  std::string targetPath( tar_vol->GetName() );
+
+  // Start by grabbing the daughter structure of the top volume and parse until found
+  TGeoNode * top_node = top_vol->GetNode(0); nodes.emplace_back( top_node );
+  std::string top_path( top_node->GetName() ); paths.emplace_back( top_path );
+  TGeoMatrix * top_mat = top_node->GetMatrix(); mats.emplace_back( top_mat );
+
+  std::string test = paths.front();
+  // strip all slashes from test
+  while( test.find("/") != string::npos ){
+    int idx = test.find("/");
+    test = test.substr(idx+1);
+  }
+  // and strip tailing underscore
+  int ididx = test.rfind("_");
+  test = test.substr( 0, ididx );
+
+  LOG( "HNL", pNOTICE )
+    << "Looking for this targetPath: " << targetPath;
+
+  // could be we hit the top volume, in which case we skip the loop
+  bool foundPath = (strcmp( test.c_str(), targetPath.c_str() ) == 0);
+
+  //while( test.find( targetPath.c_str() ) == string::npos ){ // still looking for the path.
+  while( strcmp( test.c_str(), targetPath.c_str() ) != 0 && !foundPath ){ // still looking
+    TGeoNode * node = nodes.front();
+    std::string path = paths.front();
+    TGeoMatrix * mat = mats.front();
+
+    assert( node  && "Node is not null" );
+    assert( mat && "Matrix is not null" );
+
+    int nDaughters = node->GetNdaughters();
+    LOG( "HNL", pDEBUG ) << "Node with name " << path << " has " << nDaughters << " daughters...";
+    for( int iDaughter = 0; iDaughter < nDaughters; iDaughter++ ){
+      TGeoNode * dNode = node->GetDaughter(iDaughter);
+      assert( dNode && "Daughter node not null" );
+      std::string dPath( path );
+      dPath.append( "/" ); dPath.append( dNode->GetName() );
+      TGeoMatrix * nodeMat = dNode->GetMatrix();
+
+      LOG( "HNL", pDEBUG ) << "Got node, path, and matrix for daughter node "
+			   << iDaughter << " / " << nDaughters-1 << "...";
+
+      // construct the full updated matrix from multiplying dMat on the left of mat
+      const Double_t * nodeRot = nodeMat->GetRotationMatrix();
+      const Double_t * nodeTra = nodeMat->GetTranslation();
+      
+      const Double_t * baseRot = mat->GetRotationMatrix();
+      const Double_t * baseTra = mat->GetTranslation();
+
+      const Double_t compTra[3] = { baseTra[0] + nodeTra[0], 
+				    baseTra[1] + nodeTra[1],
+				    baseTra[2] + nodeTra[2] }; // this was easy.
+      const Double_t compRot[9] = { nodeRot[0] * baseRot[0] + nodeRot[1] * baseRot[3] + nodeRot[2] * baseRot[6],
+				    nodeRot[0] * baseRot[1] + nodeRot[1] * baseRot[4] + nodeRot[2] * baseRot[7],
+				    nodeRot[0] * baseRot[2] + nodeRot[1] * baseRot[5] + nodeRot[2] * baseRot[8],
+				    nodeRot[3] * baseRot[0] + nodeRot[4] * baseRot[3] + nodeRot[5] * baseRot[6],
+				    nodeRot[3] * baseRot[1] + nodeRot[4] * baseRot[4] + nodeRot[5] * baseRot[7],
+				    nodeRot[3] * baseRot[2] + nodeRot[4] * baseRot[5] + nodeRot[5] * baseRot[8],
+				    nodeRot[6] * baseRot[0] + nodeRot[7] * baseRot[3] + nodeRot[8] * baseRot[6],
+				    nodeRot[6] * baseRot[1] + nodeRot[7] * baseRot[4] + nodeRot[8] * baseRot[7],
+				    nodeRot[6] * baseRot[2] + nodeRot[7] * baseRot[5] + nodeRot[8] * baseRot[8] }; // less easy but ok.
+
+      // construct a TGeoMatrix * from these quantities...
+      TGeoHMatrix * hmat = new TGeoHMatrix( dPath.c_str() );
+      hmat->SetTranslation( compTra );
+      hmat->SetRotation( compRot );
+      TGeoMatrix * dMat = dynamic_cast< TGeoMatrix * >( hmat );
+
+      /*
+      LOG( "HNL", pDEBUG )
+	<< "\nNode with name " << targetPath << " not yet found."
+	<< "\nParsing node with name " << dPath << "..."
+	<< "\n\nThis node had the following translations: ( " 
+	<< nodeTra[0] << ", " << nodeTra[1] << ", " << nodeTra[2] << " )"
+	<< " composed onto ( " << baseTra[0] << ", " << baseTra[1] << ", " << baseTra[2] << " ),"
+	<< "\ngiving a final translation ( " << compTra[0] << ", " << compTra[1] << ", " 
+	<< compTra[2] << " )."
+	<< "\n\nThis node had the following rotation matrix: ( ( " 
+	<< nodeRot[0] << ", " << nodeRot[1] << ", " << nodeRot[2] << " ), ( "
+	<< nodeRot[3] << ", " << nodeRot[4] << ", " << nodeRot[5] << " ), ( "
+	<< nodeRot[6] << ", " << nodeRot[7] << ", " << nodeRot[8] << " ) ),"
+	<< "\ncomposed onto ( ( "
+	<< baseRot[0] << ", " << baseRot[1] << ", " << baseRot[2] << " ), ( "
+	<< baseRot[3] << ", " << baseRot[4] << ", " << baseRot[5] << " ), ( "
+	<< baseRot[6] << ", " << baseRot[7] << ", " << baseRot[8] << " ) ),"
+	<< "\ngiving a final rotation ( ( "
+	<< compRot[0] << ", " << compRot[1] << ", " << compRot[2] << " ), ( "
+	<< compRot[3] << ", " << compRot[4] << ", " << compRot[5] << " ), ( "
+	<< compRot[6] << ", " << compRot[7] << ", " << compRot[8] << " ) ).";
+      */
+
+      // add to list TAIL and strike away list HEAD
+      nodes.emplace_back( dNode );
+      paths.emplace_back( dPath );
+      mats.emplace_back( dMat );
+
+      // break if we found the target path to ensure the TAIL always points to desired node
+      //if( dPath.find( targetPath.c_str() ) ) break;
+      while( dPath.find("/") != string::npos ){
+	int idx = dPath.find("/");
+	dPath = dPath.substr(idx+1);
+      }
+      ididx = dPath.rfind("_");
+      dPath = dPath.substr( 0, ididx );
+      if( strcmp( dPath.c_str(), targetPath.c_str() ) == 0 ){ foundPath = true; break; }
+    } // loop over daughters
+
+    if( !foundPath ){ // prevent popping out of last element!
+      nodes.pop_front();
+      paths.pop_front();
+      mats.pop_front();
+
+      test = paths.front();
+      while( test.find("/") != string::npos ){
+	int idx = test.find("/");
+	test = test.substr(idx+1);
+      }
+      ididx = test.rfind("_");
+      test = test.substr( 0, ididx );
+    }
+  } // while path not found
+
+  std::string final_path = paths.back();
+  while( final_path.find("/") != string::npos ){
+    int idx = final_path.find("/");
+    final_path = final_path.substr(idx+1);
+  }
+  ididx = final_path.rfind("_");
+  final_path = final_path.substr( 0, ididx );
+  assert( strcmp( final_path.c_str(), targetPath.c_str() ) == 0 && foundPath &&
+	  "Found the target volume's path in the ROOT geometry hierarchy" );
+  // found the path! The matrix is at the end.
+  TGeoMatrix * final_mat = mats.back();
+
+  const Double_t * final_tra = final_mat->GetTranslation();
+  const Double_t * final_rot = final_mat->GetRotationMatrix();
+
+  LOG( "HNL", pINFO )
+    << "Found the target volume! Here is its path and full matrix:"
+    << "\nPath: " << paths.back()
+    << "\nTranslations: ( " << final_tra[0] << ", " << final_tra[1] << ", " << final_tra[2]
+    << " ) [cm]"
+    << "\nRotation matrix: ( ( " 
+    << final_rot[0] << ", " << final_rot[1] << ", " << final_rot[2] << " ), ( "
+    << final_rot[3] << ", " << final_rot[4] << ", " << final_rot[5] << " ), ( "
+    << final_rot[6] << ", " << final_rot[7] << ", " << final_rot[8] << " ) )";
+
+  return final_mat;
 }

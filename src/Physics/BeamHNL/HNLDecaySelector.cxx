@@ -34,7 +34,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GINV = fDecayGammas[0];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyNuNuNu, GINV ) );
 
-  assert( GINV >= 0.0 );
+  assert( GINV >= 0.0 && "N4 --> v v v has width >= 0.0" );
 
   // nu-e-e is next lightest
   if( M < 2.0 * genie::constants::kElectronMass ) return allChannels;
@@ -49,7 +49,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GNEE = fDecayGammas[1];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyNuEE, GNEE ) );
 
-  assert( GNEE >= 0.0 );
+  assert( GNEE >= 0.0 && "N4 --> v e e has width >= 0.0" );
 
   // nu-e-mu is next lightest
   if( M < genie::constants::kElectronMass + genie::constants::kMuonMass ) return allChannels;
@@ -64,7 +64,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GNEM = fDecayGammas[2];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyNuMuE, GNEM ) );
 
-  assert( GNEM >= 0.0 );
+  assert( GNEM >= 0.0 && "N4 --> v e mu has width >= 0.0" );
 
   // pi0-nu is next lightest
   if( M < genie::constants::kPi0Mass ) return allChannels;
@@ -79,7 +79,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GP0N = fDecayGammas[3];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyPi0Nu, GP0N ) );
 
-  assert( GP0N >= 0.0 );
+  assert( GP0N >= 0.0 && "N4 --> pi0 v has width >= 0.0" );
 
   // pi-e is next lightest
   if( M < genie::constants::kPionMass + genie::constants::kElectronMass ) return allChannels;
@@ -94,7 +94,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GPIE = fDecayGammas[4];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyPiE, GPIE) );
 
-  assert( GPIE >= 0.0 );
+  assert( GPIE >= 0.0 && "N4 --> pi e has width >= 0.0" );
 
   // nu-mu-mu is next lightest
   if( M < 2.0 * genie::constants::kMuonMass ) return allChannels;
@@ -109,7 +109,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GNMM = fDecayGammas[5];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyNuMuMu, GNMM ) );
 
-  assert( GNMM >= 0.0 );
+  assert( GNMM >= 0.0 && "N4 --> v mu mu has width >= 0.0" );
 
   // pi-mu is next lightest
   if( M < genie::constants::kPionMass + genie::constants::kMuonMass ) return allChannels; 
@@ -124,7 +124,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GPIM = fDecayGammas[6];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyPiMu, GPIM ) );
 
-  assert( GPIM >= 0.0 );
+  assert( GPIM >= 0.0 && "N4 --> pi mu has width >= 0.0" );
 
   // pi0-pi0-nu is next lightest
   if( M < 2.0 * genie::constants::kPi0Mass ) return allChannels;
@@ -139,7 +139,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else fDecayGammas[7] = GP02;
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyPi0Pi0Nu, GP02 ) );
 
-  assert( GP02 >= 0.0 );
+  assert( GP02 >= 0.0 && "N4 --> pi0 pi0 v has width >= 0.0" );
 
   // pi-pi0-e is next lightest
   if( M < genie::constants::kPionMass + genie::constants::kPi0Mass + genie::constants::kElectronMass ) return allChannels;
@@ -154,7 +154,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GP0E = fDecayGammas[8];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyPiPi0E, GP0E ) );
 
-  assert( GP0E >= 0.0 );
+  assert( GP0E >= 0.0 && "N4 --> pi pi0 e has width >= 0.0" );
 
   // pi-pi0-mu is next lightest
   if( M < genie::constants::kPionMass + genie::constants::kPi0Mass + genie::constants::kMuonMass ) return allChannels;
@@ -169,7 +169,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
   } else GP0M = fDecayGammas[9];
   allChannels.insert( allChannels.begin(), std::pair< HNLDecayMode_t, double >( kHNLDcyPiPi0Mu, GP0M ) );
 
-  assert( GP0M >= 0.0 );
+  assert( GP0M >= 0.0 && "N4 --> pi pi0 mu has width >= 0.0" );
 
   //all done! Return
   return allChannels;

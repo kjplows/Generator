@@ -134,6 +134,7 @@ string          kDefOptGeomLUnits   = "mm";    // default geometry length units
 string          kDefOptGeomDUnits   = "g_cm3"; // default geometry density units
 NtpMCFormat_t   kDefOptNtpFormat    = kNFGHEP; // default event tree format
 string          kDefOptEvFilePrefix = "gntp";
+string          kDefOptTopVolName   = "TOP";   // default top volume name 
 
 string          kDefOptSName   = "genie::EventGenerator";
 string          kDefOptSConfig = "BeamHNL";
@@ -164,7 +165,8 @@ TGeoManager *    gOptRootGeoManager = 0;                 // the workhorse geomet
 TGeoVolume  *    gOptRootGeoVolume  = 0;
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
-string           gOptRootGeomTopVol = "";                // input geometry top event generation volume
+bool             gOptTopVolSelected = false;             // did the user ask for a specific top volume?
+string           gOptTopVolName = kDefOptTopVolName;     // input geometry top event generation volume
 double           gOptGeomLUnits = 0;                     // input geometry length units
 long int         gOptRanSeed = -1;                       // random number seed
 
@@ -221,12 +223,16 @@ int main(int argc, char ** argv)
       << "The specified ROOT geometry doesn't exist! Initialization failed!";
     exit(1);
   }
-  vtxGen->SetGeomFile( gOptRootGeom );
-
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
+  if( !gOptTopVolSelected ){
+    TGeoVolume * main_volume = gOptRootGeoManager->GetTopVolume();
+    gOptTopVolName = main_volume->GetName();
+    LOG("gevgen_pghnl", pINFO) << "Using top volume name " << gOptTopVolName;
+  }
+  vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
 
-  TGeoVolume * top_volume = gOptRootGeoManager->GetTopVolume();
-  assert( top_volume );
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
+  assert( top_volume && "Top volume exists" );
   __attribute__((unused)) TGeoShape * ts  = top_volume->GetShape();
 
   //TGeoBBox *  box = (TGeoBBox *)ts;
@@ -254,7 +260,8 @@ int main(int argc, char ** argv)
     stIntChannels.erase( stIntChannels.end()-1, stIntChannels.end() );
   }
 
-  assert( gOptECoupling >= 0.0 && gOptMCoupling >= 0.0 && gOptTCoupling >= 0.0 );
+  assert( gOptECoupling >= 0.0 && gOptMCoupling >= 0.0 && gOptTCoupling >= 0.0 &&
+	  "Lepton mixings nontrivial");
 
   // Initialize an Ntuple Writer to save GHEP records into a TTree
   NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
@@ -318,7 +325,7 @@ int main(int argc, char ** argv)
       << "\nPlease check ${GENIE}/config/CommonHNL.xml sections \"ParamSpace\" and \"ParticleGun\"";
     exit(1);
   }
-  assert( gOptEnergyHNL > gOptMassHNL );
+  assert( gOptEnergyHNL > gOptMassHNL && "HNL E > M" );
 
   // Event loop
   int ievent = 0;
@@ -466,8 +473,8 @@ void InitBoundingBox(void)
 
   if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
 
-  TGeoVolume * top_volume = gOptRootGeoManager->GetTopVolume();
-  assert( top_volume );
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
+  assert( top_volume && "Top volume exists" );
   TGeoShape * ts  = top_volume->GetShape();
 
   TGeoBBox *  box = (TGeoBBox *)ts;
@@ -523,7 +530,7 @@ TLorentzVector * GenerateOriginMomentum( GHepRecord * event )
   std::vector< double > PGDirection = hnlgen->GetPGunDirection();
   double cx = PGDirection.at(0), cy = PGDirection.at(1), cz = PGDirection.at(2);
   double c2 = std::sqrt( cx*cx + cy*cy + cz*cz );
-  assert( c2 > 0.0 );
+  assert( c2 > 0.0 && "Origin momentum nonzero" );
 
   cx *= 1.0 / c2; cy *= 1.0 / c2; cz *= 1.0 / c2;
 
@@ -856,6 +863,17 @@ void GetCommandLineArgs(int argc, char ** argv)
      gOptGeomLUnits = utils::units::UnitFromString(lunits);
      // gOptGeomDUnits = utils::units::UnitFromString(dunits);
 
+     // check for top volume selection
+     if( parser.OptionExists("top_volume") ) {
+       gOptTopVolSelected = true;
+       gOptTopVolName = parser.ArgAsString("top_volume");
+       LOG("gevgen_pghnl", pINFO)
+	 << "Using the following volume as top: " << gOptTopVolName;
+     } else {
+       LOG("gevgen_pghnl", pINFO)
+	 << "Using default top_volume";
+     } // --top_volume
+
   } // using root geom?
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
@@ -886,7 +904,7 @@ void GetCommandLineArgs(int argc, char ** argv)
   if (gOptUsingRootGeom) {
     gminfo << "Using ROOT geometry - file: " << gOptRootGeom
            << ", top volume: "
-           << ((gOptRootGeomTopVol.size()==0) ? "<master volume>" : gOptRootGeomTopVol)
+           << ((gOptTopVolName.size()==0) ? "<master volume>" : gOptTopVolName)
            << ", length  units: " << lunits;
            // << ", density units: " << dunits;
   }

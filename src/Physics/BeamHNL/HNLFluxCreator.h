@@ -112,7 +112,7 @@ namespace genie{
       // set the input path for a flux
       void SetInputFluxPath( std::string finpath ) const;
       // set path to geometry file
-      void SetGeomFile( string geomfile ) const;
+      void SetGeomFile( string geomfile, string topVolume ) const;
       // get N(flux input entries)
       int GetNFluxEntries() const;
       // set first entry for read-in from chain
@@ -133,7 +133,10 @@ namespace genie{
 
       // if using root geom, let this module know
       void SetUsingRootGeom( bool IsUsingRootGeom ) const;
+#ifdef __GENIE_GEOM_DRIVERS_ENABLED__
       void ImportBoundingBox( TGeoBBox * box ) const;
+      TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const;
+#endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
 
       void SetCurrentEntry( int iCurr ) const;
 
@@ -198,6 +201,7 @@ namespace genie{
       mutable bool isParentOnAxis = true;
       mutable TGeoVolume * fTopVol = 0;
       mutable string fGeomFile = "";
+      mutable string fTopVolume = "";
       mutable bool fIsUsingRootGeom = false;
 
       mutable TChain * ctree = 0, * cmeta = 0;
@@ -213,8 +217,9 @@ namespace genie{
 
       mutable std::vector< double > fB2UTranslation, fB2URotation;
       mutable std::vector< double > fDetRotation; // rotation of detector wrt tgt hall
-      mutable std::vector< double > fDetOffset; // offset of det centre wrt geom file origin
+      mutable std::vector< double > fDetOffset; // offset of det centre wrt geom file origin [m]
       mutable double fCx, fCy, fCz;   // BBox centre wrt HNL prod [m]
+      mutable double fTx, fTy, fTz;   // translation of volume wrt top volume origin [m]
       mutable double fAx1, fAz, fAx2; // Euler angles, extrinsic x-z-x. Tgt-hall to beam
       mutable double fBx1, fBz, fBx2; // Tgt-hall to detector frame
 
