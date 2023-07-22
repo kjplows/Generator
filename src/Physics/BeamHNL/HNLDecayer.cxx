@@ -463,6 +463,40 @@ void Decayer::LoadConfig(void)
   double CoMLifetime = sh.GetCoMLifetime();
   assert( CoMLifetime > 0.0 && "HNL rest-frame lifetime > 9.0" );
 
+  // set the maps straight
+  fValidChannelsMap = sh.GetValidChannels();
+  for( std::vector< HNLDecayMode_t >::iterator itInt = fIntChannels.begin();
+       itInt != fIntChannels.end() ; ++itInt ) {
+    int chanIdx = static_cast<int>( (*itInt) );
+    std::map<HNLDecayMode_t, double>::iterator chanIt;
+    switch( chanIdx ){
+    case static_cast<int>( kHNLDcyNuNuNu ): 
+      chanIt = fValidChannelsMap.find( kHNLDcyNuNuNu ); break;
+    case static_cast<int>( kHNLDcyNuEE ):
+      chanIt = fValidChannelsMap.find( kHNLDcyNuEE ); break;
+    case static_cast<int>( kHNLDcyNuMuE ):
+      chanIt = fValidChannelsMap.find( kHNLDcyNuMuE ); break;
+    case static_cast<int>( kHNLDcyPi0Nu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPi0Nu ); break;
+    case static_cast<int>( kHNLDcyPiE ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPiE ); break;
+    case static_cast<int>( kHNLDcyNuMuMu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyNuMuMu ); break;
+    case static_cast<int>( kHNLDcyPiMu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPiMu ); break;
+    case static_cast<int>( kHNLDcyPi0Pi0Nu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPi0Pi0Nu ); break;
+    case static_cast<int>( kHNLDcyPiPi0E ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPiPi0E ); break;
+    case static_cast<int>( kHNLDcyPiPi0Mu ):
+      chanIt = fValidChannelsMap.find( kHNLDcyPiPi0Mu ); break;
+    } // switch over channels
+
+    if( chanIt != fValidChannelsMap.end() )
+      fInterestingChannelsMap.insert( std::pair< HNLDecayMode_t, double >( (*chanIt).first, 
+									   (*chanIt).second ) );
+  }
+
   // also read in particle gun parameters
   this->GetParam( "PG-OriginX", fPGOx );
   this->GetParam( "PG-OriginY", fPGOy );
@@ -738,6 +772,14 @@ std::string Decayer::GetHNLInterestingChannels() const
     chanInt.append( Form("%d", fChanBits[iCBits]) );
   }
   return chanInt;
+}
+//____________________________________________________________________________
+void Decayer::GiveAccessibleChannels( std::map<HNLDecayMode_t, double> & vChan,
+				      std::map<HNLDecayMode_t, double> & iChan ) const
+{
+  vChan = fValidChannelsMap;
+  iChan = fInterestingChannelsMap;
+  return;
 }
 //____________________________________________________________________________
 std::vector< double > Decayer::GetPGunOrigin() const

@@ -29,6 +29,8 @@
 
            -h
               Prints out the gevgen_hnl syntax and exits.
+	   --info
+              Prints information about the HNL and exits.
            -r
               Specifies the MC run number [default: 1000].
            -n
@@ -58,7 +60,7 @@
 	   --top_volume
 	      Sets the top volume to be used for event generation.
            --seed
-              Random number seed.
+              Random number seed. 
 
 \author  John Plows <komninos-john.plows \at cern.ch>
          University of Oxford
@@ -79,6 +81,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <iomanip>
 
 #include <TSystem.h>
 
@@ -135,6 +138,7 @@ using namespace genie::hnl::enums;
 // function prototypes
 void   GetCommandLineArgs (int argc, char ** argv);
 void   PrintSyntax        (void);
+void   PrintInfo          (void);
 
 int    SelectDecayMode    (std::vector<HNLDecayMode_t> *intChannels, SimpleHNL sh);
 const  EventRecordVisitorI * HNLGenerator(void);
@@ -886,6 +890,13 @@ void GetCommandLineArgs(int argc, char ** argv)
     exit(0);
   }
 
+  // print HNL info?
+  bool printInfo = parser.OptionExists("info");
+  if(printInfo) {
+    PrintInfo();
+    exit(0);
+  }
+
   // run number
   if( parser.OptionExists('r') ) {
     LOG("gevgen_hnl", pDEBUG) << "Reading MC run number";
@@ -1096,11 +1107,70 @@ void GetCommandLineArgs(int argc, char ** argv)
      << "\n @@ Statistics    : " << gOptNev << " events";
 }
 //_________________________________________________________________________________________
+void PrintInfo(void)
+{
+  // first, get an instance of the HNL Decayer
+  // this will let us get the partial decay widths
+  const Algorithm * alggen = AlgFactory::Instance()->GetAlgorithm("genie::hnl::Decayer", "Default");
+  const Decayer * hnlgen = dynamic_cast<const Decayer *>( alggen );
+
+  std::ostringstream asts;
+  asts << "I am printing information about this HNL.";
+
+  gOptMassHNL = hnlgen->GetHNLMass();
+  std::vector< double > U4l2s = hnlgen->GetHNLCouplings();
+  gOptECoupling  = U4l2s.at(0);
+  gOptMCoupling  = U4l2s.at(1);
+  gOptTCoupling  = U4l2s.at(2);
+  gOptIsMajorana = hnlgen->IsHNLMajorana();
+  
+  asts << "\n\nMass = " << gOptMassHNL << " (GeV/c^2)"
+       << "\nCouplings (e, mu, tau) = (" << gOptECoupling
+       << ", " << gOptMCoupling << ", " << gOptTCoupling << ")"
+       << "\nNature: " << ( gOptIsMajorana ? "MAJORANA" : "DIRAC" )
+       << "\n";
+
+  CoMLifetime = hnlgen->GetHNLLifetime(); // GeV^{-1}
+  // also transform to ns
+  double CoMLifetimeNs = CoMLifetime * 1.0 / ( units::ns * units::GeV );
+
+  // enumerate all the valid channels
+  std::map< HNLDecayMode_t, double > validChannels;
+  std::map< HNLDecayMode_t, double > interestingChannels;
+  hnlgen->GiveAccessibleChannels( validChannels, interestingChannels );
+
+  asts << "\n ==== SUMMARY OF KINEMATICALLY ACCESSIBLE DECAY CHANNELS ===="
+       << "\n( Note: channels to be simulated are marked with (*) )"
+       << "\n\n" << std::left << std::setw(20) << "Channel" << std::setw(10) << " " 
+       << std::setw(10) << std::left << "Decay width (GeV)"
+       << "\n" << std::setw(40) << "----------------------------------------";
+
+  std::map< HNLDecayMode_t, double >::iterator itValid = validChannels.begin();
+  for( ; itValid != validChannels.end() ; ++itValid ){
+    HNLDecayMode_t hnldm = (*itValid).first; 
+    double dmGam = (*itValid).second;
+
+    asts << "\n" << std::left << std::setw(20) << utils::hnl::AsString(hnldm)
+	 << std::setw(10) << " " << std::right << std::setw(10) << Form("%4.3e", dmGam);
+    
+    if( interestingChannels.find( hnldm ) != interestingChannels.end() )
+      asts << "  (*)"; // note this will be simulated!
+  }
+
+  asts << "\n" << std::setw(40) << "----------------------------------------\n"
+       << "\nTotal decay width (GeV)      = " << Form("%4.3e", 1.0 / CoMLifetime)
+       << "\nCentre-of-mass lifetime (ns) = " << Form("%4.3e", CoMLifetimeNs)
+       << "\n\n";
+
+  LOG( "gevgen_hnl", pFATAL ) << asts.str();
+}
+//_________________________________________________________________________________________
 void PrintSyntax(void)
 {
   LOG("gevgen_hnl", pFATAL)
    << "\n **Syntax**"
    << "\n gevgen_hnl [-h] "
+   << "\n            [--info]"
    << "\n            [-r run#]"
    << "\n             -n n_of_events"
    << "\n             -f path/to/flux/files"
@@ -1108,7 +1178,9 @@ void PrintSyntax(void)
    << "\n            [--firstEvent first_event_for_dk2nu_readin]"  
    << "\n            [-m decay_mode]"
    << "\n            [-g geometry (ROOT file)]"
+   << "\n            [--top_volume top-volume-in-ROOT-file]"
    << "\n            [-L length_units_at_geom]"
+   << "\n            [--info ]"
    << "\n            [-o output_event_file_prefix]"
    << "\n            [--seed random_number_seed]"
    << "\n            [--message-thresholds xml_file]"

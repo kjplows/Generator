@@ -62,6 +62,10 @@ public:
   // 0 if uninteresting, 1 if interesting
   std::string GetHNLInterestingChannels() const;
 
+  // and a method to tell interested parties about which channels are being considered
+  void GiveAccessibleChannels( std::map<HNLDecayMode_t, double> & vChan,
+			       std::map<HNLDecayMode_t, double> & iChan ) const;
+
   // additional particle-gun config
   std::vector< double > GetPGunOrigin() const;
   std::vector< double > GetPGunDOrigin() const;
@@ -113,6 +117,9 @@ private:
 
    mutable std::vector< genie::hnl::HNLDecayMode_t > fIntChannels;
    mutable int fChanBits[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+   mutable std::map< genie::hnl::HNLDecayMode_t, double > fValidChannelsMap;
+   mutable std::map< genie::hnl::HNLDecayMode_t, double > fInterestingChannelsMap;
 
    //mutable double                     fAngularDeviation = -1.0;
    mutable std::vector< double >      fB2UTranslation;
