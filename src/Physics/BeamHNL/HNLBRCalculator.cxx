@@ -11,6 +11,12 @@
 
 #include "Physics/BeamHNL/HNLBRCalculator.h"
 
+// this include has to be here
+#include "libxml/xmlmemory.h"
+#include "libxml/parser.h"
+
+#include "Framework/Utils/XmlParserUtils.h"
+
 using namespace genie;
 using namespace genie::hnl;
 
@@ -120,6 +126,9 @@ void BRCalculator::LoadConfig(void)
     { 0.100570, 0.00000363 }
   };
 
+  this->GetParam( "UseInputQM", fIsUsingInputQM );
+  if( fIsUsingInputQM ) this->InitialiseInputQM();
+
   fIsConfigLoaded = true;
 }
 //----------------------------------------------------------------------------
@@ -155,20 +164,74 @@ double BRCalculator::KScale_Global( HNLProd_t hnldm, const double M ) const {
     return 0.0;
   }
   
-  switch( hnldm ){
-  case kHNLProdPion2Muon: return KScale_PseudoscalarToLepton( mPi, M, mMu );
-  case kHNLProdPion2Electron: return KScale_PseudoscalarToLepton( mPi, M, mE );
-  case kHNLProdKaon2Muon: return KScale_PseudoscalarToLepton( mK, M, mMu );
-  case kHNLProdKaon2Electron: return KScale_PseudoscalarToLepton( mK, M, mE );
-  case kHNLProdKaon3Muon: return KScale_PseudoscalarToPiLepton( mK, M, mMu );
-  case kHNLProdKaon3Electron: return KScale_PseudoscalarToPiLepton( mK, M, mE );
-  case kHNLProdNeuk3Muon: return KScale_PseudoscalarToPiLepton( mK0, M, mMu );
-  case kHNLProdNeuk3Electron: return KScale_PseudoscalarToPiLepton( mK0, M, mE );
-  case kHNLProdMuon3Numu:
-  case kHNLProdMuon3Nue:
-  case kHNLProdMuon3Nutau:
-    return KScale_MuonToNuAndElectron( M );
-  default: return 0.0;
+  if( !fIsUsingInputQM ){ // use in-house calculations
+    switch( hnldm ){
+    case kHNLProdPion2Muon: return KScale_PseudoscalarToLepton( mPi, M, mMu );
+    case kHNLProdPion2Electron: return KScale_PseudoscalarToLepton( mPi, M, mE );
+    case kHNLProdKaon2Muon: return KScale_PseudoscalarToLepton( mK, M, mMu );
+    case kHNLProdKaon2Electron: return KScale_PseudoscalarToLepton( mK, M, mE );
+    case kHNLProdKaon3Muon: return KScale_PseudoscalarToPiLepton( mK, M, mMu );
+    case kHNLProdKaon3Electron: return KScale_PseudoscalarToPiLepton( mK, M, mE );
+    case kHNLProdNeuk3Muon: return KScale_PseudoscalarToPiLepton( mK0, M, mMu );
+    case kHNLProdNeuk3Electron: return KScale_PseudoscalarToPiLepton( mK0, M, mE );
+    case kHNLProdMuon3Numu:
+    case kHNLProdMuon3Nue:
+    case kHNLProdMuon3Nutau:
+      return KScale_MuonToNuAndElectron( M );
+    default: return 0.0;
+    }
+  } else { // someone has provided an input. Let's grab it and see!
+    // first look at the parent
+    std::vector<double> tMasses;
+    switch( hnldm ){
+    case kHNLProdPion2Muon: case kHNLProdPion2Electron:
+      tMasses = (*fProdMasses.find(kPdgPiP)).second;
+      break;
+    case kHNLProdKaon2Muon: case kHNLProdKaon2Electron: 
+    case kHNLProdKaon3Muon: case kHNLProdKaon3Electron:
+      tMasses = (*fProdMasses.find(kPdgKP)).second;
+      break;
+    case kHNLProdNeuk3Muon: case kHNLProdNeuk3Electron:
+      tMasses = (*fProdMasses.find(kPdgK0L)).second;
+      break;
+    case kHNLProdMuon3Numu: case kHNLProdMuon3Nue: case kHNLProdMuon3Nutau:
+      tMasses = (*fProdMasses.find(kPdgMuon)).second;
+      break;
+    }
+
+    // now iterate over the decay masses and find the ones closest to the mass
+    int iMass = 0;
+    double mLow = -1.0, mHigh = -1.0;
+    std::vector<double>::iterator itMass = tMasses.begin();
+    while( itMass != tMasses.end() && mHigh < M ){
+      mLow = mHigh;
+      mHigh = (*itMass);
+      ++itMass; iMass++;
+    }
+    if( itMass == tMasses.end() && mHigh < M ){
+       //itMass == tMasses.end() ){
+      // makes no sense to interpolate here. Stick to last mass.
+      --itMass;
+      std::vector< double > factors = (*fProdFactors.find( hnldm )).second;
+      LOG( "HNL", pDEBUG )
+	<< "\nFor channel " << utils::hnl::ProdAsString( hnldm ) << " there is no interpolation: "
+	<< "\n the input mass M = " << M << " GeV > " << (*itMass) << ", which is the last known "
+	<< "mass. Returning the last point " << factors.at(factors.size()-1);
+      return factors.at(factors.size()-1);
+    }
+    iMass--;
+
+    // grab the factors from the appropriate channels
+    std::vector< double > chanFactors = (*fProdFactors.find( hnldm )).second;
+    double fLow = chanFactors.at(iMass-1), fHigh = chanFactors.at(iMass);
+
+    LOG( "HNL", pDEBUG )
+      << "\nFor channel " << utils::hnl::ProdAsString( hnldm ) << " the interpolation is in"
+      << "\n" << mLow << " -> " << M << " -> " << mHigh
+      << "\nwith endpoints" << fLow << " -> " << fHigh << " giving the answer "
+      << this->Interpolate( M, mLow, fLow, mHigh, fHigh );
+
+    return this->Interpolate( M, mLow, fLow, mHigh, fHigh );
   }
 
   return 0.0;
@@ -193,6 +256,8 @@ double BRCalculator::DWidth_PseudoscalarToLepton( const double mP, const double 
 double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const double M, const double ma ) const {
   assert( (mP == mK || mP == mK0) && "P --> N4 + l_a + pi: P == K or K0" ); // RETHERE remove this when/if heavier pseudoscalars are considered
   assert( (ma == mE || ma == mMu) && "l_a == e, mu" );
+
+  LOG( "HNL", pDEBUG ) << "Parent, coproduced lepton masses are = " << mP << ", " << ma;
   
   std::map< double, double > scaleMap = ( ma == mE ) ? kscale_K3e : kscale_K3mu;
 
@@ -201,9 +266,17 @@ double BRCalculator::KScale_PseudoscalarToPiLepton( const double mP, const doubl
   // if we're very lucky, M will coincide with a map point
   while( (*scmit).first <= M && scmit != scaleMap.end() ){ ++scmit; }
   std::map< double, double >::iterator scpit = std::prev( scmit, 1 );
-  //LOG( "HNL", pDEBUG )
-  //  << "Requested map for M = " << M << ": iter at ( " << (*scpit).first << ", " << (*scmit).first << " ]";
-  assert( scmit != scaleMap.end() && "Exists point to interpolate BR of P --> N4 + l_a + pi" );
+  /*
+  LOG( "HNL", pDEBUG )
+    << "Requested map for M = " << M << ": iter at ( " << (*scpit).first << ", " << (*scmit).first << " ]";
+  */
+  // emergency fix due to the scaling implemented in this code.
+  // for some reason, close to the K+ / K0 --> N e pi0/pi threshold the scaling throws artefacts. Kill these.
+  if( M > 0.35 && M <= 0.36 ){
+    if( ma == mE && mP == mK0 ) return 1.0;
+    return 0.0;
+  }
+  else assert( scmit != scaleMap.end() );
   // if coincide then return scale there
   if( scaleMap.find( M ) != scaleMap.end() ) return (*scmit).second;
   // otherwise transform scmit-1 and scmit second to log, do a linear extrapolation and return
@@ -250,18 +323,52 @@ double BRCalculator::DWidth_Global( HNLDecayMode_t hnldm, const double M ) const
     return 0.0;
   }
   
-  switch( hnldm ){
-  case kHNLDcyNuNuNu   : return this->DWidth_Invisible( M, fUe42, fUm42, fUt42 );
-  case kHNLDcyNuEE     : return this->DWidth_SameLepton( M, fUe42, fUm42, fUt42, mE, false );
-  case kHNLDcyNuMuE    : return (this->DWidth_DiffLepton( M, fUe42, fUm42, fMajorana ) + this->DWidth_DiffLepton( M, fUm42, fUe42, fMajorana ));
-  case kHNLDcyPi0Nu    : return this->DWidth_PiZeroAndNu( M, fUe42, fUm42, fUt42 );
-  case kHNLDcyPiE      : return this->DWidth_PiAndLepton( M, fUe42, mE );
-  case kHNLDcyNuMuMu   : return this->DWidth_SameLepton( M, fUe42, fUm42, fUt42, mMu, true );
-  case kHNLDcyPiMu     : return this->DWidth_PiAndLepton( M, fUm42, mMu );
-  case kHNLDcyPi0Pi0Nu : return this->DWidth_Pi0Pi0Nu( M, fUe42, fUm42, fUt42 );
-  case kHNLDcyPiPi0E   : return this->DWidth_PiPi0Ell( M, mE, fUe42, fUm42, fUt42, true );
-  case kHNLDcyPiPi0Mu  : return this->DWidth_PiPi0Ell( M, mMu, fUe42, fUm42, fUt42, false );
-  default: return 0.0;
+  if( !fIsUsingInputQM ){ // use in-house calculations
+    switch( hnldm ){
+    case kHNLDcyNuNuNu   : return this->DWidth_Invisible( M, fUe42, fUm42, fUt42 );
+    case kHNLDcyNuEE     : return this->DWidth_SameLepton( M, fUe42, fUm42, fUt42, mE, false );
+    case kHNLDcyNuMuE    : return (this->DWidth_DiffLepton( M, fUe42, fUm42, fMajorana ) + this->DWidth_DiffLepton( M, fUm42, fUe42, fMajorana ));
+    case kHNLDcyPi0Nu    : return this->DWidth_PiZeroAndNu( M, fUe42, fUm42, fUt42 );
+    case kHNLDcyPiE      : return this->DWidth_PiAndLepton( M, fUe42, mE );
+    case kHNLDcyNuMuMu   : return this->DWidth_SameLepton( M, fUe42, fUm42, fUt42, mMu, true );
+    case kHNLDcyPiMu     : return this->DWidth_PiAndLepton( M, fUm42, mMu );
+    case kHNLDcyPi0Pi0Nu : return this->DWidth_Pi0Pi0Nu( M, fUe42, fUm42, fUt42 );
+    case kHNLDcyPiPi0E   : return this->DWidth_PiPi0Ell( M, mE, fUe42, fUm42, fUt42, true );
+    case kHNLDcyPiPi0Mu  : return this->DWidth_PiPi0Ell( M, mMu, fUe42, fUm42, fUt42, false );
+    default: return 0.0;
+    }
+  } else { // someone has provided an input. Let's grab it and see!
+    // first, iterate over the decay masses and find the ones closest to the mass
+    std::vector<double>::iterator itMass = fDecayMasses.begin();
+    int iMass = 0;
+    double mLow = -1.0, mHigh = -1.0;
+    while( itMass != fDecayMasses.end() && mHigh <= M ){
+      mLow = mHigh;
+      mHigh = (*itMass);
+      ++itMass; iMass++;
+    }
+    if( itMass == fDecayMasses.end() ){
+      LOG( "HNL", pWARN )
+	<< "Interpolation will use the last two provided masses which are both smaller than the input mass " << M << " GeV. Proceed with caution.";
+      --itMass; --itMass;
+      mLow = (*itMass);
+      ++itMass;
+      mHigh = (*itMass);
+      //iMass--;
+    }
+    iMass--;
+
+    // grab the rates from the appropriate channels
+    std::vector< double > chanRates = (*fDecayRates.find( hnldm )).second;
+    double rLow = chanRates.at(iMass-1), rHigh = chanRates.at(iMass);
+
+    LOG( "HNL", pDEBUG )
+      << "\nFor channel " << utils::hnl::AsString( hnldm ) << " the interpolation is in "
+      << "\n" << mLow << " -> " << M << " -> " << mHigh
+      << "\nwith endpoints " << rLow << " -> " << rHigh << " giving the answer "
+      << this->Interpolate( M, mLow, rLow, mHigh, rHigh );
+
+    return this->Interpolate( M, mLow, rLow, mHigh, rHigh );
   }
 
   return 0.0;
@@ -272,6 +379,8 @@ double BRCalculator::DWidth_PiZeroAndNu( const double M, const double Ue42, cons
   const double x       = genie::utils::hnl::MassX( mPi0, M );
   const double preFac  = GF2 * M*M*M / ( 32. * pi );
   const double kinPart = ( 1. - x*x ) * ( 1. - x*x );
+  double unsc = preFac * 3.0 * fpi2 * kinPart;
+  LOG( "HNL", pDEBUG ) << "Pi0-nu unscaled gamma = " << unsc;
   return preFac * ( Ue42 + Umu42 + Ut42 ) * fpi2 * kinPart;
 }
 //----------------------------------------------------------------------------
@@ -281,11 +390,15 @@ double BRCalculator::DWidth_PiAndLepton( const double M, const double Ua42, cons
   const double preFac  = GF2 * M*M*M / ( 16. * pi );
   const double kalPart = TMath::Sqrt( genie::utils::hnl::Kallen( 1, xPi*xPi, xLep*xLep ) );
   const double othPart = 1. - xPi*xPi - xLep*xLep * ( 2. + xPi*xPi - xLep*xLep );
+  double unsc = preFac * fpi2 * Vud2 * kalPart * othPart;
+  LOG( "HNL", pDEBUG ) << "Pi-ell at ma = " << ma << " unscaled gamma = " << unsc;
   return preFac * fpi2 * Ua42 * Vud2 * kalPart * othPart;
 }
 //----------------------------------------------------------------------------
 double BRCalculator::DWidth_Invisible( const double M, const double Ue42, const double Umu42, const double Ut42 ) const {
   const double preFac = GF2 * TMath::Power( M, 5. ) / ( 192. * pi*pi*pi );
+  double unsc = preFac * 3.0;
+  LOG( "HNL", pDEBUG ) << "Invisible unscaled gamma = " << unsc;
   return preFac * ( Ue42 + Umu42 + Ut42 );
 }
 //----------------------------------------------------------------------------
@@ -298,6 +411,11 @@ double BRCalculator::DWidth_SameLepton( const double M, const double Ue42, const
   const double C2Part = ( Ue42 + Umu42 + Ut42 ) * f2 * BR_C2;
   const double D1Part = bIsMu ? 2. * s2w * Umu42 * f1 : 2. * s2w * Ue42 * f1;
   const double D2Part = bIsMu ? s2w * Umu42 * f2 : s2w * Ue42 * f2;
+
+  double cUnsc = preFac * (f1 * BR_C1 + f2 * BR_C2) * 3.0;
+  double dUnsc = preFac * s2w * (2.0 * f1 + f2);
+  LOG( "HNL", pDEBUG ) << "Same-lepton with isMu ? " << (int) bIsMu << " gives CPart unscaled gamma = "
+		       << cUnsc << " and DPart unscaled gamma = " << dUnsc;
   return preFac * ( C1Part + C2Part + D1Part + D2Part );
 }
 //----------------------------------------------------------------------------
@@ -308,6 +426,9 @@ double BRCalculator::DWidth_DiffLepton( const double M, const double Ua42, const
   const double kinLn  = -12. * TMath::Power( x, 4. ) * TMath::Log( x*x );
   const double kinPart = kinPol + kinLn;
   const double coupPart = (!IsMajorana) ? Ua42 : Ua42 + Ub42; // 2nd diagram in Majorana case!
+  double dispMaj = (!IsMajorana) ? 1.0 : 2.0;
+  double unsc = preFac * kinPart * dispMaj;
+  LOG( "HNL", pDEBUG ) << "Different-lepton unscaled gamma = " << unsc;
   return preFac * kinPart * coupPart;
 }
 //----------------------------------------------------------------------------
@@ -513,4 +634,321 @@ double BRCalculator::Pi0Pi0NuForm( double *x, double *par ){
     double Frac2 = 1.0 / ( Enu * Epi + MPi0 * MPi0 - MN * MN );
 
     return ETerm * std::pow( ( Frac1 + Frac2 ), 2.0 );
+}
+//----------------------------------------------------------------------------
+// RETHERE: figure out integration for this.
+void BRCalculator::InitialiseInputQM() const
+{
+  // VERY anti-pattern-like way of doing things. RETHERE after chatting with Marco!
+  // XML access copied from AlgConfigPool::CommonList
+  std::string xml_prefix = "GHNL20_00a/Rates/";
+  std::string xml_decay_name = xml_prefix + "decay.xml";
+  std::string xml_prod_name = xml_prefix + "production.xml";
+
+  std::string full_decay_path = utils::xml::GetXMLFilePath( xml_decay_name );
+  std::string full_prod_path = utils::xml::GetXMLFilePath( xml_prod_name );
+
+  // Fantastic, the paths are resolved. Let's find a channel and use it.
+  // Uses the machinery from Tools/Flux/GNuMIFlux.cxx
+
+  xmlDocPtr xml_decay_doc = xmlParseFile( full_decay_path.c_str() );
+  xmlDocPtr xml_prod_doc = xmlParseFile( full_prod_path.c_str() );
+
+  if( !xml_decay_doc ){
+    LOG( "HNL", pERROR )
+      << "Cannot parse decay-width XML at location " << xml_decay_name << " !";
+    return;
+  }
+  if( !xml_prod_doc ){
+    LOG( "HNL", pERROR )
+      << "Cannot parse production-scale XML at location " << xml_prod_name << " !";
+    return;
+  }
+  
+  LOG( "HNL", pINFO ) 
+    << "Attempting to load configurations from files:"
+    << "\nFrom decay rates: " << xml_decay_name
+    << "\nFrom production rates: " << xml_prod_name;
+
+  std::string cfg = "Default"; // RETHERE make this general
+  this->LoadTheorySet(xml_decay_doc, xml_prod_doc, cfg);
+
+  return;
+}
+//----------------------------------------------------------------------------
+bool BRCalculator::LoadTheorySet(xmlDocPtr & xml_decay_doc, xmlDocPtr & xml_prod_doc,
+				 std::string cfg) const
+{
+  // point to root element in the file
+  xmlNodePtr xml_decay_root = xmlDocGetRootElement( xml_decay_doc );
+  xmlNodePtr xml_prod_root = xmlDocGetRootElement( xml_prod_doc );
+  
+  // look for a particular pset config
+  bool found_decay = false;
+  bool found_prod = false;
+  xmlNodePtr xml_decay_pset = xml_decay_root->xmlChildrenNode;
+  xmlNodePtr xml_prod_pset = xml_prod_root->xmlChildrenNode;
+  for( ; xml_decay_pset != NULL ; xml_decay_pset = xml_decay_pset->next ){
+    if( ! xmlStrEqual(xml_decay_pset->name, (const xmlChar*)"param_set") ) continue;
+    
+    // every time there is a 'param_set' tag
+    std::string param_set_name =
+      utils::str::TrimSpaces(utils::xml::GetAttribute(xml_decay_pset,"name"));
+    
+    if( param_set_name != cfg ) continue; 
+    LOG( "HNL", pINFO ) << "Found config \"" << cfg << "\"";
+    
+    this->ParseParamSet( xml_decay_doc, xml_decay_pset, false );
+    
+    found_decay = true;
+  } // loop over elements of root
+
+  for( ; xml_prod_pset != NULL ; xml_prod_pset = xml_prod_pset->next ){
+    if( ! xmlStrEqual(xml_prod_pset->name, (const xmlChar*)"param_set") ) continue;
+    
+    // every time there is a 'param_set' tag
+    std::string param_set_name =
+      utils::str::TrimSpaces(utils::xml::GetAttribute(xml_prod_pset,"name"));
+    
+    if( param_set_name != cfg ) continue; 
+    LOG( "HNL", pINFO ) << "Found config \"" << cfg << "\"";
+
+    this->ParseParamSet( xml_prod_doc, xml_prod_pset, true );
+    
+    found_prod = true;
+  } // loop over elements of root
+
+  xmlFree(xml_decay_pset); xmlFree(xml_prod_pset);
+  return (found_decay && found_prod);
+}
+//----------------------------------------------------------------------------
+void BRCalculator::ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset,
+				 bool isProduction ) const
+{
+  xmlNodePtr xml_child = xml_pset->xmlChildrenNode;
+
+  for( ; xml_child != NULL ; xml_child = xml_child->next ) {
+    // so far we have 1 vector of masses for all HNL decay channels
+    // and 1 vector per HNL parent, meaning we should say if we're doing P --> N or N --> X
+    if( !isProduction ){
+      // build the decay rates
+      std::string pname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_child->name));
+      if( pname == "param" ){
+	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
+	// this is either a calculation or the masses.
+	std::string pval = std::string( (const char*) (xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1)) );
+	  //utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1));
+	if( ppname == "Calculation" ){
+	  LOG( "HNL", pDEBUG )
+	    << "Doing decay rates from calculation set named " << pval;
+	} else if( ppname == "Reference" ){
+	  LOG( "HNL", pINFO )
+	    << "Calculating the decay rates from Ref. " << pval;
+	} else if( ppname == "Masses" ){
+	  fDecayMasses = this->GetDoubleVector(pval);
+	}
+      } else if( pname == "decayChannel" ) { // decayChannel
+	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
+	LOG( "HNL", pDEBUG )
+	  << "Found a decayChannel with name = \"" << ppname << "\"";
+	// now we need to loop over all the rates in the decay channels and get vectors
+	// also need to associate scalings with them
+	std::vector<double> chanRates, tmpRates;
+	std::string tmpScale;
+	xmlNodePtr xml_grandchild = xml_child->xmlChildrenNode;
+	
+	for( ; xml_grandchild != NULL ; xml_grandchild = xml_grandchild->next ) {
+	  std::string gname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_grandchild->name));
+	  if( gname == "param" ){
+	    std::string pgname = utils::str::TrimSpaces(utils::xml::GetAttribute(xml_grandchild, "name"));
+	    std::string gval = utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_grandchild->xmlChildrenNode, 1));
+	    int iPoint = 0;
+	    // for each component, pick out the rate first and then apply scaling. Finally,
+	    // add to the vector and put into the map.
+	    if( pgname.find("Rates") != std::string::npos ){
+	      tmpRates.clear();
+	      tmpRates = this->GetDoubleVector(gval);
+	    }
+	    else { // it's a scaling. Have to figure out what scaling to use.
+	      if( (!fMajorana && pgname.find("Dirac") == std::string::npos) ||
+		  (fMajorana && pgname.find("Majorana") == std::string::npos) )
+		continue;
+	      
+	      tmpScale = gval;
+
+	      // by now the raw rates should be loaded. Let's scale these.
+	      TFormula scaleForm(Form("scale_%s_%s", ppname.c_str(), pgname.c_str()), tmpScale.c_str());
+	      double scale = scaleForm.Eval( fUe42, fUm42, fUt42 );
+
+	      // let's now scale to the proper rates, and add to the pile.
+	      if( (!fMajorana && pgname.find("Dirac") != std::string::npos) ||
+		  (fMajorana && pgname.find("Majorana") != std::string::npos) ){
+		for( ; iPoint < fDecayMasses.size() ; iPoint++ ){
+		  if( iPoint >= chanRates.size() ){ // first component of channel
+		    chanRates.emplace_back( scale * tmpRates.at(iPoint) );
+		  } else { // add component on top
+		    chanRates.at(iPoint) += scale * tmpRates.at(iPoint);
+		  } // if ( iPoint >= chanRates.size() )
+		} // loop over masses
+	      } // only do once: for Dirac *or* for Majorana
+
+	      //bool isGChildMajorana = (pgname.find("Majorana") != std::string::npos);
+	    }
+	  }
+	} // loop over params in decayChannel -- all separate components
+
+	// now we have the full vector of decay rates for this channel, properly scaled.
+	// Insert into the map of rates to use.
+	// ugly if-else block a la Python here...
+	HNLDecayMode_t dkmd = kHNLDcyNull;
+	if( ppname == "nu_nu_nu" )
+	  dkmd = kHNLDcyNuNuNu;
+	else if( ppname == "nu_e_e" )
+	  dkmd = kHNLDcyNuEE;
+	else if( ppname == "nu_mu_e" || ppname == "nu_e_mu" )
+	  dkmd = kHNLDcyNuMuE;
+	else if( ppname == "nu_pi0" || ppname == "pi0_nu" )
+	  dkmd = kHNLDcyPi0Nu;
+	else if( ppname == "e_pi" || ppname == "pi_e" )
+	  dkmd = kHNLDcyPiE;
+	else if( ppname == "nu_mu_mu" )
+	  dkmd = kHNLDcyNuMuMu;
+	else if( ppname == "mu_pi" || ppname == "pi_mu" )
+	  dkmd = kHNLDcyPiMu;
+	else if( ppname == "pi0_pi0_nu" || ppname == "nu_pi0_pi0" )
+	  dkmd = kHNLDcyPi0Pi0Nu;
+	else if( ppname == "pi_pi0_e" || ppname == "pi0_pi_e" || 
+		 ppname == "e_pi_pi0" || ppname == "e_pi0_pi" )
+	  dkmd = kHNLDcyPiPi0E;
+	else if( ppname == "pi_pi0_mu" || ppname == "pi0_pi_mu" || 
+		 ppname == "mu_pi_pi0" || ppname == "mu_pi0_pi" )
+	  dkmd = kHNLDcyPiPi0Mu;
+	else {
+	  LOG( "HNL", pERROR ) << "Unknown decay channel " << ppname << " !!! Cannot proceed";
+	  return;
+	}
+
+	LOG( "HNL", pDEBUG ) << "Channel is " << utils::hnl::AsString( dkmd );
+	fDecayRates.insert( { dkmd, chanRates } );
+      }
+    } else {
+      // build the production rates
+      std::string pname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_child->name));
+      if( pname == "param" ){
+	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
+	// this is the calculation
+	std::string pval = std::string( (const char *) (xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1)) );
+	if( ppname == "Calculation" ){
+	  LOG( "HNL", pDEBUG )
+	    << "Doing production rates from calculation set named " << pval;
+	} else if( ppname == "Reference" ){
+	  LOG( "HNL", pINFO )
+	    << "Calculating the production rates from Ref. " << pval;
+	}
+      } else if( pname == "parent" ){
+	std::string ppname = utils::str::TrimSpaces( utils::xml::GetAttribute(xml_child, "name") );
+	std::string pppdg = utils::xml::GetAttribute(xml_child, "pdg");
+	int pdg = std::stoi(pppdg);
+	std::string pval = std::string( (const char*) (xmlNodeListGetString(xml_doc, xml_child->xmlChildrenNode, 1)) );
+	LOG( "HNL", pDEBUG )
+	  << "Found parent with name " << ppname << " and PDG code " << pppdg;
+	// Each parent has a string of masses, and a collection of implemented productionChannels.
+	// Loop over the children of this node
+	xmlNodePtr xml_grandchild = xml_child->xmlChildrenNode;
+	
+	for( ; xml_grandchild != NULL ; xml_grandchild = xml_grandchild->next ) {
+	  std::string gname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_grandchild->name));
+	  if( gname == "param" ){ // masses
+	    std::string gval = utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_grandchild->xmlChildrenNode, 1));
+	    std::vector<double> inMasses = this->GetDoubleVector(gval);
+	    fProdMasses.insert( { pdg, inMasses } );
+	  } else if( gname == "productionChannel" ){
+	    std::string pgname = utils::str::TrimSpaces(utils::xml::GetAttribute(xml_grandchild, "name"));
+	    LOG( "HNL", pDEBUG )
+	      << "Reading in factors for production channel with name " << pgname;
+
+	    // now we need to loop over all the factors in the decay channels and get vectors
+	    std::vector<double> chanFactors;
+	    xmlNodePtr xml_descendant = xml_grandchild->xmlChildrenNode;
+	    
+	    for( ; xml_descendant != NULL ; xml_descendant = xml_descendant->next ){
+	      std::string dname = utils::xml::TrimSpaces(const_cast<xmlChar*>(xml_descendant->name));
+	      if( dname == "param" ){
+		std::string pdname = utils::str::TrimSpaces(utils::xml::GetAttribute(xml_descendant, "name"));
+		std::string dval = utils::xml::TrimSpaces(xmlNodeListGetString(xml_doc, xml_descendant->xmlChildrenNode, 1));
+		
+		
+		// list of factors that are purely kinematic here.
+		chanFactors = this->GetDoubleVector(dval);
+	      
+		// now we have the full vector of production rates for this channel, properly scaled.
+		// Insert into the map of rates to use.
+		// ugly if-else block a la Python here...
+		HNLProd_t pdmd = kHNLProdNull;
+		if( pdg == kPdgPiP && pgname == "N4_mu" )
+		  pdmd = kHNLProdPion2Muon;
+		else if( pdg == kPdgPiP && pgname == "N4_e" )
+		  pdmd = kHNLProdPion2Electron;
+		else if( pdg == kPdgKP && pgname == "N4_mu" )
+		  pdmd = kHNLProdKaon2Muon;
+		else if( pdg == kPdgKP && pgname == "N4_e" )
+		  pdmd = kHNLProdKaon2Electron;
+		else if( pdg == kPdgKP && pgname == "N4_pi0_mu" )
+		  pdmd = kHNLProdKaon3Muon;
+		else if( pdg == kPdgKP && pgname == "N4_pi0_e" )
+		  pdmd = kHNLProdKaon3Electron;
+		else if( pdg == kPdgK0L && pgname == "N4_pi_mu" )
+		  pdmd = kHNLProdNeuk3Muon;
+		else if( pdg == kPdgK0L && pgname == "N4_pi_e" )
+		  pdmd = kHNLProdNeuk3Electron;
+		else if( pdg == kPdgMuon && pgname == "N4_e_numu" )
+		  pdmd = kHNLProdMuon3Numu;
+		else if( pdg == kPdgMuon && pgname == "N4_e_nue" )
+		  pdmd = kHNLProdMuon3Nue;
+		else if( pdg == kPdgMuon && pgname == "N4_e_nutau" )
+		  pdmd = kHNLProdMuon3Nutau;
+		else {
+		  LOG( "HNL", pERROR ) << "Unknown decay channel " << pgname << " for parent with PDG code " << pppdg << " !!! Cannot proceed";
+		  return;
+		}
+		
+		LOG( "HNL", pDEBUG )
+		  << "Found production channel " << utils::hnl::ProdAsString( pdmd );
+		
+		fProdFactors.insert( { pdmd, chanFactors } );
+	      } // loop over params in productionChannel -- all separate components
+	    }
+	  } // loop over production channels for parent
+	}
+      } // loop over all parents
+    }
+  } // loop over children.
+}
+//----------------------------------------------------------------------------
+// copied from GNuMIFlux.cxx
+std::vector<double> BRCalculator::GetDoubleVector(std::string str) const
+{
+  // turn string into vector<double>
+  // be liberal about separators, users might punctuate for clarity
+  std::vector<std::string> strtokens = genie::utils::str::Split(str," ,;:()[]=\t\n");
+  std::vector<double> vect;
+  size_t ntok = strtokens.size();
+
+  for (size_t i=0; i < ntok; ++i) {
+    std::string trimmed = utils::str::TrimSpaces(strtokens[i]);
+    if ( " " == trimmed || "" == trimmed ) continue;  // skip empty strings
+    double val = strtod(trimmed.c_str(), (char**)NULL);
+    vect.push_back(val);
+  }
+
+  return vect;
+}
+//----------------------------------------------------------------------------
+double BRCalculator::Interpolate( double x, double x1, double y1, double x2, double y2 ) const
+{
+  // simple linear interpolation, no safeguards here
+  double xvar = x2 - x1;
+  double yvar = y2 - y1;
+  double result = y1 + yvar * (x-x1)/xvar;
+  return result;
 }

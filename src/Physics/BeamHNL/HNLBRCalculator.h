@@ -30,6 +30,11 @@
 #include "TF2.h"
 #include "TMath.h"
 
+#include "libxml/xmlmemory.h"
+#include "libxml/parser.h"
+
+#include "Framework/Utils/XmlParserUtils.h"
+
 // -- GENIE includes
 #include "Framework/Conventions/Constants.h"
 #include "Framework/Conventions/Units.h"
@@ -71,10 +76,18 @@ namespace genie {
       
       // return the integrated decay width for a decay channel
       double DecayWidth( genie::hnl::HNLDecayMode_t hnldm ) const;
-
+     
     private:
 
       void LoadConfig(void);
+
+      void InitialiseInputQM() const;
+      bool LoadTheorySet(xmlDocPtr & xml_decay_doc, xmlDocPtr & xml_prod_doc, std::string cfg) const;
+      void ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset, bool isProduction) const;
+
+      // This should be included in a more general package
+      // Copied from GNuMIFlux.cxx
+      std::vector<double> GetDoubleVector(std::string str) const;
 
       //============================================
       // total decay widths, parents to HNL
@@ -131,8 +144,23 @@ namespace genie {
       // kinematic functions
       double GetFormfactorF1( double x ) const;
       double GetFormfactorF2( double x ) const;
+
+      // interpolator function from pre-calculated knots.
+      double Interpolate( double x, double x1, double y1, double x2, double y2 ) const;
      
       bool fIsConfigLoaded = false;
+
+      bool fIsUsingInputQM = false; // input theory calculations instead of in-house calc
+      // Decay rates
+      // key: (vector of masses)
+      mutable std::vector<double> fDecayMasses;
+      // value: (vector of rates at the correct scalings)
+      mutable std::map<HNLDecayMode_t, std::vector<double>> fDecayRates;
+      // Production rates
+      // key: (vector of vectors of masses)
+      mutable std::map<int, std::vector<double>> fProdMasses; // pdg code of parent --> masses
+      // value: (vector of factors at the correct scalings)
+      mutable std::map<HNLProd_t, std::vector<double>> fProdFactors;
       
       // physical constants
       double wAng, s2w;

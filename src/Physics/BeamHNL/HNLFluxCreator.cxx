@@ -1131,6 +1131,7 @@ std::map< HNLProd_t, double > FluxCreator::GetProductionProbs( int parPDG ) cons
   // also, construct an BRCalculator * object to handle the scalings.
   const Algorithm * algBRCalc = AlgFactory::Instance()->GetAlgorithm("genie::hnl::BRCalculator", "Default");
   const BRCalculator * BRCalc = dynamic_cast< const BRCalculator * >( algBRCalc );
+
   
   // first get pure kinematic part of the BRs
   double KScale[4] = { -1.0, -1.0, -1.0, -1.0 }, mixScale[4] = { -1.0, -1.0, -1.0, -1.0 };
@@ -1140,6 +1141,10 @@ std::map< HNLProd_t, double > FluxCreator::GetProductionProbs( int parPDG ) cons
     KScale[0] = BRCalc->KinematicScaling( kHNLProdMuon3Numu );
     KScale[1] = BRCalc->KinematicScaling( kHNLProdMuon3Nue ); // same, convenience for later
     KScale[2] = BRCalc->KinematicScaling( kHNLProdMuon3Nutau ); // same, convenience for later
+
+    LOG( "HNL", pDEBUG ) << "For a muon, the KScales are (mu, e, tau) = " << KScale[0]
+			 << ", " << KScale[1] << ", " << KScale[2];
+
     mixScale[0] = 1.0 * Um42 * KScale[0]; totalMix += mixScale[0];
     mixScale[1] = 1.0 * Ue42 * KScale[1]; totalMix += mixScale[1];
     mixScale[2] = 1.0 * Ut42 * KScale[2]; totalMix += mixScale[2];
@@ -1163,6 +1168,10 @@ std::map< HNLProd_t, double > FluxCreator::GetProductionProbs( int parPDG ) cons
     KScale[1] = BRCalc->KinematicScaling( kHNLProdKaon2Electron );
     KScale[2] = BRCalc->KinematicScaling( kHNLProdKaon3Muon );
     KScale[3] = BRCalc->KinematicScaling( kHNLProdKaon3Electron );
+
+    LOG( "HNL", pDEBUG ) << "For a kaon, the KScales are (2mu, 2e, 3mu, 3e) = " << KScale[0]
+			 << ", " << KScale[1] << ", " << KScale[2] << ", " << KScale[3];
+
     mixScale[0] = BR_K2mu * Um42 * KScale[0]; totalMix += mixScale[0];
     mixScale[1] = BR_K2e  * Ue42 * KScale[1]; totalMix += mixScale[1];
     mixScale[2] = BR_K3mu * Um42 * KScale[2]; totalMix += mixScale[2];
@@ -1185,6 +1194,10 @@ std::map< HNLProd_t, double > FluxCreator::GetProductionProbs( int parPDG ) cons
 
     KScale[0] = BRCalc->KinematicScaling( kHNLProdPion2Muon );
     KScale[1] = BRCalc->KinematicScaling( kHNLProdPion2Electron );
+
+    LOG( "HNL", pDEBUG ) << "For a pion, the KScales are (mu, e) = " << KScale[0]
+			 << ", " << KScale[1];
+
     mixScale[0] = BR_pi2mu * Um42 * KScale[0]; totalMix += mixScale[0];
     mixScale[1] = BR_pi2e  * Ue42 * KScale[1]; totalMix += mixScale[1];
 
@@ -1203,6 +1216,10 @@ std::map< HNLProd_t, double > FluxCreator::GetProductionProbs( int parPDG ) cons
 
     KScale[0] = BRCalc->KinematicScaling( kHNLProdNeuk3Muon );
     KScale[1] = BRCalc->KinematicScaling( kHNLProdNeuk3Electron );
+
+    LOG( "HNL", pDEBUG ) << "For a neuk, the KScales are (mu, e) = " << KScale[0]
+			 << ", " << KScale[1];
+
     mixScale[0] = BR_K03mu * Um42 * KScale[0]; totalMix += mixScale[0];
     mixScale[1] = BR_K03e  * Ue42 * KScale[1]; totalMix += mixScale[1];
     
@@ -1222,8 +1239,6 @@ std::map< HNLProd_t, double > FluxCreator::GetProductionProbs( int parPDG ) cons
       << "Unknown parent particle. Cannot make scales, exiting."; exit(1);
   }
 
-  LOG( "HNL", pDEBUG )
-    << "Score map now has " << dynScores.size() << " elements. Returning.";
   return dynScores;
 
 }
