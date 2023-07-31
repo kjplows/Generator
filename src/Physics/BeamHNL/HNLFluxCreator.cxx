@@ -353,7 +353,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   case kHNLProdKaon3Muon: fNuProdChan = 5; fNuPdg = kPdgNuMu; break;
   case kHNLProdMuon3Nue:
   case kHNLProdMuon3Numu:
-  case kHNLProdMuon3Nutau: fNuProdChan = 9; fNuPdg = kPdgNuE; break;
+    //case kHNLProdMuon3Nutau: fNuProdChan = 9; fNuPdg = kPdgNuE; break;
   case kHNLProdPion2Electron: fNuProdChan = 8; fNuPdg = kPdgNuE; break;
   case kHNLProdPion2Muon: fNuProdChan = 7; fNuPdg = kPdgNuMu; break;
   default: fNuProdChan = -999; fNuPdg = -999; break;
@@ -1140,18 +1140,18 @@ std::map< HNLProd_t, double > FluxCreator::GetProductionProbs( int parPDG ) cons
   case genie::kPdgMuon:
     KScale[0] = BRCalc->KinematicScaling( kHNLProdMuon3Numu );
     KScale[1] = BRCalc->KinematicScaling( kHNLProdMuon3Nue ); // same, convenience for later
-    KScale[2] = BRCalc->KinematicScaling( kHNLProdMuon3Nutau ); // same, convenience for later
+    //KScale[2] = BRCalc->KinematicScaling( kHNLProdMuon3Nutau ); // same, convenience for later
 
     LOG( "HNL", pDEBUG ) << "For a muon, the KScales are (mu, e, tau) = " << KScale[0]
 			 << ", " << KScale[1] << ", " << KScale[2];
 
     mixScale[0] = 1.0 * Um42 * KScale[0]; totalMix += mixScale[0];
     mixScale[1] = 1.0 * Ue42 * KScale[1]; totalMix += mixScale[1];
-    mixScale[2] = 1.0 * Ut42 * KScale[2]; totalMix += mixScale[2];
+    //mixScale[2] = 1.0 * Ut42 * KScale[2]; totalMix += mixScale[2];
 
     dynScores.insert( std::pair< HNLProd_t, double >( { kHNLProdMuon3Numu,  mixScale[0] / totalMix } ) );
     dynScores.insert( std::pair< HNLProd_t, double >( { kHNLProdMuon3Nue,   mixScale[1] / totalMix } ) );
-    dynScores.insert( std::pair< HNLProd_t, double >( { kHNLProdMuon3Nutau, mixScale[2] / totalMix } ) );
+    //dynScores.insert( std::pair< HNLProd_t, double >( { kHNLProdMuon3Nutau, mixScale[2] / totalMix } ) );
 
     // it can happen that HNL is not coupled to the only kinematically available channel.
     // Return bogus map if that happens

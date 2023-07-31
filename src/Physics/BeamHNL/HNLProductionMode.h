@@ -25,19 +25,36 @@ namespace genie {
   namespace hnl {
     
     typedef enum t_HNLProd {
+
+      // Using Table 4 from Coloma et al, EPJ C 81 (2021) 78
+      // Only considering LFC modes
       
       kHNLProdNull          = -1,
-      kHNLProdPion2Muon     = 0, // pi --> HNL + mu
-      kHNLProdPion2Electron = 1, // pi --> HNL + e
-      kHNLProdKaon2Muon     = 2, // K  --> HNL + mu
-      kHNLProdKaon2Electron = 3, // K  --> HNL + e
-      kHNLProdKaon3Muon     = 4, // K  --> HNL + mu   + pi0
-      kHNLProdKaon3Electron = 5, // K  --> HNL + e    + pi0
-      kHNLProdNeuk3Muon     = 6, // K0 --> HNL + mu   + pi
-      kHNLProdNeuk3Electron = 7, // K0 --> HNL + e    + pi
-      kHNLProdMuon3Numu     = 8, // mu --> HNL + numu + e
-      kHNLProdMuon3Nue      = 9, // mu --> HNL + nue  + e
-      kHNLProdMuon3Nutau    = 10 // mu --> HNL + nutau + e (LFV!)
+      kHNLProdPion2Muon     = 0, // pi --> N + mu
+      kHNLProdPion2Electron = 1, // pi --> N + e
+      kHNLProdKaon2Muon     = 2, // K  --> N + mu
+      kHNLProdKaon2Electron = 3, // K  --> N + e
+      kHNLProdKaon3Muon     = 4, // K  --> N + mu   + pi0
+      kHNLProdKaon3Electron = 5, // K  --> N + e    + pi0
+      kHNLProdNeuk3Muon     = 6, // K0 --> N + mu   + pi
+      kHNLProdNeuk3Electron = 7, // K0 --> N + e    + pi
+      kHNLProdMuon3Numu     = 8, // mu --> N + numu + e
+      kHNLProdMuon3Nue      = 9, // mu --> N + nue  + e
+      //kHNLProdMuon3Nutau    = 10, // mu --> N + nutau + e (LFV!)
+      kHNLProdTau2Rho       = 10, // \tau --> N + rho
+      kHNLProdTau2Pion      = 11, // \tau --> N + pi
+      kHNLProdTau3Numu      = 12, // \tau --> N + numu + mu
+      kHNLProdTau3NutauMu   = 13, // \tau --> N + nutau + mu
+      kHNLProdTau3Nue       = 14, // \tau --> N + nue + e
+      kHNLProdTau3NutauE    = 15, // \tau --> N + nutau + e
+      kHNLProdD2Tau         = 16, // D --> N + tau
+      kHNLProdD3Muon        = 17, // D --> N + mu + K0
+      kHNLProdD3Electron    = 18, // D --> N + e + K0
+      kHNLProdD2Muon        = 19, // D --> N + mu
+      kHNLProdD2Electron    = 20, // D --> N + e
+      kHNLProdDs2Tau        = 21, // D_s --> N + tau
+      kHNLProdDs2Muon       = 22, // D_s --> N + mu
+      kHNLProdDs2Electron   = 23, // D_s --> N + e
       
     } HNLProd_t;
 

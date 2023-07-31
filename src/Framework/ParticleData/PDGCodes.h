@@ -184,6 +184,8 @@ namespace genie {
   const int kPdgAntiD0           =  -421; // \bar{D0}
   const int kPdgDPs              =   431; // D+_{s}
   const int kPdgDMs              =  -431; // D-_{s}
+  const int kPdgDStarPs          =   433; // Dstar+_s(2112)
+  const int KPdgDStarMs          =  -433; // Dstar-_s(2112)
 
   const int kPdgGluon            =    21; // gluon
   const int kPdgGamma            =    22; // photon

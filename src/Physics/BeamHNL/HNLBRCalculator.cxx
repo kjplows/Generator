@@ -176,7 +176,7 @@ double BRCalculator::KScale_Global( HNLProd_t hnldm, const double M ) const {
     case kHNLProdNeuk3Electron: return KScale_PseudoscalarToPiLepton( mK0, M, mE );
     case kHNLProdMuon3Numu:
     case kHNLProdMuon3Nue:
-    case kHNLProdMuon3Nutau:
+      //case kHNLProdMuon3Nutau:
       return KScale_MuonToNuAndElectron( M );
     default: return 0.0;
     }
@@ -194,7 +194,7 @@ double BRCalculator::KScale_Global( HNLProd_t hnldm, const double M ) const {
     case kHNLProdNeuk3Muon: case kHNLProdNeuk3Electron:
       tMasses = (*fProdMasses.find(kPdgK0L)).second;
       break;
-    case kHNLProdMuon3Numu: case kHNLProdMuon3Nue: case kHNLProdMuon3Nutau:
+    case kHNLProdMuon3Numu: case kHNLProdMuon3Nue: //case kHNLProdMuon3Nutau:
       tMasses = (*fProdMasses.find(kPdgMuon)).second;
       break;
     }
@@ -905,8 +905,8 @@ void BRCalculator::ParseParamSet(xmlDocPtr & xml_doc, xmlNodePtr & xml_pset,
 		  pdmd = kHNLProdMuon3Numu;
 		else if( pdg == kPdgMuon && pgname == "N4_e_nue" )
 		  pdmd = kHNLProdMuon3Nue;
-		else if( pdg == kPdgMuon && pgname == "N4_e_nutau" )
-		  pdmd = kHNLProdMuon3Nutau;
+		//else if( pdg == kPdgMuon && pgname == "N4_e_nutau" )
+		//pdmd = kHNLProdMuon3Nutau;
 		else {
 		  LOG( "HNL", pERROR ) << "Unknown decay channel " << pgname << " for parent with PDG code " << pppdg << " !!! Cannot proceed";
 		  return;
