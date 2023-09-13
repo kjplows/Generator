@@ -80,7 +80,9 @@ For simplicity, the detector frame USER is unrotated wrt the NEAR frame, placed 
   </param_set>
 
   <param_set name="FluxCalc">
-    <param type="vec-double" name="ParentPOTScalings" delim=";"> 1.0 ; 1.005 ; 9.353 ; 10.458 </param> <!-- All parents -> no muons -> no pions -> no K0L -->
+    <param type="vec-int" name="ParentPOTScalings_PDGs" delim=";"> 211 ; -211 ; 321 ; -321 ; 130 ; 13 ; -13 </param>
+    <param type="vec-double" name="ParentPOTScalings_scales" delim=";"> 1.0 ; 1.0 ; 1.0 ; 1.0 ; 1.0 ; 1.0 ; 1.0 </param>
+    <!-- <param type="vec-double" name="ParentPOTScalings" delim=";"> 1.0 ; 1.005 ; 9.353 ; 10.458 </param> --> <!-- All parents -> no muons -> no pions -> no K0L -->
     <param type="bool" name="DoOldFluxCalculation"> false </param>
     <param type="bool" name="RerollPoints"> true </param>
     <param type="double" name="CollectionRadius"> 1.0 </param>

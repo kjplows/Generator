@@ -98,14 +98,7 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 	evrec->SetWeight( evrec->Weight() / invAccWeight );
 	
 	// scale by how many POT it takes to make the appropriate parent
-	/*
-	 * To incorporate populations of parents, we take the cumulative multiplicity
-	 * i.e. HNL light enough to be made by every parent get scaled by 
-	 * n1 = \sigma(p + target) / \sigma(p + target ; parent-producing)
-	 * For HNL that are heavier than a muon, we don't take muons into account. So
-	 * we up the scaling to incorporate their dropping out as
-	 * n2 = \sigma(p + target) / \sigma(p + target ; parent-producing ; no muon) - etc.
-	 */
+	POTScaleWeight = fScales[ decay_ptype ];
 	evrec->SetWeight( evrec->Weight() * POTScaleWeight );
 	
 	// set prod-vertex in cm, ns, NEAR coords
@@ -2384,7 +2377,19 @@ void FluxCreator::LoadConfig(void)
   this->GetParamVect( "Near2Beam_R", fB2URotation );
   this->GetParamVect( "DetCentre_User", fDetOffset );
 
-  this->GetParamVect( "ParentPOTScalings", fScales );
+  // Read in the \sigma( p + target ) / \sigma( p + target --> Parent )
+  //this->GetParamVect( "ParentPOTScalings", fScales );
+  std::vector<int> scales_pdgs;
+  std::vector<double> scales_vals;
+  this->GetParamVect( "ParentPOTScalings_PDGs", scales_pdgs );
+  this->GetParamVect( "ParentPOTScalings_scales", scales_vals );
+  assert( scales_pdgs.size() == scales_vals.size() && "Each input parent PDG has a frequency scale associated with it" );
+  for( unsigned int i = 0; i < scales_pdgs.size(); i++ ){
+    fScales.insert( std::pair< int, double >( { scales_pdgs.at(i), scales_vals.at(i) } ) );
+    LOG( "HNL", pNOTICE )
+      << "Inserting parent with PDG code " << scales_pdgs.at(i) << " with scale " << scales_vals.at(i);
+  }
+
   this->GetParam( "DoOldFluxCalculation", fDoingOldFluxCalc );
   this->GetParam( "RerollPoints", fRerollPoints );
   this->GetParam( "CollectionRadius", fRadius );
@@ -2410,6 +2415,8 @@ void FluxCreator::LoadConfig(void)
   fBx2 = fDetRotation.at(2);
 
   POTScaleWeight = 1.0;
+  
+  /*
   if( utils::hnl::IsProdKinematicallyAllowed( kHNLProdMuon3Nue ) ) 
     POTScaleWeight = fScales[0]; // all POT contribute
   else if( utils::hnl::IsProdKinematicallyAllowed( kHNLProdPion2Muon ) ||
@@ -2423,6 +2430,7 @@ void FluxCreator::LoadConfig(void)
 	   utils::hnl::IsProdKinematicallyAllowed( kHNLProdKaon3Muon ) ||
 	   utils::hnl::IsProdKinematicallyAllowed( kHNLProdKaon3Electron ) )
     POTScaleWeight = fScales[3]; // only charged kaons contribute
+  */
 
   /*
   LOG( "HNL", pDEBUG )

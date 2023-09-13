@@ -301,7 +301,8 @@ namespace genie{
       mutable genie::hnl::FluxContainer fGnmf;
 
       mutable double POTScaleWeight;
-      mutable std::vector<double> fScales;
+      //mutable std::vector<double> fScales;
+      mutable std::unordered_map<int, double> fScales;
       
       mutable bool fDoingOldFluxCalc = false;
       mutable bool fRerollPoints = false;
