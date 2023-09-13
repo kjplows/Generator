@@ -170,6 +170,13 @@ namespace genie{
       double CalculateDetectorAcceptanceSAA( TVector3 detO ) const;
       // collimation effect calc, returns HNL_acc / geom_acc
       double CalculateAcceptanceCorrection( TLorentzVector p4par, TLorentzVector p4HNL, double SMECM, double zm, double zp ) const;
+      double AccCorr_Sqrt( double thetalab, double mass, double EPar, double MPar, double ENu ) const;
+      double AccCorr_Denom( double thetalab, double mass, double EPar, double MPar, double ENu ) const;
+      double AccCorr_SolnArgs( double thetalab, double mass, double EPar, double MPar, double ENu,
+			       bool isPos ) const;
+      double AccCorr_Solution( double thetalab, double mass, double EPar, double MPar, double ENu,
+			       bool isPos ) const;
+      double CalculateAcceptanceCorrection_legacy( TLorentzVector p4par, TLorentzVector p4HNL, double SMECM, double zm, double zp ) const;
       static double labangle( double * x, double * par ); // function formula for correction
       // get minimum and maximum deviation from parent momentum to hit detector, [deg]
       double GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool seekingMax ) const;

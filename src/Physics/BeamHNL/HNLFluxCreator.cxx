@@ -552,6 +552,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 
   fSMECM = decay_necm;
   fZm = zm; fZp = zp;
+
   double accCorr = this->CalculateAcceptanceCorrection( p4par, p4HNL_rest, decay_necm, zm, zp );
   //if( !fDoingOldFluxCalc ){
   if( fRerollPoints ){
@@ -573,9 +574,9 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 			 absolutePoint.Y() - (fCy + fDetOffset.at(1)),
 			 absolutePoint.Z() - (fCz + fDetOffset.at(2)) );
       */
-      fRVec_beam.SetXYZ( absolutePoint.X() - (fCx),
-			 absolutePoint.Y() - (fCy),
-			 absolutePoint.Z() - (fCz) );
+      fRVec_beam.SetXYZ( absolutePoint.X() - (FDx),
+			 absolutePoint.Y() - (FDy),
+			 absolutePoint.Z() - (FDz) );
       // rotate it and get unit
       fRVec_unit = (this->ApplyUserRotation( fRVec_beam )).Unit(); // BEAM
       // force HNL to point along this direction
@@ -1944,7 +1945,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 }
 //----------------------------------------------------------------------------
 double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorentzVector p4HNL,
-						      double SMECM, double zm, double zp ) const
+						   double SMECM, double zm, double zp ) const
 {
   /*
    * This method calculates HNL acceptance by taking into account the collimation effect
@@ -1953,6 +1954,191 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
    * more rest-frame emission angles that map into this range. 
    * Find the measure of the rest-frame that maps onto the allowed lab-frame angles
    * and return the ratio over the relevant measure for a SM neutrino
+   * This is the analytical implementation
+   */
+
+  assert( zm >= 0.0 && zp >= zm && "Zeta-plus >= zeta-minus >= 0.0" );
+  if( zp == zm ) return 1.0;
+  if( zp > 180.0 ) zp = 180.0;
+
+  double M = p4HNL.M();
+  if( M < 1.0e-6 ) return 1.0;
+
+  double ECM = p4HNL.E();
+
+  double EPar = p4par.E();
+  double MPar = p4par.M();
+
+  // Calculate the pre-image under SM neutrino of [zm, zp]. Always one as it's monotonic
+  double tLow_SM = this->AccCorr_Solution( zm, 0.0, EPar, MPar, SMECM, true );
+  double tHigh_SM = this->AccCorr_Solution( zp, 0.0, EPar, MPar, SMECM, true );
+
+  double range2 = std::abs( tHigh_SM - tLow_SM );
+
+  // And of the HNL. The below functions perform all necessary checks
+  double tLow1 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, true );
+  double tHigh1 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, true );
+  double tHigh2 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, false );
+  double tLow2 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, false );
+
+  double range1 = std::abs( tHigh1 - tLow1 ) + std::abs( tHigh2 - tLow2 );
+
+  LOG( "HNL", pDEBUG ) 
+    << "\nArgs: zm, zp, M, ECM, SMECM, EPar, MPar = "
+    << zm << ", " << zp << ", " << M << ", " << ECM << ", " << SMECM
+    << ", " << EPar << ", " << MPar
+    << "\nSM range:  [ " << tLow_SM << ", " << tHigh_SM << " ]"
+    << "\nHNL range: [ " << tLow1 << ", " << tHigh1 << " ] , [ " 
+    << tLow2 << ", " << tHigh2 << " ]";
+
+  return range1 / range2;
+}
+//----------------------------------------------------------------------------
+double FluxCreator::AccCorr_Sqrt( double thetalab, double mass, 
+				  double EPar, double MPar, double ENu ) const
+{
+  double theta = thetalab * TMath::DegToRad();
+  double tanTheta = TMath::Tan( theta );
+  
+  double pPar = std::sqrt( EPar * EPar - MPar * MPar );
+  double bPar = pPar / EPar;
+  double gPar = EPar / MPar;
+
+  double arg1 = ( ENu * ENu - mass * mass ) * 
+    ( 1.0 + tanTheta * tanTheta * gPar * gPar );
+  double arg2 = ( tanTheta * bPar * gPar * ENu ) * ( tanTheta * bPar * gPar * ENu );
+
+  /*
+  LOG( "HNL", pWARN )
+    << "\nSQRT Args: thetalab, t, mass, EPar, MPar, ENu = " << thetalab << ", "
+    << tanTheta << ", " << mass << ", " << EPar << ", " << MPar << ", " << ENu
+    << "\nSQRT Lorentz: pPar, bPar, gPar = " << pPar << ", " << bPar << ", " << gPar
+    << "\nSQRT Value: " << arg1 << ", " << arg2 << " ==> " << std::sqrt( std::max( 0.0, arg1 - arg2 ) );
+  */
+
+  return std::sqrt( std::max( 0.0, arg1 - arg2 ) );
+}
+//----------------------------------------------------------------------------
+double FluxCreator::AccCorr_Denom( double thetalab, double mass, 
+				   double EPar, double MPar, double ENu ) const
+{
+  double theta = thetalab * TMath::DegToRad();
+  double tanTheta = TMath::Tan( theta );
+  
+  double pPar = std::sqrt( EPar * EPar - MPar * MPar );
+  double bPar = pPar / EPar;
+  double gPar = EPar / MPar;
+
+  double qNu = std::sqrt( ENu * ENu - mass * mass );
+
+  double oth = tanTheta * bPar * gPar * ENu;
+
+  /*
+  LOG( "HNL", pWARN )
+    << "\nDENOM Args: thetalab, t, mass, EPar, MPar, ENu = " << thetalab << ", "
+    << tanTheta << ", " << mass << ", " << EPar << ", " << MPar << ", " << ENu
+    << "\nDENOM Lorentz: pPar, bPar, gPar = " << pPar << ", " << bPar << ", " << gPar
+    << "\nDENOM Value: " << qNu << ", " << oth << " ==> " << ( ( qNu - oth ) * ( qNu + oth ) );
+  */
+  
+  return ( ( qNu - oth ) * ( qNu + oth ) );
+}
+//----------------------------------------------------------------------------
+double FluxCreator::AccCorr_SolnArgs( double thetalab, double mass, 
+				      double EPar, double MPar, double ENu, bool isPos ) const
+{
+  double theta = thetalab * TMath::DegToRad();
+  double tanTheta = TMath::Tan( theta );
+
+  double pPar = std::sqrt( EPar * EPar - MPar * MPar );
+  double bPar = pPar / EPar;
+  double gPar = EPar / MPar;
+
+  double denom = this->AccCorr_Denom( thetalab, mass, EPar, MPar, ENu );
+
+  double qNu = std::sqrt( ENu * ENu - mass * mass );
+  double sqt = this->AccCorr_Sqrt( thetalab, mass, EPar, MPar, ENu );
+
+  int coeff = ( isPos ) ? 1 : -1;
+  double numer = qNu * qNu + coeff * bPar * ENu * sqt;
+
+  /*
+  LOG( "HNL", pWARN )
+    << "\nSOLNARGS Args: thetalab, t, mass, EPar, MPar, ENu = " << thetalab << ", "
+    << tanTheta << ", " << mass << ", " << EPar << ", " << MPar << ", " << ENu
+    << "\nSOLNARGS Lorentz: pPar, bPar, gPar = " << pPar << ", " << bPar << ", " << gPar
+    << "\nSOLNARGS Value: " << numer << ", " << coeff << " ==> " << tanTheta * gPar * numer / denom;
+  */
+
+  return tanTheta * gPar * numer / denom;
+}
+//----------------------------------------------------------------------------
+double FluxCreator::AccCorr_Solution( double thetalab, double mass, 
+				      double EPar, double MPar, double ENu, bool isPos ) const
+{
+  double pPar = std::sqrt( EPar * EPar - MPar * MPar );
+  double bPar = pPar / EPar;
+  double gPar = EPar / MPar;
+
+  double qNu = std::sqrt( ENu * ENu - mass * mass );
+  double bNu = qNu / ENu;
+  double gNu = (bNu < 1.0) ? ENu / mass : -1.0;
+
+  double tanMaxTheta = ( bNu >= bPar ) ? 180.0 : 1.0 / ( gPar * std::sqrt( ( bPar / bNu ) * ( bPar / bNu ) - 1.0 ) );
+  double maxTheta = TMath::ATan( tanMaxTheta ) * TMath::RadToDeg();
+  if( maxTheta < 0.0 ) maxTheta += 180.0;
+
+  /*
+  LOG( "HNL", pWARN )
+    << "\nSOLUTION Args: thetalab, mass, EPar, MPar, ENu = " << thetalab << ", "
+    << mass << ", " << EPar << ", " << MPar << ", " << ENu
+    << "\nSOLUTION Lorentz: pPar, bPar, gPar = " << pPar << ", " << bPar << ", " << gPar
+    << "\nSOLUTION Lorentz: qNu, bNu, gNu = " << qNu << ", " << bNu << ", " << gNu
+    << "\nSOLUTION maxTheta = " << maxTheta;
+  */
+
+  double arg = 0.0;
+  if( isPos ){ // positive solution
+    if( bNu >= bPar ){ // labangle is surjective
+      arg = this->AccCorr_SolnArgs( thetalab, mass, EPar, MPar, ENu, isPos );
+      double tsol = TMath::ATan( arg ) * TMath::RadToDeg();
+      if( tsol < 0.0 ) tsol += 180.0;
+      return tsol;
+    } else { // labangle is not surjective, check if preimage can be found
+      if( thetalab > maxTheta ) return 0.0;
+
+      arg = this->AccCorr_SolnArgs( thetalab, mass, EPar, MPar, ENu, isPos );
+      double tsol = TMath::ATan( arg ) * TMath::RadToDeg();
+      if( tsol < 0.0 ) tsol += 180.0;
+      return tsol;
+    }
+  } else { // negative solution
+    if( bNu >= bPar ){ // HNL is too fast, so labangle is monotonic and no negative solution
+      return 0.0;
+    } else { // check if preimage can be found
+      if( thetalab > maxTheta ) return 0.0;
+
+      arg = this->AccCorr_SolnArgs( thetalab, mass, EPar, MPar, ENu, isPos );
+      double tsol = TMath::ATan( arg ) * TMath::RadToDeg();
+      if( tsol < 0.0 ) tsol += 180.0;
+      return tsol;
+    }
+  }
+
+  return -1.0; // you should never see this.
+}
+//----------------------------------------------------------------------------
+double FluxCreator::CalculateAcceptanceCorrection_legacy( TLorentzVector p4par, TLorentzVector p4HNL,
+							  double SMECM, double zm, double zp ) const
+{
+  /*
+   * This method calculates HNL acceptance by taking into account the collimation effect
+   * HNL are massive so Lorentz boost from parent CM ==> lab is more effective
+   * This means that, given a desired range of lab-frame emission angles, there are
+   * more rest-frame emission angles that map into this range. 
+   * Find the measure of the rest-frame that maps onto the allowed lab-frame angles
+   * and return the ratio over the relevant measure for a SM neutrino
+   * This is the legacy numerical implementation.
    */
 
   assert( zm >= 0.0 && zp >= zm && "Zeta-plus >= zeta-minus >= 0.0" );
