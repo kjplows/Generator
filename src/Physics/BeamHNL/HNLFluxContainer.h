@@ -108,6 +108,8 @@ namespace genie{
       mutable double acceptance;         ///< full acceptance == XYWgt * boostCorr^2 * accCorr
 
       mutable double nimpwt;             ///< Weight of parent
+
+      ClassDef(FluxContainer, 1)
       
 
     }; // class FluxContainer

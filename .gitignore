@@ -6,7 +6,13 @@ src/make/Make.config
 src/make/Make.config_no_paths
 src/Framework/Conventions/GBuild.h
 src/Framework/Conventions/GVersion.h
+*.root
+*.gdml
+*.org
+*.tar.gz
+*.tgz
 *.o
+*.so
 *.d
 *.pcm
 *.bak

@@ -2204,7 +2204,8 @@ void ConvertToGRooTracker(void)
 #ifdef __GENIE_HEAVY_NEUTRAL_LEPTON_ENABLED__
   // gnumi_flux_ster ==> the "new flux" for HNL neutrino
   hnl::FluxContainer * gnumi_flux_ster = 0;
-  if(gOptOutFileFormat == kConvFmt_numi_rootracker) {
+  if(gOptOutFileFormat == kConvFmt_numi_rootracker || 
+     gOptOutFileFormat == kConvFmt_rootracker) {
     gtree->SetBranchAddress("flux", &gnumi_flux_ster);
   }
   // extra branches for HNL declared here
@@ -3307,14 +3308,14 @@ void DeclareHNLBranches( TTree * tree, TTree * intree,
   tree->Branch( "HNL_coup_t",   &dVars[3],    "HNL_coup_t/D"   );
   tree->Branch( "HNL_Majorana", &iVars[0],    "HNL_Majorana/O" );
 
-  tree->Branch( "NumiHNLFluxNdxdz",   &dVars[4],   "NumiHNLFluxNdxdz/D"   );
-  tree->Branch( "NumiHNLFluxNdydz",   &dVars[5],   "NumiHNLFluxNdydz/D"   );
-  tree->Branch( "NumiHNLFluxNpz",     &dVars[6],   "NumiHNLFluxNpz/D"     );
-  tree->Branch( "NumiHNLFluxNdecay",  &iVars[1],   "NumiHNLFluxNdecay/I"  );
-  tree->Branch( "NumiHNLFluxNtype",   &iVars[2],   "NumiHNLFluxNtype/I"   );
-  tree->Branch( "NumiHNLFluxLepPdg",  &iVars[3],   "NumiHNLFluxLepPdg/I"  );
-  tree->Branch( "NumiHNLFluxNecm",    &dVars[7],   "NumiHNLFluxNecm/D"    );
-  tree->Branch( "NumiHNLFluxAccCorr", &dVars[8],   "NumiHNLFluxAccCorr/D" );
+  tree->Branch( "HNLFluxNdxdz",   &dVars[4],   "HNLFluxNdxdz/D"   );
+  tree->Branch( "HNLFluxNdydz",   &dVars[5],   "HNLFluxNdydz/D"   );
+  tree->Branch( "HNLFluxNpz",     &dVars[6],   "HNLFluxNpz/D"     );
+  tree->Branch( "HNLFluxNdecay",  &iVars[1],   "HNLFluxNdecay/I"  );
+  tree->Branch( "HNLFluxNtype",   &iVars[2],   "HNLFluxNtype/I"   );
+  tree->Branch( "HNLFluxLepPdg",  &iVars[3],   "HNLFluxLepPdg/I"  );
+  tree->Branch( "HNLFluxNecm",    &dVars[7],   "HNLFluxNecm/D"    );
+  tree->Branch( "HNLFluxAccCorr", &dVars[8],   "HNLFluxAccCorr/D" );
 
   // set up the branch addresses now.
   intree->SetBranchAddress( "hnl_mass",   &dVars[0] );
