@@ -159,10 +159,13 @@ namespace genie{
       std::map< genie::hnl::HNLProd_t, double > GetProductionProbs( int parPDG ) const;
       
       // Obtain detector dimensions + position
-      // RETHERE: BBox isn't good enough! But roll with it for now
       void MakeBBox() const;
       TVector3 ApplyUserRotation( TVector3 vec, bool doBackwards = false ) const;
       TVector3 ApplyUserRotation( TVector3 vec, TVector3 oriVec, std::vector<double> rotVec, bool doBackwards = false ) const;
+
+      // Do a single iteration of the boost correction loop
+      double BoostCorrectionStep( TLorentzVector p4par, TLorentzVector p4HNL_rest, 
+				  TVector3 detO, double betaPrev ) const;
       
       // calculate detector acceptance (== solid angle of proj of det onto unit-radius sphere / (4pi))
       // NOTE THIS IS A LAB FRAME (==GEOMETRICAL) ACCEPTANCE!!!!

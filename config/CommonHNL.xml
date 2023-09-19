@@ -81,9 +81,7 @@ April 11th, 2022
 
   <param_set name="FluxCalc">
     <param type="vec-int" name="ParentPOTScalings_PDGs" delim=";"> 211 ; -211 ; 321 ; -321 ; 130 ; 13 ; -13 </param>
-    <param type="vec-double" name="ParentPOTScalings_scales" delim=";"> 0.672 ; 0.979 ; 4.9 ; 13.2 ; 31.3 ; 334.0 ; 94.0 </param>
-    <!-- <param type="vec-double" name="ParentPOTScalings_scales" delim=";"> 0.672 ; 0.979 ; 4.9 ; 13.2 ; 31.3 ; 334.0 ; 94.0 </param> --> <!-- FHC MINERvA -->
-    <!-- <param type="vec-double" name="ParentPOTScalings_scales" delim=";"> 1.01 ; 0.69 ; 6.86 ; 9.29 ; 31.7 ; 103.0 ; 342.0 </param> --> <!-- FHC MINERvA -->
+    <param type="vec-double" name="ParentPOTScalings_scales" delim=";"> 1.0 ; 1.0 ; 1.0 ; 1.0 ; 1.0 ; 1.0 ; 1.0 </param>
     
     <!-- <param type="vec-double" name="ParentPOTScalings" delim=";"> 1.0 ; 1.005 ; 9.353 ; 10.458 </param> --> <!-- All parents -> no muons -> no pions -> no K0L -->
     <param type="bool" name="DoOldFluxCalculation"> false </param>
