@@ -338,12 +338,6 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   assert( imap < dynamicScores.size() && "HNL has been produced" ); // should have decayed to *some* HNL
   prodChan = (*pdit).first;
 
-  // RETHERE the usual parent-fixing block to remove
-  if( decay_ptype != kPdgPiP ){
-    this->FillNonsense( iEntry, gnmf ); return gnmf;
-  }
-  prodChan = kHNLProdPion2Electron;
-
   // bookkeep this
   fProdChan = static_cast<int>(prodChan);
   switch( prodChan ){
