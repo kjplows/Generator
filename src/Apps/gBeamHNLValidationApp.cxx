@@ -620,7 +620,7 @@ int TestDecay(void)
   TLorentzVector * x4HNL = new TLorentzVector( 1.0, 2.0, 3.0, 0.0 ); // dummy
 
   // now build array with indices of valid decay modes for speedy access
-  HNLDecayMode_t validModes[10] = { kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull };
+  HNLDecayMode_t validModes[12] = { kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull, kHNLDcyNull };
   //double validRates[10] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
   std::map< HNLDecayMode_t, double >::iterator vmit = valMap.begin(); int modeIdx = 0;
   std::ostringstream msts;
@@ -635,7 +635,7 @@ int TestDecay(void)
 
   // declare histos
   // hSpectrum[i][j]: i iterates over HNLDecayMode_t, j over FS particle in same order as event record
-  TH1D hSpectrum[10][3], hCMSpectrum[10][3], hRates;
+  TH1D hSpectrum[12][3], hCMSpectrum[12][3], hRates;
   TH1D hParamSpace = TH1D( "hParamSpace", "Parameter space", 5, 0., 5. );
 
   hParamSpace.SetBinContent( 1, 1000.0 * gCfgMassHNL ); // MeV
@@ -643,14 +643,17 @@ int TestDecay(void)
   hParamSpace.SetBinContent( 3, gCfgMCoupling );
   hParamSpace.SetBinContent( 4, gCfgTCoupling );
 
-  hRates = TH1D( "hRates", "Rates of HNL decay channels", 10, 0, 10 );
+  hRates = TH1D( "hRates", "Rates of HNL decay channels", 12, 0, 12 );
 
-  std::string shortModes[10] = { "vvv", "vee", "vmue", "pi0v", "pie", "vmumu", "pimu", "pi0pi0v", 
-				 "pipi0e", "pipi0mu" };
-  std::string part0names[10] = { "v1", "v", "v", "pi0", "pi", "v", "pi", "pi01", "pi", "pi" };
-  std::string part1names[10] = { "v2", "e1", "mu", "v", "e", "mu1", "mu", "pi02", "pi0", "pi0" };
-  std::string part2names[10] = { "v3", "e2", "e", "None", "None", "mu2", "None", "v", "e", "mu" };
-  std::string partNames[3][10] = { part0names, part1names, part2names };
+  std::string shortModes[12] = { "vvv", "vee", "vmue", "vmu+e-", "vmu-e+", "pi0v", 
+				 "pie", "vmumu", "pimu", "pi0pi0v", "pipi0e", "pipi0mu" };
+  std::string part0names[12] = { "v1", "v", "v", "v", "v", "pi0", 
+				 "pi", "v", "pi", "pi01", "pi", "pi" };
+  std::string part1names[12] = { "v2", "e1", "mu", "mu+", "mu-", "v", 
+				 "e", "mu1", "mu", "pi02", "pi0", "pi0" };
+  std::string part2names[12] = { "v3", "e2", "e", "e-", "e+", "None", 
+				 "None", "mu2", "None", "v", "e", "mu" };
+  std::string partNames[3][12] = { part0names, part1names, part2names };
   for( unsigned int iChan = 0; iChan < valMap.size(); iChan++ ){
 
     std::string shortMode = shortModes[iChan];
@@ -677,6 +680,8 @@ int TestDecay(void)
   double rnununu = ( (*valMap.find( kHNLDcyNuNuNu )) ).second;
   double rnuee = ( valMap.find( kHNLDcyNuEE ) != valMap.end() ) ? (*(valMap.find( kHNLDcyNuEE ))).second : 0.0;
   double rnumue = ( valMap.find( kHNLDcyNuMuE ) != valMap.end() ) ? (*(valMap.find( kHNLDcyNuMuE ))).second : 0.0;
+  double rnumuPeM = rnumue * gCfgECoupling / ( gCfgECoupling + gCfgMCoupling );
+  double rnumuMeP = rnumue * gCfgMCoupling / ( gCfgECoupling + gCfgMCoupling );
   double rpi0nu = ( valMap.find( kHNLDcyPi0Nu ) != valMap.end() ) ? (*(valMap.find( kHNLDcyPi0Nu ))).second : 0.0;
   double rpie = ( valMap.find( kHNLDcyPiE ) != valMap.end() ) ? (*(valMap.find( kHNLDcyPiE ))).second : 0.0;
   double rnumumu = ( valMap.find( kHNLDcyNuMuMu ) != valMap.end() ) ? (*(valMap.find( kHNLDcyNuMuMu ))).second : 0.0;
@@ -685,16 +690,18 @@ int TestDecay(void)
   double rpipi0e = ( valMap.find( kHNLDcyPiPi0E ) != valMap.end() ) ? (*(valMap.find( kHNLDcyPiPi0E ))).second : 0.0;
   double rpipi0mu = ( valMap.find( kHNLDcyPiPi0Mu ) != valMap.end() ) ? (*(valMap.find( kHNLDcyPiPi0Mu ))).second : 0.0;
 
-  hRates.SetBinContent(  1, rpimu );
-  hRates.SetBinContent(  2, rpie );
-  hRates.SetBinContent(  3, rpi0nu );
-  hRates.SetBinContent(  4, rnununu );
-  hRates.SetBinContent(  5, rnumumu );
-  hRates.SetBinContent(  6, rnuee );
-  hRates.SetBinContent(  7, rnumue );
-  hRates.SetBinContent(  8, rpipi0e );
-  hRates.SetBinContent(  9, rpipi0mu );
+  hRates.SetBinContent(  1, rnununu );
+  hRates.SetBinContent(  2, rnuee );
+  hRates.SetBinContent(  3, rnumue ); // summed
+  hRates.SetBinContent(  4, rnumuPeM ); // numu mu+ e-
+  hRates.SetBinContent(  5, rnumuMeP ); // nue mu- e+
+  hRates.SetBinContent(  6, rpi0nu );
+  hRates.SetBinContent(  7, rpie );
+  hRates.SetBinContent(  8, rnumumu );
+  hRates.SetBinContent(  9, rpimu );
   hRates.SetBinContent( 10, rpi0pi0nu );
+  hRates.SetBinContent( 11, rpipi0e );
+  hRates.SetBinContent( 12, rpipi0mu );
 
   int ievent = 0;
   while( true ){

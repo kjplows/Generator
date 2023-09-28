@@ -126,8 +126,21 @@ void Decayer::GenerateDecayProducts(GHepRecord * event) const
   LOG("HNL", pINFO) << "Generating decay...";
   fDecLepPdg = 0; fDecHadPdg = 0;
 
-  // do we have nubar?
+  // check if summmed nuemu mode, decide which lepton is pos and which is neg
+  if( fCurrDecayMode == kHNLDcyNuMuE ){
+    double emix = fUe42 / ( fUe42 + fUm42 );
+    RandomGen * Rng = RandomGen::Instance();
+    double rnd = Rng->RndGen().Uniform(0.0, 1.0);
+    if( rnd < emix ) { // Ue4 at coupling
+      fCurrDecayMode = kHNLDcyNuMuE_Ue4;
+    } else { // Um4 at coupling
+      fCurrDecayMode = kHNLDcyNuMuE_Um4;
+    }
+  } // numue decay mode
+
   PDGCodeList pdgv0 = utils::hnl::DecayProductList(fCurrDecayMode);
+  
+  // do we have nubar?
   int typeMod = ( fCurrInitStatePdg >= 0 ) ? 1 : -1; 
   if( fCurrDecayMode == kHNLDcyPi0Nu ){
     fDecHadPdg = typeMod * kPdgPi0;

@@ -51,7 +51,7 @@ std::map< HNLDecayMode_t, double > selector::GetValidChannelWidths( const double
 
   assert( GNEE >= 0.0 && "N4 --> v e e has width >= 0.0" );
 
-  // nu-e-mu is next lightest
+  // nu-e-mu is next lightest (ignoring sign of leptons)
   if( M < genie::constants::kElectronMass + genie::constants::kMuonMass ) return allChannels;
 
   double GNEM = 0.0;

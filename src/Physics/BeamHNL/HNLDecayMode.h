@@ -30,18 +30,20 @@ namespace genie {
 
  typedef enum EHNLDecayMode {
 
-   kHNLDcyNull     = -1, // dummy
-   kHNLDcyNuNuNu   = 0,	 // N --> 3 nus. Summed over all flavours 
-   kHNLDcyNuEE     = 1,	 // N --> nu_{a}      e^{\mp}   e^{\pm}. W and Z interfere
-   kHNLDcyNuMuE    = 2,	 // N --> nu_{\mu/e}  e^{\mp} \mu^{\pm}. Only W. Summed over nue and numu
-   kHNLDcyPi0Nu    = 3,	 // N --> \pi^{0}   \nu (any kind)	  
-   kHNLDcyPiE      = 4,  // N --> \pi^{\pm}   e^{\mp}		  
-   kHNLDcyNuMuMu   = 5,	 // N --> nu_{a}    \mu^{\mp} \mu^{\pm}. W and Z interfere
-   kHNLDcyPiMu     = 6,  // N --> \pi^{\pm} \mu^{\mp}
-   kHNLDcyPi0Pi0Nu = 7,	 // N --> \pi^{0}   \pi^{0} \nu (any kind)
-   kHNLDcyPiPi0E   = 8,	 // N --> \pi^{\pm} \pi^{0}   e^{\mp}	  
-   kHNLDcyPiPi0Mu  = 9,	 // N --> \pi^{\pm} \pi^{0} \mu^{\mp}	  
-   kHNLDcyTEST     = 99, // N --> vv. Test only, not a valid FS.
+   kHNLDcyNull      = -1, // dummy
+   kHNLDcyNuNuNu    = 0,	 // N --> 3 nus. Summed over all flavours 
+   kHNLDcyNuEE      = 1,	 // N --> nu_{a}      e^{\mp}   e^{\pm}. W and Z interfere
+   kHNLDcyNuMuE     = 2,	 // N --> nu_{\mu/e}  e^{\mp} \mu^{\pm}. Only W.
+   kHNLDcyNuMuE_Ue4 = 3,         // N --> nu_{\mu} e^{-} \mu^{+}
+   kHNLDcyNuMuE_Um4 = 4,         // N --> nu_{e} e^{+} \mu^{-}
+   kHNLDcyPi0Nu     = 5,	 // N --> \pi^{0}   \nu (any kind)	  
+   kHNLDcyPiE       = 6,         // N --> \pi^{\pm}   e^{\mp}		  
+   kHNLDcyNuMuMu    = 7,	 // N --> nu_{a}    \mu^{\mp} \mu^{\pm}. W and Z interfere
+   kHNLDcyPiMu      = 8,         // N --> \pi^{\pm} \mu^{\mp}
+   kHNLDcyPi0Pi0Nu  = 9,	 // N --> \pi^{0}   \pi^{0} \nu (any kind)
+   kHNLDcyPiPi0E    = 10,	 // N --> \pi^{\pm} \pi^{0}   e^{\mp}	  
+   kHNLDcyPiPi0Mu   = 11,	 // N --> \pi^{\pm} \pi^{0} \mu^{\mp}	  
+   kHNLDcyTEST      = 99,        // N --> vv. Test only, not a valid FS.
 
  } HNLDecayMode_t;
 

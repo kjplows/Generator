@@ -318,10 +318,19 @@ PDGCodeList genie::utils::hnl::DecayProductList(HNLDecayMode_t hnldm)
     decay_products.push_back(kPdgPositron);
     break;
 
-  case(kHNLDcyNuMuE):
-    decay_products.push_back(kPdgNuMu);
+  case(kHNLDcyNuMuE): // dummy (haven't selected lepton sign)
+    break;
+
+  case(kHNLDcyNuMuE_Um4): // N4 --> mu- + W+ --> mu- + e+ + nue
+    decay_products.push_back(kPdgNuE);
     decay_products.push_back(kPdgMuon);
     decay_products.push_back(kPdgPositron);
+    break;
+
+  case(kHNLDcyNuMuE_Ue4): // N4 --> e- + W+ --> e- + mu+ + numu
+    decay_products.push_back(kPdgNuMu);
+    decay_products.push_back(kPdgAntiMuon);
+    decay_products.push_back(kPdgElectron);
     break;
 
   case(kHNLDcyPiPi0E):
