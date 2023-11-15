@@ -121,6 +121,7 @@ using namespace genie::hnl;
 #define __CAN_GENERATE_EVENTS_USING_A_FLUX__
 //#include "Tools/Flux/GNuMIFlux.h"
 #include <TH1.h>
+void FillFluxNonsense( FluxContainer & ggn );
 #endif // #ifdef __GENIE_FLUX_DRIVERS_ENABLED__
 
 #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
@@ -295,7 +296,8 @@ int TestFluxFromDk2nu()
     << "\n--> Production vertex locations"
     << "\n--> Counters for each production mode"
     << "\n--> Spectrum of acceptance correction as function of parent boost factor"
-    << "\n--> Boost factor spectrum of parents broken down by type";
+    << "\n--> Boost factor spectrum of parents broken down by type"
+    << "\n--> TTree containing nu energy, weight, parent, decay mode, and FluxContainer object";
   
   const Algorithm * algFluxCreator = AlgFactory::Instance()->GetAlgorithm("genie::hnl::FluxCreator", "Default");
 
@@ -324,6 +326,23 @@ int TestFluxFromDk2nu()
   __attribute__((unused)) TGeoBBox *  box = (TGeoBBox *)ts;
 
   TFile * fout = TFile::Open( foutName.c_str(), "RECREATE" );
+  TTree * outTree = new TTree( "outTree", "Flux information tree" );
+  double Enu = -9999.9, wgt = -9999.9;
+  int parPDG = -999, modeType = -999;
+
+  FluxContainer vgnmf;
+  FluxContainer * ptGnmf = new FluxContainer();
+  vgnmf = *ptGnmf;
+  delete ptGnmf;
+  FillFluxNonsense( vgnmf );
+
+  outTree->Branch( "Energy", &Enu, "Energy/D" );
+  outTree->Branch( "Weight", &wgt, "Weight/D" );
+  outTree->Branch( "Parent", &parPDG, "Parent/I" );
+  outTree->Branch( "DecayMode", &modeType, "DecayMode/I" );
+  TBranch * fluxBranch = outTree->Branch( "Flux", "genie::hnl::FluxContainer", &vgnmf, 32000, 1 );
+  fluxBranch->SetAutoDelete( kFALSE );
+
   TH1D hEAll, hEPion, hEKaon, hEMuon, hENeuk;
   TH1D hPop, hImpwt;
   TH1D hAcceptanceCorr, hAcceptance, hAcceptNoBCorr;
@@ -360,7 +379,6 @@ int TestFluxFromDk2nu()
 
   hParamSpace = TH1D( "hParamSpace", "Parameter space", 5, 0., 5. );
 
-  int parPDG;
   TLorentzVector p4HNL;
   TLorentzVector x4HNL;
   int nPion2Muon = 0, nPion2Electron = 0, nKaon2Muon = 0,
@@ -405,7 +423,7 @@ int TestFluxFromDk2nu()
 	gOptNev = maxFluxEntries;
       }
       
-      FluxContainer vgnmf = fluxCreator->RetrieveFluxInfo();
+      vgnmf = fluxCreator->RetrieveFluxInfo();
       FluxContainer * gnmf = &vgnmf;
       
       // reject nonsense
@@ -423,6 +441,7 @@ int TestFluxFromDk2nu()
 	int typeMod = (gnmf->pdg > 0) ? 1 : -1;
 
 	parPDG = gnmf->parPdg;
+	modeType = gnmf->nuProdChan;
 
 	if( parPDG == 0 || parPDG == -9999 ){ ievent++; continue; }
 	
@@ -470,6 +489,12 @@ int TestFluxFromDk2nu()
 	if( std::abs( fullTerm ) > 100.0 ) fullTerm *= 100.0 / std::abs( fullTerm );
 	
 	nPOT = 1.0; // = gnmf->norig;
+
+	// fill tree
+	outTree->Fill();
+
+	Enu = p4HNL.E();
+	wgt = acceptance * nimpwt;
 	
 	// fill the histos!
 	hEAll.Fill( p4HNL.E(), acceptance * nimpwt );
@@ -540,10 +565,50 @@ int TestFluxFromDk2nu()
   hParamSpace.SetBinContent( 4, gCfgTCoupling );
   hParamSpace.SetBinContent( 5, nPOT );
 
+  outTree->Write();
   fout->Write();
   fout->Close();
 
   return 0;
+}
+//_________________________________________________________________________________________
+void FillFluxNonsense( FluxContainer &ggn )
+{
+  ggn.evtno = -9999;
+
+  ggn.pdg = -9999;
+  ggn.parPdg = -9999;
+  ggn.lepPdg = -9999;
+  ggn.nuPdg = -9999;
+
+  ggn.prodChan = -9999;
+  ggn.nuProdChan = -9999;
+
+  ggn.startPoint.SetXYZ(-9999.9, -9999.9, -9999.9);
+  ggn.targetPoint.SetXYZ(-9999.9, -9999.9, -9999.9);
+  ggn.startPointUser.SetXYZ(-9999.9, -9999.9, -9999.9);
+  ggn.targetPointUser.SetXYZ(-9999.9, -9999.9, -9999.9);
+  ggn.delay = -9999.9;
+
+  ggn.polz.SetXYZ(-9999.9, -9999.9, -9999.9);
+
+  ggn.p4.SetPxPyPzE(-9999.9, -9999.9, -9999.9, -9999.9);
+  ggn.parp4.SetPxPyPzE(-9999.9, -9999.9, -9999.9, -9999.9);
+  ggn.p4User.SetPxPyPzE(-9999.9, -9999.9, -9999.9, -9999.9);
+  ggn.parp4User.SetPxPyPzE(-9999.9, -9999.9, -9999.9, -9999.9);
+
+  ggn.Ecm = -9999.9;
+  ggn.nuEcm = -9999.9;
+  ggn.XYWgt = -9999.9;
+  ggn.boostCorr = -9999.9;
+  ggn.accCorr = -9999.9;
+  ggn.zetaMinus = -9999.9;
+  ggn.zetaPlus = -9999.9;
+  ggn.acceptance = -9999.9;
+
+  ggn.nimpwt = -9999.9;
+
+  return;
 }
 //............................................................................
 #endif // #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX_
