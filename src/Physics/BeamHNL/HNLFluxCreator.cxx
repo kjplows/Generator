@@ -98,7 +98,14 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 	evrec->SetWeight( evrec->Weight() / invAccWeight );
 	
 	// scale by how many POT it takes to make the appropriate parent
-	POTScaleWeight = fScales[ decay_ptype ];
+	/*
+	 * To incorporate populations of parents, we take the cumulative multiplicity
+	 * i.e. HNL light enough to be made by every parent get scaled by 
+	 * n1 = \sigma(p + target) / \sigma(p + target ; parent-producing)
+	 * For HNL that are heavier than a muon, we don't take muons into account. So
+	 * we up the scaling to incorporate their dropping out as
+	 * n2 = \sigma(p + target) / \sigma(p + target ; parent-producing ; no muon) - etc.
+	 */
 	evrec->SetWeight( evrec->Weight() * POTScaleWeight );
 	
 	// set prod-vertex in cm, ns, NEAR coords
@@ -185,26 +192,14 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
     return gnmf;
   }
 
-  // All calculations will be done in the NEAR frame.
-  // Any other quantities will be explicitly stated as BEAM, USER, or anything else.
+  TVector3 dumori( 0.0, 0.0, 0.0 ); // use to rotate VECTORS
+  TVector3 originPoint( -(fCx + fDetOffset.at(0)), 
+			-(fCy + fDetOffset.at(1)), 
+			-(fCz + fDetOffset.at(2)) ); // use to rotate POINTS. m
+
   // All these in m
-  
-  TVector3 fCvec( fCx, fCy, fCz ); // This is the centre of the full detector. m
-  TVector3 detOri( fDetOffset.at(0), 
-		   fDetOffset.at(1), 
-		   fDetOffset.at(2) ); // This is the point wrt all NEAR <--> USER rotations are made. For physical separations. m
-  TVector3 dumOri( 0.0, 0.0, 0.0 ); // A zero-origin vector for rotating momenta.
-
-  TVector3 fTvec( fCx + fTx, fCy + fTy, fCz + fTz ); // This is the centre of the top volume. m
-  TVector3 fTvec_BEAM = this->ApplyUserRotation( fTvec, false ); // NEAR --> BEAM
-  TVector3 fTvec_USER( fTvec.X() - fCx, fTvec.Y() - fCy, fTvec.Z() - fCz );
-  fTvec_USER = this->ApplyUserRotation( fTvec_USER, detOri, fDetRotation, false ); // NEAR --> USER
-
-  LOG( "HNL", pDEBUG )
-    << "\nIn NEAR coords, fTvec = " << utils::print::Vec3AsString( &fTvec )
-    << "\nIn BEAM coords, fTvec = " << utils::print::Vec3AsString( &fTvec_BEAM )
-    << "\nIn USER coords, fTvec = " << utils::print::Vec3AsString( &fTvec_USER );
-
+  TVector3 fCvec_beam( fCx, fCy, fCz );
+  TVector3 fCvec = this->ApplyUserRotation( fCvec_beam ); // in NEAR coords
   fLepPdg = 0;
   
   ctree->GetEntry(iEntry);
@@ -236,40 +231,45 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   }
     
   // turn cm to m and make origin wrt detector 
-  double input_Dx = decay_vx * units::cm / units::m ;
-  double input_Dy = decay_vy * units::cm / units::m ;
-  double input_Dz = decay_vz * units::cm / units::m ;
-  if( fSupplyingBEAM ){
-    TVector3 tmpVec( input_Dx, input_Dy, input_Dz ); // BEAM
-    tmpVec = this->ApplyUserRotation( tmpVec, true ); // BEAM --> BEAR
+  fDx = decay_vx * units::cm / units::m; // BEAM, m
+  fDy = decay_vy * units::cm / units::m;
+  fDz = decay_vz * units::cm / units::m;
+
+  if( !fSupplyingBEAM ){
+    TVector3 tmpVec( fDx, fDy, fDz ); // NEAR
+    tmpVec = this->ApplyUserRotation( tmpVec, false ); // BEAM
     fDx = tmpVec.X(); fDy = tmpVec.Y(); fDz = tmpVec.Z();
-  } else {
-    fDx = input_Dx; fDy = input_Dy; fDz = input_Dz;
   }
 
-  TVector3 fDvec( fDx, fDy, fDz ); // NEAR
-  TVector3 fDvec_BEAM = this->ApplyUserRotation( fDvec, false ); // NEAR --> BEAM
-  TVector3 fDvec_USER( fDvec.X() - fCx, fDvec.Y() - fCy, fDvec.Z() - fCz );
-  fDvec_USER = this->ApplyUserRotation( fDvec_USER, detOri, fDetRotation, false ); // NEAR --> USER
+  TVector3 fDvec( fDx, fDy, fDz ); // in BEAM coords
+  TVector3 fDvec_beam = this->ApplyUserRotation( fDvec, true ); // in NEAR coords
+
+  TVector3 fDvec_user( fDvec_beam.X() - fCx, fDvec_beam.Y() - fCy, fDvec_beam.Z() - fCz ); // in USER coords
+  fDvec_user = this->ApplyUserRotation( fDvec_user, originPoint, fDetRotation, false );
 
   LOG( "HNL", pDEBUG )
-    << "\nIn NEAR coords, fDvec = " << utils::print::Vec3AsString( &fDvec ) << " [m]"
-    << "\nIn BEAM coords, fDvec = " << utils::print::Vec3AsString( &fDvec_BEAM ) << " [m]"
-    << "\nIn USER coords, fDvec = " << utils::print::Vec3AsString( &fDvec_USER ) << " [m]";
+    << "\nIn BEAM coords, fDvec = " << utils::print::Vec3AsString( &fDvec )
+    << "\nIn NEAR coords, fDvec = " << utils::print::Vec3AsString( &fDvec_beam );
 
-  // Calculate the separation between the centre of the top volume, and the decay point.
-  TVector3 detO( fTvec.X() - fDvec.X(),
-		 fTvec.Y() - fDvec.Y(),
-		 fTvec.Z() - fDvec.Z() );
+  TVector3 detO_beam( fCvec_beam.X() - fDvec_beam.X(),
+		      fCvec_beam.Y() - fDvec_beam.Y(),
+		      fCvec_beam.Z() - fDvec_beam.Z() ); // separation in NEAR coords
+  TVector3 detO( fCvec.X() - fDvec.X(),
+		 fCvec.Y() - fDvec.Y(),
+		 fCvec.Z() - fDvec.Z() ); // separation in BEAM coords
+  TVector3 detO_user( detO_beam.X(), detO_beam.Y(), detO_beam.Z() );
+
+  detO_user = this->ApplyUserRotation( detO_user, dumori, fDetRotation, false ); // tgt-hall --> det
   
-  // The lab-frame angular size of the detector is...
-  double acc_saa = this->CalculateDetectorAcceptanceSAA( detO );
+  double acc_saa = this->CalculateDetectorAcceptanceSAA( detO_user );
+  
+  // set parent mass
 
-  double dpdpx = decay_pdpx, dpdpy = decay_pdpy, dpdpz = decay_pdpz; // GeV
-  if( fSupplyingBEAM ){
-    TVector3 tmpVec( dpdpx, dpdpy, dpdpz ); // BEAM
-    tmpVec = this->ApplyUserRotation( tmpVec, true ); // BEAM --> NEAR
-    dpdpx = tmpVec.X(); dpdpy = tmpVec.Y(); dpdpz = tmpVec.Z(); // NEAR
+  double dpdpx = decay_pdpx, dpdpy = decay_pdpy, dpdpz = decay_pdpz; // BEAM GeV
+  if( !fSupplyingBEAM ){
+    TVector3 tmpVec( dpdpx, dpdpy, dpdpz ); // NEAR
+    tmpVec = this->ApplyUserRotation( tmpVec, false ); // BEAM
+    dpdpx = tmpVec.X(); dpdpy = tmpVec.Y(); dpdpz = tmpVec.Z();
   }
 
   switch( std::abs( decay_ptype ) ){
@@ -288,24 +288,28 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 		    parentMomentum * (detO.Unit()).Y(),
 		    parentMomentum * (detO.Unit()).Z(),
 		    parentEnergy ) :
-    TLorentzVector( dpdpx, dpdpy, dpdpz, parentEnergy );
+    TLorentzVector( dpdpx, dpdpy, dpdpz, parentEnergy ); // in BEAM coords
 
-  TVector3 p3par_BEAM( dpdpx, dpdpy, dpdpz ); // NEAR
-  p3par_BEAM = this->ApplyUserRotation( p3par_BEAM, false ); // NEAR --> BEAM
-  TLorentzVector p4par_BEAM( p3par_BEAM.X(), p3par_BEAM.Y(), p3par_BEAM.Z(), parentEnergy ); // BEAM
-
-  TLorentzVector p4par_USER = p4par;
-  TVector3 p3par_USER = p4par_USER.Vect();
-  p3par_USER = this->ApplyUserRotation( p3par_USER, dumOri, fDetRotation, false ); // NEAR --> USER
-  p4par_USER.SetPxPyPzE( p3par_USER.Px(), p4par_USER.Py(), p4par_USER.Pz(), parentEnergy );
-
-  TVector3 p3par = p4par.Vect();
+  TLorentzVector p4par_beam( dpdpx, dpdpy, dpdpz, parentEnergy ); // in BEAM coords
+  TVector3 p3par_beam = p4par_beam.Vect();
+  TVector3 p3par_near = this->ApplyUserRotation( p3par_beam, true );
+  TLorentzVector p4par_near( p3par_near.X(), p3par_near.Y(), p3par_near.Z(), parentEnergy ); // in NEAR coords
   LOG( "HNL", pDEBUG )
-    << "\nIn NEAR coords: p3par = " << utils::print::Vec3AsString( &p3par )
-    << "\nIn BEAM coords: p3par = " << utils::print::Vec3AsString( &p3par_BEAM )
-    << "\nIn USER coords: p3par = " << utils::print::Vec3AsString( &p3par_USER );
+    << "\nIn BEAM coords: p3par_beam = " << utils::print::Vec3AsString( &p3par_beam )
+    << "\nIn NEAR coords: p3par_near = " << utils::print::Vec3AsString( &p3par_near );
+  if( !isParentOnAxis ){
+    // rotate p4par to NEAR coordinates
+    TVector3 tmpv3 = ApplyUserRotation( p4par.Vect(), true );
+    p4par.SetPxPyPzE( tmpv3.Px(), tmpv3.Py(), tmpv3.Pz(), p4par.E() );
+  }
 
-  TVector3 boost_beta = p4par.BoostVector();
+  TLorentzVector p4par_user = p4par_near;
+  // rotate it to user coords
+  TVector3 ppar_user = p4par_user.Vect();
+  ppar_user = this->ApplyUserRotation( ppar_user, dumori, fDetRotation, false ); // tgt-hall --> det
+  p4par_user.SetPxPyPzE( ppar_user.Px(), ppar_user.Py(), ppar_user.Pz(), p4par_user.E() );
+
+  TVector3 boost_beta = p4par_beam.BoostVector(); // in BEAM coords
 
   // now calculate which decay channel produces the HNL.
   dynamicScores = this->GetProductionProbs( decay_ptype );
@@ -338,6 +342,14 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   assert( imap < dynamicScores.size() && "HNL has been produced" ); // should have decayed to *some* HNL
   prodChan = (*pdit).first;
 
+  // assert production as K+- --> N + mu+-
+  assert( fU4l2s.at(1) > 0.0 );
+  if( !utils::hnl::IsProdKinematicallyAllowed( kHNLProdKaon2Muon ) ){
+      this->FillNonsense( iEntry, gnmf ); return gnmf;
+  }
+  prodChan = kHNLProdKaon2Muon;
+  
+
   // bookkeep this
   fProdChan = static_cast<int>(prodChan);
   switch( prodChan ){
@@ -359,110 +371,167 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
     << "Selected channel: " << utils::hnl::ProdAsString( prodChan );
   
   // decay channel specified, now time to make kinematics
-  TLorentzVector p4HNL_REST = HNLEnergy( prodChan, p4par ); 
+  TLorentzVector p4HNL_rest = HNLEnergy( prodChan, p4par ); 
   // this is a random direction rest-frame HNL. 
-  fECM = p4HNL_REST.E();
+  fECM = p4HNL_rest.E();
 
-  // first guess: betaHNL ~= 1 . Do the Lorentz boosts knocking betaHNL downwards until we hit fTvec
+  // we will now boost detO into rest frame, force rest to point to the new direction, boost the result, and compare the boost corrections
+  double boost_correction_two = 0.0;
+  
+  // 17-Jun-22: Notice the time component needs to be nonzero to get this to work!
+
+  // first guess: betaHNL ~= 1 . Do the Lorentz boosts knocking betaHNL downwards until we hit det centre
   double betaMag = boost_beta.Mag();
   double gamma   = std::sqrt( 1.0 / ( 1.0 - betaMag * betaMag ) );
-  
+  double betaLab = 1.0; // first guess
+
+  // now make a TLorentzVector in lab frame to boost back to rest. 
+  double timeBit = detO.Mag(); // / units::kSpeedOfLight ; // s
+  TLorentzVector detO_4v( detO.X(), detO.Y(), detO.Z(), timeBit ); detO_4v.Boost( -boost_beta ); // BEAM with BEAM
+  TVector3 detO_rest_unit = (detO_4v.Vect()).Unit();
+  TLorentzVector p4HNL_rest_good( p4HNL_rest.P() * detO_rest_unit.X(),
+				  p4HNL_rest.P() * detO_rest_unit.Y(),
+				  p4HNL_rest.P() * detO_rest_unit.Z(),
+				  p4HNL_rest.E() );
+
+  double pLep_rest = std::sqrt( fLPx*fLPx + fLPy*fLPy + fLPz*fLPz );
+  TLorentzVector p4Lep_rest_good( -1.0 * pLep_rest * detO_rest_unit.X(),
+				  -1.0 * pLep_rest * detO_rest_unit.Y(),
+				  -1.0 * pLep_rest * detO_rest_unit.Z(),
+				  fLPE );
+
+  // boost HNL into lab frame!
+
+  TLorentzVector p4HNL_good = p4HNL_rest_good;
+  p4HNL_good.Boost( boost_beta );
+  boost_correction_two = p4HNL_good.E() / p4HNL_rest.E();
+
+  TVector3 detO_unit = detO.Unit(); // BEAM
+
+  TVector3 p4HNL_good_vect = p4HNL_good.Vect();
+  TVector3 p4HNL_good_unit = p4HNL_good_vect.Unit();
+
+  // now calculate how far away from target point we are.
+  // dist = || detO x p4HNL || / || p4HNL_good || where x == cross product
+  TVector3 distNum = detO.Cross( p4HNL_good_unit );
+  double dist = distNum.Mag(); // m
+
+  double prevDist = 2.0 * dist;
+
+  while( betaLab > 0.0 && ( dist > 1.0e-3 && dist < prevDist  &&
+	 std::abs(dist - prevDist) > 1.0e-3 * prevDist ) ){ // 1mm tolerance
+
+    // that didn't work. Knock betaLab down a little bit and try again.
+    prevDist = dist;
+    betaLab -= 1.0e-4;
+    timeBit = detO.Mag() / ( betaLab );
+    detO_4v.SetXYZT( detO.X(), detO.Y(), detO.Z(), timeBit );
+    detO_4v.Boost( -boost_beta );
+    detO_rest_unit = (detO_4v.Vect()).Unit();
+    p4HNL_rest_good.SetPxPyPzE( p4HNL_rest.P() * detO_rest_unit.X(),
+				p4HNL_rest.P() * detO_rest_unit.Y(),
+				p4HNL_rest.P() * detO_rest_unit.Z(),
+				p4HNL_rest.E() );
+
+    // boost into lab frame
+    p4HNL_good = p4HNL_rest_good;
+    p4HNL_good.Boost( boost_beta );
+    
+    detO_unit = detO.Unit();
+    p4HNL_good_vect = p4HNL_good.Vect();
+    p4HNL_good_unit = p4HNL_good_vect.Unit();
+
+    distNum = detO.Cross( p4HNL_good_unit );
+    dist = distNum.Mag(); // m
+  }
+
+  // but we don't care about that. We just want to obtain a proxy for betaHNL in lab frame.
+  // Then we can use the dk2nu-style formula modified for betaHNL!
+
+  /* 
+   * it is NOT sufficient to boost this into lab frame! 
+   * Only a small portion of the CM decays can possibly reach the detector, 
+   * imposing a constraint on the allowed directions of p4HNL_rest. 
+   * You will miscalculate the HNL energy if you just Boost here. 
+   */
+  // explicitly calculate the boost correction to lab-frame energy
+  // in a dk2nu-like fashion. See bsim::CalcEnuWgt()
+  //double betaHNL = p4HNL_rest.P() / p4HNL_rest.E();
+  double betaHNL = p4HNL_good.P() / p4HNL_good.E();
   double costh_pardet = 0.0;
-  double boost_correction = 1.0;
+  double boost_correction = 0.0;
   if( parentMomentum > 0.0 ){
-    costh_pardet = ( p4par.X() * detO.X() +
-		     p4par.Y() * detO.Y() +
-		     p4par.Z() * detO.Z() ) / ( parentMomentum * detO.Mag() );
+    costh_pardet = ( p4par_beam.X() * detO.X() +
+		     p4par_beam.Y() * detO.Y() +
+		     p4par_beam.Z() * detO.Z() ) / ( parentMomentum * detO.Mag() );
     if( costh_pardet < -1.0 ) costh_pardet = -1.0;
     if( costh_pardet > 1.0 ) costh_pardet = 1.0;
-  }
-  double betaLab = std::min( 1.0, (1 - 1.0 / gamma)/( betaMag * costh_pardet ) ); // noughth guess
-
-  // Construct a sequence of guesses for the betaLab. Hopefully this converges.
-  int iBoost = 0; const int maxIBoost = 10; double prev_boost = -1.0;
-  while( iBoost < maxIBoost && betaLab <= 1.0 && betaLab >= 0.0 && boost_correction > 0.0 && 
-	 prev_boost != boost_correction ){
-    prev_boost = boost_correction;
-    boost_correction = this->BoostCorrectionStep( p4par, p4HNL_REST, detO, betaLab );
-
-    LOG( "HNL", pDEBUG )
-      << "\nWorking with boost correction step " << iBoost
-      << " and val = " << boost_correction
-      << " : betaLab = " << betaLab
-      << " ==> " << (1 - 1.0 / ( gamma * boost_correction ))/( betaMag * costh_pardet );
-
-    betaLab = 1 - 1.0 / ( gamma * boost_correction );
-    betaLab /= ( betaMag * costh_pardet );
-    iBoost++;
+    boost_correction = 1.0 / ( gamma * ( 1.0 - betaMag * betaHNL * costh_pardet ) );
+    // assume boost is on z' direction where z' = parent momentum direction, subbing betaMag ==> betaMag * costh_pardet
+    if( true && boost_correction * p4HNL_rest.E() > p4HNL_rest.M() ) {
+      boost_correction = 1.0 / ( gamma * ( 1.0 - betaMag * betaHNL * costh_pardet ) );
+    } else {
+      boost_correction = p4HNL_good.E() / p4HNL_rest_good.E();
+    }
   }
 
-  assert( boost_correction > 0.0 && "HNL boost factor physical" );
+  assert( boost_correction > 0.0 && boost_correction_two > 0.0 && "HNL boost factor physical" );
 
   // so now we have the random decay. Direction = parent direction, energy = what we calculated
-  double EHNL = p4HNL_REST.E() * boost_correction;
-  double MHNL = p4HNL_REST.M();
+  double EHNL = p4HNL_rest.E() * boost_correction;
+  double MHNL = p4HNL_rest.M();
   double PHNL = std::sqrt( EHNL * EHNL - MHNL * MHNL );
-
-  TLorentzVector p4HNL_good( EHNL, PHNL * (detO.Unit()).X(),
-			     PHNL * (detO.Unit()).Y(),
-			     PHNL * (detO.Unit()).Z() );
-
-  LOG( "HNL", pDEBUG )
-    << "\nSanity check!"
-    << "\nBoost correction = " << boost_correction 
-    << "\nEnergy from boost correction = " << EHNL << " [ GeV ]"
-    << "\nEnergy direct from betaLab = " << p4HNL_good.E() << " [ GeV ]";
-
-  //TVector3 pdu = ( p4par.Vect() ).Unit(); // NEAR
-  //TLorentzVector p4HNL_rand( PHNL * pdu.X(), PHNL * pdu.Y(), PHNL * pdu.Z(), EHNL );
+  TVector3 pdu = ( p4par.Vect() ).Unit(); // in BEAM coords
+  TLorentzVector p4HNL_rand( PHNL * pdu.X(), PHNL * pdu.Y(), PHNL * pdu.Z(), EHNL );
 
   // find random point in BBox and force momentum to point to that point
   
-  // RETHERE: I am pretty sure this only checks from TopVolume but need to verify.
+  double FDx = fDvec_beam.X();
+  double FDy = fDvec_beam.Y();
+  double FDz = fDvec_beam.Z();
+
   TVector3 absolutePoint = this->PointToRandomPointInBBox( ); // in NEAR coords, m
-  if( absolutePoint.X() == 999.9 && absolutePoint.Y() == 999.9 && absolutePoint.Z() == 999.9 ){
-    this->FillNonsense( iEntry, gnmf ); return gnmf;
-  }
+  // if( absolutePoint.X() == 999.9 && absolutePoint.Y() == 999.9 && absolutePoint.Z() == 999.9 ){
+  //   this->FillNonsense( iEntry, gnmf ); return gnmf;
+  // }
   
-  TVector3 fRVec( absolutePoint.X() - fDx, absolutePoint.Y() - fDy, absolutePoint.Z() - fDz ); // m
-  TVector3 fRVec_unit = fRVec.Unit(); // m/m
-
-  TVector3 fRVec_BEAM = this->ApplyUserRotation( fRVec, false ); // BEAM
-  TVector3 fRVec_USER = this->ApplyUserRotation( fRVec, detOri, fDetRotation, false ); // USER
-
-  LOG( "HNL", pDEBUG )
-    << "\nIn NEAR coordinates, fRVec = " << utils::print::Vec3AsString( &fRVec ) << " [ m ]"
-    << "\nIn BEAM coordinates, fRVec = " << utils::print::Vec3AsString( &fRVec_BEAM ) << " [ m ]"
-    << "\nIn USER coordinates, fRVec = " << utils::print::Vec3AsString( &fRVec_USER ) << " [ m ]";
+  TVector3 fRVec_beam( absolutePoint.X() - FDx, absolutePoint.Y() - FDy, absolutePoint.Z() - FDz ); // NEAR, m
+  // rotate it and get unit
+  TVector3 fRVec_unit = (this->ApplyUserRotation( fRVec_beam )).Unit(); // BEAM, m/m
+  TVector3 fRVec_actualBeam = this->ApplyUserRotation( fRVec_beam ); // BEAM, m
+  TVector3 fRVec_user = this->ApplyUserRotation( fRVec_beam, dumori, fDetRotation, false ); // USER m
   
-  /*
+
   TVector3 rRVec_near( fRVec_beam.X() + FDx, fRVec_beam.Y() + FDy, fRVec_beam.Z() + FDz );
   TVector3 rRVec_beam = this->ApplyUserRotation( rRVec_near );
   TVector3 rRVec_user = this->ApplyUserRotation( rRVec_near, dumori, fDetRotation, false );
+  /*
   rRVec_user.SetXYZ( rRVec_user.X() + (fCx + fDetOffset.at(0)),
 		     rRVec_user.Y() + (fCy + fDetOffset.at(1)),
 		     rRVec_user.Z() + (fCz + fDetOffset.at(2)) );
+  */
   rRVec_user.SetXYZ( rRVec_user.X() + (fCx),
 		     rRVec_user.Y() + (fCy),
 		     rRVec_user.Z() + (fCz) );
-  */
 
   // force HNL to point along this direction
-  TLorentzVector p4HNL( PHNL * fRVec_unit.X(),
-			PHNL * fRVec_unit.Y(),
-			PHNL * fRVec_unit.Z(),
-			EHNL );
+  TLorentzVector p4HNL( p4HNL_rand.P() * fRVec_unit.X(),
+			p4HNL_rand.P() * fRVec_unit.Y(),
+			p4HNL_rand.P() * fRVec_unit.Z(),
+			p4HNL_rand.E() ); // in BEAM coords
+
+  TVector3 pHNL_near = this->ApplyUserRotation( p4HNL.Vect(), true ); // BEAM --> NEAR coords
+  TLorentzVector p4HNL_near( pHNL_near.X(), pHNL_near.Y(), pHNL_near.Z(), p4HNL.E() );
 
   LOG( "HNL", pDEBUG )
-    << "\nHNL momentum: " << utils::print::P4AsString( &p4HNL ) << " [ GeV ]";
-
-  TLorentzVector p4Lep_REST_good( p4par.M() - EHNL, -p4HNL_REST.Px(),
-				  -p4HNL_REST.Py(), -p4HNL_REST.Pz() );
+    << "\nRandom:  " << utils::print::P4AsString( &p4HNL_rand )
+    << "\nPointed [NEAR]: " << utils::print::P4AsString( &p4HNL_near )
+    << "\nRest:    " << utils::print::P4AsString( &p4HNL_rest );
 
   // update polarisation
-  TLorentzVector p4Lep_good = p4Lep_REST_good; // in parent rest frame
-  p4Lep_good.Boost( boost_beta ); // rest --> lab
-  TVector3 boost_beta_HNL = p4HNL.BoostVector();
+  TLorentzVector p4Lep_good = p4Lep_rest_good; // in parent rest frame
+  p4Lep_good.Boost( boost_beta ); // in lab frame
+  TVector3 boost_beta_HNL = p4HNL_near.BoostVector();
   p4Lep_good.Boost( -boost_beta_HNL ); // in HNL rest frame
 
   fLPx = ( fixPol ) ? fFixedPolarisation.at(0) : p4Lep_good.Px() / p4Lep_good.P();
@@ -473,10 +542,10 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   // first, get minimum and maximum deviation from parent momentum to hit detector in degrees
   double zm = 0.0, zp = 0.0;
   if( fIsUsingRootGeom ){
-    this->GetAngDeviation( p4par, detO, zm, zp );
+    this->GetAngDeviation( p4par_near, detO_beam, zm, zp ); // using NEAR and NEAR
   } else { // !fIsUsingRootGeom
-    zm = ( isParentOnAxis ) ? 0.0 : this->GetAngDeviation( p4par, detO, false );
-    zp = this->GetAngDeviation( p4par, detO, true );
+    zm = ( isParentOnAxis ) ? 0.0 : this->GetAngDeviation( p4par_near, detO_beam, false );
+    zp = this->GetAngDeviation( p4par_near, detO_beam, true );
   }
 
   if( zm == -999.9 && zp == 999.9 ){
@@ -491,8 +560,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 
   fSMECM = decay_necm;
   fZm = zm; fZp = zp;
-
-  double accCorr = this->CalculateAcceptanceCorrection( p4par, p4HNL_REST, decay_necm, zm, zp );
+  double accCorr = this->CalculateAcceptanceCorrection( p4par, p4HNL_rest, decay_necm, zm, zp );
   //if( !fDoingOldFluxCalc ){
   if( fRerollPoints ){
     // if accCorr == 0 then we must ~bail and find the next event.~ 
@@ -501,31 +569,41 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
     int iAccFail = 0; const int iAccFailBail = 10;
     while( iAccFail < iAccFailBail && accCorr == 0.0 ){
       LOG( "HNL", pNOTICE )
-	<< "Point with separation " << utils::print::Vec3AsString( &fRVec ) << " is unreachable "
+	<< "Point with separation " << utils::print::Vec3AsString( &fRVec_beam ) << " is unreachable "
 	<< "by HNL from parent with momentum " << utils::print::P4AsString( &p4par ) << " !"
 	<< "\nRerolling point. This is the " << iAccFail << "th try out of " << iAccFailBail;
       
       // find random point in BBox and force momentum to point to that point
       // first, separation in beam frame
       absolutePoint = this->PointToRandomPointInBBox( ); // always NEAR, m
-      fRVec.SetXYZ( absolutePoint.X() - fTvec.X(),
-			 absolutePoint.Y() - fTvec.Y(),
-			 absolutePoint.Z() - fTvec.Z() );
+      /*
+      fRVec_beam.SetXYZ( absolutePoint.X() - (fCx + fDetOffset.at(0)),
+			 absolutePoint.Y() - (fCy + fDetOffset.at(1)),
+			 absolutePoint.Z() - (fCz + fDetOffset.at(2)) );
+      */
+      fRVec_beam.SetXYZ( absolutePoint.X() - (fCx),
+			 absolutePoint.Y() - (fCy),
+			 absolutePoint.Z() - (fCz) );
       // rotate it and get unit
-      fRVec_unit = (this->ApplyUserRotation( fRVec )).Unit();
+      fRVec_unit = (this->ApplyUserRotation( fRVec_beam )).Unit(); // BEAM
       // force HNL to point along this direction
-      p4HNL.SetPxPyPzE( PHNL * fRVec_unit.X(),
-			PHNL * fRVec_unit.Y(),
-			PHNL * fRVec_unit.Z(),
-			EHNL ); // BEAM
+      p4HNL.SetPxPyPzE( p4HNL_rand.P() * fRVec_unit.X(),
+			p4HNL_rand.P() * fRVec_unit.Y(),
+			p4HNL_rand.P() * fRVec_unit.Z(),
+			p4HNL_rand.E() ); // BEAM
+      
+      pHNL_near = this->ApplyUserRotation( p4HNL.Vect(), true ); // NEAR
+      p4HNL_near.SetPxPyPzE( pHNL_near.X(), pHNL_near.Y(), pHNL_near.Z(), p4HNL.E() );
       
       LOG( "HNL", pDEBUG )
-	<< "\nNew HNL momentum: " << utils::print::P4AsString( &p4HNL );
+	<< "\nRandom:  " << utils::print::P4AsString( &p4HNL_rand )
+	<< "\nPointed: " << utils::print::P4AsString( &p4HNL )
+	<< "\nRest:    " << utils::print::P4AsString( &p4HNL_rest );
       
       // update polarisation
-      p4Lep_good = p4Lep_REST_good; // in parent rest frame
+      p4Lep_good = p4Lep_rest_good; // in parent rest frame
       p4Lep_good.Boost( boost_beta ); // in lab frame
-      boost_beta_HNL = p4HNL.BoostVector(); // NEAR coords
+      boost_beta_HNL = p4HNL_near.BoostVector(); // NEAR coords
       p4Lep_good.Boost( -boost_beta_HNL ); // in HNL rest frame
       
       fLPx = ( fixPol ) ? fFixedPolarisation.at(0) : p4Lep_good.Px() / p4Lep_good.P();
@@ -536,10 +614,10 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
       // first, get minimum and maximum deviation from parent momentum to hit detector in degrees
       zm = 0.0; zp = 0.0;
       if( fIsUsingRootGeom ){
-	this->GetAngDeviation( p4par, detO, zm, zp ); // NEAR and NEAR
+	this->GetAngDeviation( p4par_near, detO_beam, zm, zp ); // NEAR and NEAR
       } else { // !fIsUsingRootGeom
-	zm = ( isParentOnAxis ) ? 0.0 : this->GetAngDeviation( p4par, detO, false );
-	zp = this->GetAngDeviation( p4par, detO, true );
+	zm = ( isParentOnAxis ) ? 0.0 : this->GetAngDeviation( p4par_near, detO_beam, false );
+	zp = this->GetAngDeviation( p4par_near, detO_beam, true );
       }
       
       if( zm == -999.9 && zp == 999.9 ){
@@ -552,7 +630,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 	zp = (tzp - tzm)/2.0; // 1/2 * angular opening
       }
       
-      accCorr = this->CalculateAcceptanceCorrection( p4par, p4HNL_REST, decay_necm, zm, zp );
+      accCorr = this->CalculateAcceptanceCorrection( p4par_near, p4HNL_rest, decay_necm, zm, zp );
       iAccFail++;
     }
   }
@@ -571,7 +649,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 			      detO.Y() * detO.Y() +
 			      detO.Z() * detO.Z() ); // m
   const double kSpeedOfLightNs = units::kSpeedOfLight * units::ns / units::s; // m / ns
-  double delay = detDist / kSpeedOfLightNs * ( 1.0 / betaLab - 1.0 );
+  double delay = detDist / kSpeedOfLightNs * ( 1.0 / betaHNL - 1.0 );
   delay *= units::ns / units::s;
 
   /*
@@ -585,18 +663,18 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 
   double dxvx = decay_vx, dxvy = decay_vy, dxvz = decay_vz;
 
-  if( fSupplyingBEAM ){
-    TVector3 tmpVec( dxvx, dxvy, dxvz ); // BEAM
-    tmpVec = this->ApplyUserRotation( tmpVec, true ); // BEAM --> NEAR
+  if( !fSupplyingBEAM ){
+    TVector3 tmpVec( dxvx, dxvy, dxvz ); // NEAR
+    tmpVec = this->ApplyUserRotation( tmpVec, false ); // BEAM
     dxvx = tmpVec.X(); dxvy = tmpVec.Y(); dxvz = tmpVec.Z();
   }
 
-  TLorentzVector x4HNL( dxvx, dxvy, dxvz, delay ); // in cm, ns
-  TVector3 x3HNL = x4HNL.Vect();
-  TVector3 x3HNL_BEAM = this->ApplyUserRotation( x3HNL, false ); // NEAR --> BEAM
-  TLorentzVector x4HNL_BEAM( x3HNL_BEAM.X(), x3HNL_BEAM.Y(), x3HNL_BEAM.Z(), delay );
+  TLorentzVector x4HNL_beam( dxvx, dxvy, dxvz, delay ); // in cm, ns, BEAM coords
+  TVector3 x3HNL_beam = x4HNL_beam.Vect();
+  TVector3 x3HNL_near = this->ApplyUserRotation( x3HNL_beam, true );
+  TLorentzVector x4HNL_near( x3HNL_near.X(), x3HNL_near.Y(), x3HNL_near.Z(), delay );
 
-  TLorentzVector x4HNL_USER( fDvec_USER.X(), fDvec_USER.Y(), fDvec_USER.Z(), delay ); // in m, ns, USER coords
+  TLorentzVector x4HNL( fDvec_user.X(), fDvec_user.Y(), fDvec_user.Z(), delay ); // in m, ns, USER coords
   TLorentzVector x4HNL_cm( units::m / units::cm * x4HNL.X(),
 			   units::m / units::cm * x4HNL.Y(),
 			   units::m / units::cm * x4HNL.Z(), delay ); // in cm, ns, USER
@@ -621,24 +699,24 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   gnmf.prodChan = fProdChan;
   gnmf.nuProdChan = fNuProdChan;
 
-  gnmf.startPoint.SetXYZ( fDvec.X(), fDvec.Y(), fDvec.Z() ); // NEAR m
+  gnmf.startPoint.SetXYZ( fDvec_beam.X(), fDvec_beam.Y(), fDvec_beam.Z() ); // NEAR m
   gnmf.targetPoint.SetXYZ( fTargetPoint.X(), fTargetPoint.Y(), fTargetPoint.Z() ); // NEAR m
-  gnmf.startPointUser.SetXYZ( fDvec_USER.X(), fDvec_USER.Y(), fDvec_USER.Z() ); // USER m
+  gnmf.startPointUser.SetXYZ( fDvec_user.X() - fCx, fDvec_user.Y() - fCy, fDvec_user.Z() - fCz ); // USER m
   gnmf.targetPointUser.SetXYZ( fTargetPoint.X() - fCx, fTargetPoint.Y() - fCy, fTargetPoint.Z() - fCz ); // USER m
   gnmf.delay = delay; // ns
 
   gnmf.polz.SetXYZ( fLPx, fLPy, fLPz );
 
-  TLorentzVector p4HNL_USER = p4HNL;
+  TLorentzVector p4HNL_user = p4HNL_near;
   // rotate it to user coords
-  TVector3 pHNL_USER = p4HNL_USER.Vect();
-  pHNL_USER = this->ApplyUserRotation( pHNL_USER, dumOri, fDetRotation, false ); // NEAR --> USER
-  p4HNL_USER.SetPxPyPzE( pHNL_USER.Px(), pHNL_USER.Py(), pHNL_USER.Pz(), p4HNL_USER.E() );
+  TVector3 pHNL_user = p4HNL_user.Vect();
+  pHNL_user = this->ApplyUserRotation( pHNL_user, dumori, fDetRotation, false ); // tgt-hall --> det
+  p4HNL_user.SetPxPyPzE( pHNL_user.Px(), pHNL_user.Py(), pHNL_user.Pz(), p4HNL_user.E() );
 
-  gnmf.p4 = p4HNL;
-  gnmf.parp4 = p4par;
-  gnmf.p4User = p4HNL_USER;
-  gnmf.parp4User = p4par_USER;
+  gnmf.p4 = p4HNL_near;
+  gnmf.parp4 = p4par_near;
+  gnmf.p4User = p4HNL_user;
+  gnmf.parp4User = p4par_user;
 
   gnmf.Ecm = fECM;
   gnmf.nuEcm = fSMECM;
@@ -1382,15 +1460,15 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
       iBad++;
     }
     // weaker condition. Just bail if 100 tries don't get you inside the flux volume...
-    if( pathString.find( fTopVolume.c_str(), iNode ) == string::npos ){
-      LOG( "HNL", pWARN ) << "Could not place flux generation vertex inside the requested volume! Bailing on event";
-      checkPoint.SetXYZ( -999.9, -999.9, -999.9 );
-      fTargetPoint = checkPoint;
-      return checkPoint;
-    }
+    // if( pathString.find( fTopVolume.c_str(), iNode ) == string::npos ){
+    //   LOG( "HNL", pWARN ) << "Could not place flux generation vertex inside the requested volume! Bailing on event";
+    //   checkPoint.SetXYZ( -999.9, -999.9, -999.9 );
+    //   fTargetPoint = checkPoint;
+    //   return checkPoint;
+    // }
 
-    //assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos &&
-    //	    "Vertex for flux generation inside top volume");
+    assert( pathString.find( fTopVolume.c_str(), iNode ) != string::npos &&
+    	    "Vertex for flux generation inside top volume");
   }
 
   // turn u back into [m] from [cm]
@@ -1399,13 +1477,13 @@ TVector3 FluxCreator::PointToRandomPointInBBox( ) const
   ux += fTx; uy += fTy; uz += fTz; // add in volume translation
   // return the absolute point in space [NEAR, m] that we're pointing to!
   checkPoint.SetXYZ( ux, uy, uz );
-  checkPoint = this->ApplyUserRotation( checkPoint, dumori, fDetRotation, true ); // USER --> NEAR
+  checkPoint = this->ApplyUserRotation( checkPoint, dumori, fDetRotation, true ); // det --> tgt-hall
   checkPoint.SetXYZ( checkPoint.X() + ox, checkPoint.Y() + oy, checkPoint.Z() + oz );
 
   TVector3 vec( ux, uy, uz ); // USER m
   LOG( "HNL", pDEBUG )
-    << "\nPointing to this point in BBox (USER coords): " << utils::print::Vec3AsString( &vec ) << " [m]"
-    << "\nIn NEAR coords this is " << utils::print::Vec3AsString( &checkPoint ) << " [m]";
+    << "\nPointing to this point in BBox (USER coords): " << utils::print::Vec3AsString( &vec ) << "[m]"
+    << "\nIn NEAR coords this is " << utils::print::Vec3AsString( &checkPoint ) << "[m]";
 
   // update bookkeeping
   fTargetPoint = checkPoint;
@@ -1548,76 +1626,94 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   // parent decay point, and detector centre.
 
   TVector3 dumori(0.0, 0.0, 0.0); // tgt-hall frame origin is 0
-  TVector3 detori( fDetOffset.at(0), fDetOffset.at(1), fDetOffset.at(2) ); // for rotations of the detector
+  TVector3 detori( (fDetOffset.at(0)) * units::m / units::cm,
+		   (fDetOffset.at(1)) * units::m / units::cm,
+		   (fDetOffset.at(2)) * units::m / units::cm ); // for rotations of the detector
 
-  // All calculations in USER and m
+  // Do all this in NEAR coords and m to avoid ambiguity.
 
-  TVector3 fCvec( fCx, fCy, fCz );  // Detector centre
-  TVector3 fTvec( fCx + fTx, fCy + fTy, fCz + fTz ); // Centre of top volume, NEAR
-  TVector3 fDvec( fDx, fDy, fDz ); // Decay point
+  TVector3 fCvec_near( fCx, fCy, fCz );  // NEAR m
+  TVector3 fDvec( fDx, fDy, fDz ); // in BEAM coords, m
+  TVector3 fDvec_beam = this->ApplyUserRotation( fDvec, true ); // in NEAR coords, m
+  TVector3 detO_near( fCvec_near.X() - fDvec_beam.X(),
+		      fCvec_near.Y() - fDvec_beam.Y(),
+		      fCvec_near.Z() - fDvec_beam.Z() );
+  TVector3 detO_user = this->ApplyUserRotation( detO_near, dumori, fDetRotation, false ); // tgt-hall --> det
 
-  TVector3 detO_USER = this->ApplyUserRotation( detO, dumori, fDetRotation, false );
-  TVector3 pparUnit_USER = this->ApplyUserRotation( pparUnit, dumori, fDetRotation, false );
+  const double aConst[3] = { fDvec_beam.X(), fDvec_beam.Y(), fDvec_beam.Z() };
+  const double aConstUser[3] = { -detO_user.X(), -detO_user.Y(), -detO_user.Z() };
+  /*
+  const double dConst[3] = { fCx + fDetOffset.at(0), fCy + fDetOffset.at(1), fCz + fDetOffset.at(2) };
+  */
+  const double dConst[3] = { fCx, fCy, fCz };
+  const double nConst[3] = { pparUnit.X(), pparUnit.Y(), pparUnit.Z() };
 
   // formula for POCA is \vec{a} + \vec{n} * ( (\vec{d} - \vec{a}) \cdot \vec{n} )
-  // where \vec{a} + t * \vec{n} is the formula for the line \eps(t), and \vec{d} is the point
-  // we\re calculating the distance of the line from.
+  const double nMult = nConst[0] * (dConst[0] - aConst[0]) +
+    nConst[1] * (dConst[1] - aConst[1]) +
+    nConst[2] * (dConst[2] - aConst[2]);
 
-  // The point the momentum passes through
-  const double aConst[3] = { fDvec.X(), fDvec.Y(), fDvec.Z() };
-  const double aConstUser[3] = { -(detO_USER.X()), 
-				 -(detO_USER.Y()), 
-				 -(detO_USER.Z()) };
-  // The point we're evaluating at. Let this be the detector centre for now.
-  const double dConst[3] = { fTvec.X(), fTvec.Y(), fTvec.Z() };
-  const double dConstUser[3] = { 0.0, 0.0, 0.0 } ; 
-  // The direction of the parent momentum
-  const double nConst[3] = { pparUnit.X(), pparUnit.Y(), pparUnit.Z() };
-  const double nConstUser[3] = { pparUnit_USER.X(), pparUnit_USER.Y(), pparUnit_USER.Z() };
+  // don't use the actual POCA, force calculation from that point V0 such that z(V0) = z(C)
+  // and V0 lies on line joining decay point and POCA
+  
+  const double POCA_m[3] = { aConst[0] + nMult * nConst[0],
+			     aConst[1] + nMult * nConst[1],
+			     aConst[2] + nMult * nConst[2] }; // NEAR
+  /*
+  const double zConstMult = ((fCz + fDetOffset.at(2)) - aConst[2]) / (POCA_m[2] - aConst[2]);
+  */
+  const double zConstMult = ((fCz) - aConst[2]) / (POCA_m[2] - aConst[2]);
+  const double startPoint_m[3] = { aConst[0] + nMult * zConstMult * nConst[0],
+				   aConst[1] + nMult * zConstMult * nConst[1],
+				   aConst[2] + nMult * zConstMult * nConst[2] }; // NEAR
 
-  const double nMult = nConstUser[0] * (dConstUser[0] - aConstUser[0]) +
-    nConstUser[1] * (dConstUser[1] - aConstUser[1]) +
-    nConstUser[2] * (dConstUser[2] - aConstUser[2]);
+  /*
+  LOG( "HNL", pDEBUG )
+    << "\ndetO_cm = " << utils::print::Vec3AsString( &detO_cm )
+    << "\npparUnit = " << utils::print::Vec3AsString( &pparUnit );
+  */
 
-  // This is the point of closest approach.
-  const double POCA_USER[3] = { aConstUser[0] + nMult * nConstUser[0],
-				aConstUser[1] + nMult * nConstUser[1],
-				aConstUser[2] + nMult * nConstUser[2] }; // m
-  // And the line which connects these two.
-  const double POCAToCentre_USER[3] = { dConstUser[0] - POCA_USER[0],
-					dConstUser[1] - POCA_USER[1],
-					dConstUser[2] - POCA_USER[2] };
+  const double startPoint[3] = { startPoint_m[0] * units::m / units::cm,
+				 startPoint_m[1] * units::m / units::cm,
+				 startPoint_m[2] * units::m / units::cm }; // NEAR, cm
 
-  // Convert these to cm, so that ROOT can do its magic.
-  const double startPoint_USER[3] = { POCA_USER[0] * units::m / units::cm,
-				      POCA_USER[1] * units::m / units::cm,
-				      POCA_USER[2] * units::m / units::cm }; // cm
+  /*
+  const double sweepVect[3] = { (fCx + fDetOffset.at(0)) * units::m / units::cm - startPoint[0],
+				(fCy + fDetOffset.at(1)) * units::m / units::cm - startPoint[1],
+				(fCz + fDetOffset.at(2)) * units::m / units::cm - startPoint[2] }; // NEAR, cm
+  */
+  const double sweepVect[3] = { (fCx) * units::m / units::cm - startPoint[0],
+				(fCy) * units::m / units::cm - startPoint[1],
+				(fCz) * units::m / units::cm - startPoint[2] }; // NEAR, cm
+  const double swvMag = std::sqrt( sweepVect[0]*sweepVect[0] + sweepVect[1]*sweepVect[1] + sweepVect[2]*sweepVect[2] ); assert( swvMag > 0.0 && "Sweep is non-zero" );
 
-  const double sweepVect_USER[3] = { POCAToCentre_USER[0] * units::m / units::cm,
-				     POCAToCentre_USER[1] * units::m / units::cm,
-				     POCAToCentre_USER[2] * units::m / units::cm }; // cm
+  // Note the geometry manager works in the *detector frame*. Transform to that.
+  /*
+  TVector3 detStartPoint( startPoint[0] - (fCx + fDetOffset.at(0)) * units::m / units::cm,
+			  startPoint[1] - (fCy + fDetOffset.at(1)) * units::m / units::cm,
+			  startPoint[2] - (fCz + fDetOffset.at(2)) * units::m / units::cm );
+  */
+  TVector3 detStartPoint( startPoint[0] - (fCx) * units::m / units::cm,
+			  startPoint[1] - (fCy) * units::m / units::cm,
+			  startPoint[2] - (fCz) * units::m / units::cm );
+  TVector3 detSweepVect( sweepVect[0], sweepVect[1], sweepVect[2] );
 
-  const double swvMag = std::sqrt( sweepVect_USER[0]*sweepVect_USER[0] + 
-				   sweepVect_USER[1]*sweepVect_USER[1] + 
-				   sweepVect_USER[2]*sweepVect_USER[2] ); 
-  assert( swvMag > 0.0 && "Sweep is non-zero" );
-
-  TVector3 detStartPoint( startPoint_USER[0], startPoint_USER[1], startPoint_USER[2] ); 
-  TVector3 detSweepVect( sweepVect_USER[0], sweepVect_USER[1], sweepVect_USER[2] );
+  TVector3 detPpar = ppar;
 
   LOG( "HNL", pDEBUG )
-    << "\nStartPoint = " << utils::print::Vec3AsString( &detStartPoint ) << " [cm]"
-    << "\nSweepVect  = " << utils::print::Vec3AsString( &detSweepVect ) << " [cm]"
-    << "\nparent p3  = " << utils::print::Vec3AsString( &pparUnit_USER ) << " [GeV/GeV]";
+    << "\nStartPoint = " << utils::print::Vec3AsString( &detStartPoint )
+    << "\nSweepVect  = " << utils::print::Vec3AsString( &detSweepVect )
+    << "\nparent p3  = " << utils::print::Vec3AsString( &detPpar );
+  
+  detStartPoint = this->ApplyUserRotation( detStartPoint, detori, fDetRotation, false ); // passive transformation
+  detSweepVect = this->ApplyUserRotation( detSweepVect, dumori, fDetRotation, true );
+  detPpar = this->ApplyUserRotation( detPpar, dumori, fDetRotation, true );
 
   // first check that detStartPoint is not already in the detector! If it is, we should flag this now.
-  std::string detPathString = this->CheckGeomPoint( startPoint_USER[0], startPoint_USER[1], startPoint_USER[2] ); int iDNode = 1; // 1 past beginning
-
+  std::string detPathString = this->CheckGeomPoint( detStartPoint.X(), detStartPoint.Y(), detStartPoint.Z() ); int iDNode = 1; // 1 past beginning
   bool startsInsideDet = ( detPathString.find(fTopVolume.c_str(), iDNode) != string::npos );
 
-  TLorentzVector detPpar_4v( p4par.P() * pparUnit_USER.X(), 
-			     p4par.P() * pparUnit_USER.Y(),
-			     p4par.P() * pparUnit_USER.Z(), p4par.E() );
+  TLorentzVector detPpar_4v( detPpar.X(), detPpar.Y(), detPpar.Z(), p4par.E() );
   
   // now sweep along sweepVect until we hit either side of the detector. 
   // This will give us two points in space
@@ -1631,6 +1727,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 
   gGeoManager->SetCurrentPoint( detStartPoint.X(), detStartPoint.Y(), detStartPoint.Z() );
   gGeoManager->SetCurrentDirection( detSweepVect.X() / swvMag, detSweepVect.Y() / swvMag, detSweepVect.Z() / swvMag );
+  //const double sStepSize = 0.05 * std::min( std::min( fLx, fLy ), fLz );
 
   // start stepping. Let's do this manually cause FindNextBoundaryAndStep() can be finicky.
   // if start inside detector, then only find exit point, otherwise find entry point.
@@ -1686,7 +1783,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
     double currz = (gGeoManager->GetCurrentPoint())[2];
     double currDist = std::sqrt( currx*currx + curry*curry + currz*currz );
 
-    double stepMod = 0.999;
+    double stepMod = 0.99;
     double boxSize = std::sqrt( fLxR*fLxR + fLyR*fLyR + fLzR*fLzR )/2.0; // m
     double halfBoxSize = boxSize / 2.0;
     double desiredDist = stepMod * halfBoxSize * units::m / units::cm;
@@ -1703,6 +1800,15 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 				  curry + largeStep * curdy,
 				  currz + largeStep * curdz );
 
+    /* // slow but correct
+    while( detPathString.find(fTopVolume.c_str(), iDNode) == string::npos ){
+      gGeoManager->SetCurrentPoint( (gGeoManager->GetCurrentPoint())[0] + (gGeoManager->GetCurrentDirection())[0] * sStepSize,
+				    (gGeoManager->GetCurrentPoint())[1] + (gGeoManager->GetCurrentDirection())[1] * sStepSize,
+				    (gGeoManager->GetCurrentPoint())[2] + (gGeoManager->GetCurrentDirection())[2] * sStepSize );
+      detPathString = this->CheckGeomPoint( (gGeoManager->GetCurrentPoint())[0], (gGeoManager->GetCurrentPoint())[1], (gGeoManager->GetCurrentPoint())[2] );
+    }
+    */
+
     minusPoint[0] = (gGeoManager->GetCurrentPoint())[0];
     minusPoint[1] = (gGeoManager->GetCurrentPoint())[1];
     minusPoint[2] = (gGeoManager->GetCurrentPoint())[2];
@@ -1714,8 +1820,26 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
     currx = (gGeoManager->GetCurrentPoint())[0];
     curry = (gGeoManager->GetCurrentPoint())[1];
     currz = (gGeoManager->GetCurrentPoint())[2];
+    /*
+    double cdx = fDetOffset.at(0) * units::m / units::cm - currx; // cm
+    double cdy = fDetOffset.at(1) * units::m / units::cm - curry; // cm
+    double cdz = fDetOffset.at(2) * units::m / units::cm - currz; // cm
+
+    gGeoManager->SetCurrentPoint( fDetOffset.at(0) * units::m / units::cm + cdx,
+				  fDetOffset.at(1) * units::m / units::cm + cdy,
+				  fDetOffset.at(2) * units::m / units::cm + cdz );
+    */
 
     gGeoManager->SetCurrentPoint( -currx, -curry, -currz );
+
+    /* // slow but correct
+    while( detPathString.find(fTopVolume.c_str(), iDNode) != string::npos ){
+      gGeoManager->SetCurrentPoint( (gGeoManager->GetCurrentPoint())[0] + (gGeoManager->GetCurrentDirection())[0] * sStepSize,
+				    (gGeoManager->GetCurrentPoint())[1] + (gGeoManager->GetCurrentDirection())[1] * sStepSize,
+				    (gGeoManager->GetCurrentPoint())[2] + (gGeoManager->GetCurrentDirection())[2] * sStepSize );
+      detPathString = this->CheckGeomPoint( (gGeoManager->GetCurrentPoint())[0], (gGeoManager->GetCurrentPoint())[1], (gGeoManager->GetCurrentPoint())[2] );
+    }
+    */
 
     plusPoint[0] = (gGeoManager->GetCurrentPoint())[0];
     plusPoint[1] = (gGeoManager->GetCurrentPoint())[1];
@@ -1740,7 +1864,7 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   }
   */
 
-  TVector3 originPoint( -fTvec.X(), -fTvec.Y(), -fTvec.Z() );
+  TVector3 originPoint( -(fCx + fDetOffset.at(0)), -(fCy + fDetOffset.at(1)), -(fCz + fDetOffset.at(2)) );
 
   TVector3 vMUser( minusPoint[0] * units::cm / units::m, 
 		   minusPoint[1] * units::cm / units::m,
@@ -1750,24 +1874,24 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
 		   plusPoint[2] * units::cm / units::m ); // USER, m
 
   // rotate to NEAR frame
-  TVector3 vMNear = this->ApplyUserRotation( vMUser, originPoint, fDetRotation, true ); // USER --> NEAR
+  TVector3 vMNear = this->ApplyUserRotation( vMUser, originPoint, fDetRotation, true ); // det --> tgt-hall
   /*
   vMNear.SetXYZ( vMNear.X() + (fCx + fDetOffset.at(0)), 
 		 vMNear.Y() + (fCy + fDetOffset.at(1)),
 		 vMNear.Z() + (fCz + fDetOffset.at(2)) );
   */
-  vMNear.SetXYZ( vMNear.X() + (fTvec.X()),
-		 vMNear.Y() + (fTvec.Y()),
-		 vMNear.Z() + (fTvec.Z()) );
-  TVector3 vPNear = this->ApplyUserRotation( vPUser, originPoint, fDetRotation, true ); // USER --> NEAR
+  vMNear.SetXYZ( vMNear.X() + (fCx),
+		 vMNear.Y() + (fCy),
+		 vMNear.Z() + (fCz) );
+  TVector3 vPNear = this->ApplyUserRotation( vPUser, originPoint, fDetRotation, true ); // det --> tgt-hall
   /*
   vPNear.SetXYZ( vPNear.X() + (fCx + fDetOffset.at(0)), 
 		 vPNear.Y() + (fCy + fDetOffset.at(1)),
 		 vPNear.Z() + (fCz + fDetOffset.at(2)) );
   */
-  vPNear.SetXYZ( vPNear.X() + (fTvec.X()), 
-		 vPNear.Y() + (fTvec.Y()),
-		 vPNear.Z() + (fTvec.Z()) );
+  vPNear.SetXYZ( vPNear.X() + (fCx), 
+		 vPNear.Y() + (fCy),
+		 vPNear.Z() + (fCz) );
 
   // with 3 points and 1 vector we calculate the angles.
   // Points: D(decay), E(entry), X(exit) [all in local, cm]. Vector: detPpar [local, GeV/GeV]
@@ -1782,15 +1906,15 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   TVector3 decayPoint_user( aConstUser[0] * units::m / units::cm, 
 			    aConstUser[1] * units::m / units::cm,
 			    aConstUser[2] * units::m / units::cm );
-  TVector3 decayPoint_near = this->ApplyUserRotation( decayPoint_user, detori, fDetRotation, true ); // NEAR, cm
+  TVector3 decayPoint_near = this->ApplyUserRotation( decayPoint_user, detori, fDetRotation, false ); // NEAR, cm
   /*
   decayPoint_near.SetXYZ( decayPoint_near.X() + (fCx + fDetOffset.at(0)) * units::m / units::cm,
 			  decayPoint_near.Y() + (fCy + fDetOffset.at(1)) * units::m / units::cm,
 			  decayPoint_near.Z() + (fCz + fDetOffset.at(2)) * units::m / units::cm );
   */
-  decayPoint_near.SetXYZ( decayPoint_near.X() + (fTvec.X()) * units::m / units::cm,
-			  decayPoint_near.Y() + (fTvec.Y()) * units::m / units::cm,
-			  decayPoint_near.Z() + (fTvec.Z()) * units::m / units::cm );
+  decayPoint_near.SetXYZ( decayPoint_near.X() + (fCx) * units::m / units::cm,
+			  decayPoint_near.Y() + (fCy) * units::m / units::cm,
+			  decayPoint_near.Z() + (fCz) * units::m / units::cm );
 
   TVector3 minusVec( minusPoint[0] - decayPoint_user.X(), minusPoint[1] - decayPoint_user.Y(), minusPoint[2] - decayPoint_user[2] ); // USER, cm
   TVector3 plusVec( plusPoint[0] - decayPoint_user.X(), plusPoint[1] - decayPoint_user.Y(), plusPoint[2] - decayPoint_user[2] ); // USER, cm
@@ -1816,17 +1940,19 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
     zm = tmpzp;
   }
 
+  /*
   LOG( "HNL", pDEBUG )
-    << "\nIn USER coordinates:"
+    << "\nIn DETECTOR coordinates:"
     << "\nentered at ( " << minusPoint[0] << ", " << minusPoint[1] << ", " << minusPoint[2] << " ) [cm]"
     << "\nexited  at ( " << plusPoint[0] << ", " << plusPoint[1] << ", " << plusPoint[2] << " ) [cm]"
-    << "\nstarted at ( " << utils::print::Vec3AsString( &detStartPoint ) << " ) [cm]"
-    << "\nmomentum   ( " << detPpar_4v.Px() << ", " << detPpar_4v.Py() << ", " << detPpar_4v.Pz() << " )"
+    << "\nstarted at ( " << decVec.X() << ", " << decVec.Y() << ", " << decVec.Z() << " ) [cm]"
+    << "\nmomentum   ( " << detPpar.X() << ", " << detPpar.Y() << ", " << detPpar.Z() << " )"
     << "\nmeaning zm = " << zm << ", zp = " << zp << " [deg]";
+  */
 }
 //----------------------------------------------------------------------------
 double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorentzVector p4HNL,
-						   double SMECM, double zm, double zp ) const
+						      double SMECM, double zm, double zp ) const
 {
   /*
    * This method calculates HNL acceptance by taking into account the collimation effect
@@ -1835,201 +1961,6 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
    * more rest-frame emission angles that map into this range. 
    * Find the measure of the rest-frame that maps onto the allowed lab-frame angles
    * and return the ratio over the relevant measure for a SM neutrino
-   * This is the analytical implementation
-   */
-
-  assert( zm >= 0.0 && zp >= zm && "Zeta-plus >= zeta-minus >= 0.0" );
-  if( zp == zm ) return 1.0;
-  if( zp > 180.0 ) zp = 180.0;
-
-  double M = p4HNL.M();
-  if( M < 1.0e-6 ) return 1.0;
-
-  double ECM = p4HNL.E();
-
-  double EPar = p4par.E();
-  double MPar = p4par.M();
-
-  // Calculate the pre-image under SM neutrino of [zm, zp]. Always one as it's monotonic
-  double tLow_SM = this->AccCorr_Solution( zm, 0.0, EPar, MPar, SMECM, true );
-  double tHigh_SM = this->AccCorr_Solution( zp, 0.0, EPar, MPar, SMECM, true );
-
-  double range2 = std::abs( tHigh_SM - tLow_SM );
-
-  // And of the HNL. The below functions perform all necessary checks
-  double tLow1 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, true );
-  double tHigh1 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, true );
-  double tHigh2 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, false );
-  double tLow2 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, false );
-
-  /* 
-   * Now notice there are three cases. 
-   Either zm >= max (labangle), in which case all the solutions hit zero. Zero acceptance.
-   Or     zp <= max (labangle), in which case all 4 solutions are non-zero.
-   Or     zm < max <= zp, in which case tHigh1 and tLow2 are zero.
-  */
-
-  double range1 = std::abs( tHigh1 - tLow1 ) + std::abs( tHigh2 - tLow2 );
-  if( tHigh1 == 0 && tLow2 == 0 ){
-    range1 = std::abs( tHigh2 - tLow1 );
-  }
-
-  LOG( "HNL", pDEBUG ) 
-    << "\nArgs: zm, zp, M, ECM, SMECM, EPar, MPar = "
-    << zm << ", " << zp << ", " << M << ", " << ECM << ", " << SMECM
-    << ", " << EPar << ", " << MPar
-    << "\nSM range:  [ " << tLow_SM << ", " << tHigh_SM << " ]"
-    << "\nHNL range: [ " << tLow1 << ", " << tHigh1 << " ] , [ " 
-    << tLow2 << ", " << tHigh2 << " ]";
-
-  return range1 / range2;
-}
-//----------------------------------------------------------------------------
-double FluxCreator::AccCorr_Sqrt( double thetalab, double mass, 
-				  double EPar, double MPar, double ENu ) const
-{
-  double theta = thetalab * TMath::DegToRad();
-  double tanTheta = TMath::Tan( theta );
-  
-  double pPar = std::sqrt( EPar * EPar - MPar * MPar );
-  double bPar = pPar / EPar;
-  double gPar = EPar / MPar;
-
-  double arg1 = ( ENu * ENu - mass * mass ) * 
-    ( 1.0 + tanTheta * tanTheta * gPar * gPar );
-  double arg2 = ( tanTheta * bPar * gPar * ENu ) * ( tanTheta * bPar * gPar * ENu );
-
-  /*
-  LOG( "HNL", pWARN )
-    << "\nSQRT Args: thetalab, t, mass, EPar, MPar, ENu = " << thetalab << ", "
-    << tanTheta << ", " << mass << ", " << EPar << ", " << MPar << ", " << ENu
-    << "\nSQRT Lorentz: pPar, bPar, gPar = " << pPar << ", " << bPar << ", " << gPar
-    << "\nSQRT Value: " << arg1 << ", " << arg2 << " ==> " << std::sqrt( std::max( 0.0, arg1 - arg2 ) );
-  */
-
-  return std::sqrt( std::max( 0.0, arg1 - arg2 ) );
-}
-//----------------------------------------------------------------------------
-double FluxCreator::AccCorr_Denom( double thetalab, double mass, 
-				   double EPar, double MPar, double ENu ) const
-{
-  double theta = thetalab * TMath::DegToRad();
-  double tanTheta = TMath::Tan( theta );
-  
-  double pPar = std::sqrt( EPar * EPar - MPar * MPar );
-  double bPar = pPar / EPar;
-  double gPar = EPar / MPar;
-
-  double qNu = std::sqrt( ENu * ENu - mass * mass );
-
-  double oth = tanTheta * bPar * gPar * ENu;
-
-  /*
-  LOG( "HNL", pWARN )
-    << "\nDENOM Args: thetalab, t, mass, EPar, MPar, ENu = " << thetalab << ", "
-    << tanTheta << ", " << mass << ", " << EPar << ", " << MPar << ", " << ENu
-    << "\nDENOM Lorentz: pPar, bPar, gPar = " << pPar << ", " << bPar << ", " << gPar
-    << "\nDENOM Value: " << qNu << ", " << oth << " ==> " << ( ( qNu - oth ) * ( qNu + oth ) );
-  */
-  
-  return ( ( qNu - oth ) * ( qNu + oth ) );
-}
-//----------------------------------------------------------------------------
-double FluxCreator::AccCorr_SolnArgs( double thetalab, double mass, 
-				      double EPar, double MPar, double ENu, bool isPos ) const
-{
-  double theta = thetalab * TMath::DegToRad();
-  double tanTheta = TMath::Tan( theta );
-
-  double pPar = std::sqrt( EPar * EPar - MPar * MPar );
-  double bPar = pPar / EPar;
-  double gPar = EPar / MPar;
-
-  double denom = this->AccCorr_Denom( thetalab, mass, EPar, MPar, ENu );
-
-  double qNu = std::sqrt( ENu * ENu - mass * mass );
-  double sqt = this->AccCorr_Sqrt( thetalab, mass, EPar, MPar, ENu );
-
-  int coeff = ( isPos ) ? 1 : -1;
-  double numer = qNu * qNu + coeff * bPar * ENu * sqt;
-
-  /*
-  LOG( "HNL", pWARN )
-    << "\nSOLNARGS Args: thetalab, t, mass, EPar, MPar, ENu = " << thetalab << ", "
-    << tanTheta << ", " << mass << ", " << EPar << ", " << MPar << ", " << ENu
-    << "\nSOLNARGS Lorentz: pPar, bPar, gPar = " << pPar << ", " << bPar << ", " << gPar
-    << "\nSOLNARGS Value: " << numer << ", " << coeff << " ==> " << tanTheta * gPar * numer / denom;
-  */
-
-  return tanTheta * gPar * numer / denom;
-}
-//----------------------------------------------------------------------------
-double FluxCreator::AccCorr_Solution( double thetalab, double mass, 
-				      double EPar, double MPar, double ENu, bool isPos ) const
-{
-  double pPar = std::sqrt( EPar * EPar - MPar * MPar );
-  double bPar = pPar / EPar;
-  double gPar = EPar / MPar;
-
-  double qNu = std::sqrt( ENu * ENu - mass * mass );
-  double bNu = qNu / ENu;
-  double gNu = (bNu < 1.0) ? ENu / mass : -1.0;
-
-  double tanMaxTheta = ( bNu >= bPar ) ? 180.0 : 1.0 / ( gPar * std::sqrt( ( bPar / bNu ) * ( bPar / bNu ) - 1.0 ) );
-  double maxTheta = TMath::ATan( tanMaxTheta ) * TMath::RadToDeg();
-  if( maxTheta < 0.0 ) maxTheta += 180.0;
-
-  /*
-  LOG( "HNL", pWARN )
-    << "\nSOLUTION Args: thetalab, mass, EPar, MPar, ENu = " << thetalab << ", "
-    << mass << ", " << EPar << ", " << MPar << ", " << ENu
-    << "\nSOLUTION Lorentz: pPar, bPar, gPar = " << pPar << ", " << bPar << ", " << gPar
-    << "\nSOLUTION Lorentz: qNu, bNu, gNu = " << qNu << ", " << bNu << ", " << gNu
-    << "\nSOLUTION maxTheta = " << maxTheta;
-  */
-
-  double arg = 0.0;
-  if( isPos ){ // positive solution
-    if( bNu >= bPar ){ // labangle is surjective
-      arg = this->AccCorr_SolnArgs( thetalab, mass, EPar, MPar, ENu, isPos );
-      double tsol = TMath::ATan( arg ) * TMath::RadToDeg();
-      if( tsol < 0.0 ) tsol += 180.0;
-      return tsol;
-    } else { // labangle is not surjective, check if preimage can be found
-      if( thetalab > maxTheta ) return 0.0;
-
-      arg = this->AccCorr_SolnArgs( thetalab, mass, EPar, MPar, ENu, isPos );
-      double tsol = TMath::ATan( arg ) * TMath::RadToDeg();
-      if( tsol < 0.0 ) tsol += 180.0;
-      return tsol;
-    }
-  } else { // negative solution
-    if( bNu >= bPar ){ // HNL is too fast, so labangle is monotonic and no negative solution
-      return 0.0;
-    } else { // check if preimage can be found
-      if( thetalab > maxTheta ) return 0.0;
-
-      arg = this->AccCorr_SolnArgs( thetalab, mass, EPar, MPar, ENu, isPos );
-      double tsol = TMath::ATan( arg ) * TMath::RadToDeg();
-      if( tsol < 0.0 ) tsol += 180.0;
-      return tsol;
-    }
-  }
-
-  return -1.0; // you should never see this.
-}
-//----------------------------------------------------------------------------
-double FluxCreator::CalculateAcceptanceCorrection_legacy( TLorentzVector p4par, TLorentzVector p4HNL,
-							  double SMECM, double zm, double zp ) const
-{
-  /*
-   * This method calculates HNL acceptance by taking into account the collimation effect
-   * HNL are massive so Lorentz boost from parent CM ==> lab is more effective
-   * This means that, given a desired range of lab-frame emission angles, there are
-   * more rest-frame emission angles that map into this range. 
-   * Find the measure of the rest-frame that maps onto the allowed lab-frame angles
-   * and return the ratio over the relevant measure for a SM neutrino
-   * This is the legacy numerical implementation.
    */
 
   assert( zm >= 0.0 && zp >= zm && "Zeta-plus >= zeta-minus >= 0.0" );
@@ -2176,7 +2107,6 @@ void FluxCreator::MakeBBox() const
   fLx = fRadius; fLy = fRadius; fLz = fRadius;
 }
 //----------------------------------------------------------------------------
-// Shorthand. Forwards: NEAR --> BEAM, Backwards: BEAM --> NEAR
 TVector3 FluxCreator::ApplyUserRotation( TVector3 vec, bool doBackwards ) const
 {
   double vx = vec.X(), vy = vec.Y(), vz = vec.Z();
@@ -2202,13 +2132,12 @@ TVector3 FluxCreator::ApplyUserRotation( TVector3 vec, bool doBackwards ) const
   return nvec;
 }
 //----------------------------------------------------------------------------
-// Shorthand. Forwards: NEAR --> OTHER, Backwards: OTHER --> NEAR
 TVector3 FluxCreator::ApplyUserRotation( TVector3 vec, TVector3 oriVec, std::vector<double> rotVec, bool doBackwards ) const
 {
   double vx = vec.X(), vy = vec.Y(), vz = vec.Z();
   double ox = oriVec.X(), oy = oriVec.Y(), oz = oriVec.Z();
   
-  vx -= ox; vy -= oy; vz -= oz; // switch so that origin vector is at (0, 0, 0)
+  vx -= ox; vy -= oy; vz -= oz; // make this rotation about detector origin
 
   assert( rotVec.size() == 3 && "3 Euler angles" ); // want 3 Euler angles, otherwise this is unphysical.
   double Ax2 = ( doBackwards ) ? -rotVec.at(2) : rotVec.at(2);
@@ -2228,45 +2157,10 @@ TVector3 FluxCreator::ApplyUserRotation( TVector3 vec, TVector3 oriVec, std::vec
   vy = y * std::cos( Ax1 ) - z * std::sin( Ax1 );
   vz = y * std::sin( Ax1 ) + z * std::cos( Ax1 );
 
+  // back to beam frame
   vx += ox; vy += oy; vz += oz;
   TVector3 nvec( vx, vy, vz );
   return nvec;
-}
-//----------------------------------------------------------------------------
-double FluxCreator::BoostCorrectionStep( TLorentzVector p4par, TLorentzVector p4HNL_rest, 
-					 TVector3 detO, double betaPrev ) const
-{
-  // taking betaPrev as the element (n-1) in a sequence of \beta_{n}, construct the next element.
-  // Construct a rest-frame vector such that, when boosted, it will follow the worldline
-  // with spatial component detO and time component ||detO||/betaPrev
-  // Obtain the boost correction from that.
-
-  TLorentzVector detO_4v;
-  detO_4v.SetXYZT( detO.X(), detO.Y(), detO.Z(), detO.Mag() / betaPrev );
-  LOG( "HNL", pDEBUG ) << "BEFORE boost: " << utils::print::X4AsString( &detO_4v );
-  TVector3 boost_par = p4par.BoostVector();
-  detO_4v.Boost( -boost_par ); // rest frame
-  LOG( "HNL", pDEBUG ) << "AFTER boost: " << utils::print::X4AsString( &detO_4v );
-
-  TVector3 detO_REST_unit = (detO_4v.Vect()).Unit();
-  // This is the rest-frame HNL constrained to point such that its lab-frame transformation
-  // follows the worldline (timeBit, detO) == detO_4v
-  TLorentzVector p4HNL_rest_good( p4HNL_rest.P() * detO_REST_unit.X(),
-				  p4HNL_rest.P() * detO_REST_unit.Y(),
-				  p4HNL_rest.P() * detO_REST_unit.Z(),
-				  p4HNL_rest.E() );
-
-  // boost this into the lab frame
-  TLorentzVector p4HNL_good = p4HNL_rest;
-  p4HNL_good.Boost( boost_par );
-
-  LOG( "HNL", pDEBUG )
-    << "\nLooking at betaPrev = " << betaPrev << " : it is"
-    << "\np4HNL_good = " << utils::print::P4AsString( &p4HNL_good )
-    << "\np4HNL_rest = " << utils::print::P4AsString( &p4HNL_rest );
-
-  if( p4HNL_good.E() < p4HNL_rest.E() ) return 1.0;
-  return p4HNL_good.E() / p4HNL_rest.E();
 }
 //____________________________________________________________________________
 double FluxCreator::CalculateDetectorAcceptanceSAA( TVector3 detO ) const
@@ -2312,19 +2206,7 @@ void FluxCreator::LoadConfig(void)
   this->GetParamVect( "Near2Beam_R", fB2URotation );
   this->GetParamVect( "DetCentre_User", fDetOffset );
 
-  // Read in the \sigma( p + target ) / \sigma( p + target --> Parent )
-  //this->GetParamVect( "ParentPOTScalings", fScales );
-  std::vector<int> scales_pdgs;
-  std::vector<double> scales_vals;
-  this->GetParamVect( "ParentPOTScalings_PDGs", scales_pdgs );
-  this->GetParamVect( "ParentPOTScalings_scales", scales_vals );
-  assert( scales_pdgs.size() == scales_vals.size() && "Each input parent PDG has a frequency scale associated with it" );
-  for( unsigned int i = 0; i < scales_pdgs.size(); i++ ){
-    fScales.insert( std::pair< int, double >( { scales_pdgs.at(i), scales_vals.at(i) } ) );
-    LOG( "HNL", pNOTICE )
-      << "Inserting parent with PDG code " << scales_pdgs.at(i) << " with scale " << scales_vals.at(i);
-  }
-
+  this->GetParamVect( "ParentPOTScalings", fScales );
   this->GetParam( "DoOldFluxCalculation", fDoingOldFluxCalc );
   this->GetParam( "RerollPoints", fRerollPoints );
   this->GetParam( "CollectionRadius", fRadius );
@@ -2350,8 +2232,6 @@ void FluxCreator::LoadConfig(void)
   fBx2 = fDetRotation.at(2);
 
   POTScaleWeight = 1.0;
-  
-  /*
   if( utils::hnl::IsProdKinematicallyAllowed( kHNLProdMuon3Nue ) ) 
     POTScaleWeight = fScales[0]; // all POT contribute
   else if( utils::hnl::IsProdKinematicallyAllowed( kHNLProdPion2Muon ) ||
@@ -2365,7 +2245,6 @@ void FluxCreator::LoadConfig(void)
 	   utils::hnl::IsProdKinematicallyAllowed( kHNLProdKaon3Muon ) ||
 	   utils::hnl::IsProdKinematicallyAllowed( kHNLProdKaon3Electron ) )
     POTScaleWeight = fScales[3]; // only charged kaons contribute
-  */
 
   /*
   LOG( "HNL", pDEBUG )

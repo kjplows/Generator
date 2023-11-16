@@ -159,13 +159,10 @@ namespace genie{
       std::map< genie::hnl::HNLProd_t, double > GetProductionProbs( int parPDG ) const;
       
       // Obtain detector dimensions + position
+      // RETHERE: BBox isn't good enough! But roll with it for now
       void MakeBBox() const;
       TVector3 ApplyUserRotation( TVector3 vec, bool doBackwards = false ) const;
       TVector3 ApplyUserRotation( TVector3 vec, TVector3 oriVec, std::vector<double> rotVec, bool doBackwards = false ) const;
-
-      // Do a single iteration of the boost correction loop
-      double BoostCorrectionStep( TLorentzVector p4par, TLorentzVector p4HNL_rest, 
-				  TVector3 detO, double betaPrev ) const;
       
       // calculate detector acceptance (== solid angle of proj of det onto unit-radius sphere / (4pi))
       // NOTE THIS IS A LAB FRAME (==GEOMETRICAL) ACCEPTANCE!!!!
@@ -173,13 +170,6 @@ namespace genie{
       double CalculateDetectorAcceptanceSAA( TVector3 detO ) const;
       // collimation effect calc, returns HNL_acc / geom_acc
       double CalculateAcceptanceCorrection( TLorentzVector p4par, TLorentzVector p4HNL, double SMECM, double zm, double zp ) const;
-      double AccCorr_Sqrt( double thetalab, double mass, double EPar, double MPar, double ENu ) const;
-      double AccCorr_Denom( double thetalab, double mass, double EPar, double MPar, double ENu ) const;
-      double AccCorr_SolnArgs( double thetalab, double mass, double EPar, double MPar, double ENu,
-			       bool isPos ) const;
-      double AccCorr_Solution( double thetalab, double mass, double EPar, double MPar, double ENu,
-			       bool isPos ) const;
-      double CalculateAcceptanceCorrection_legacy( TLorentzVector p4par, TLorentzVector p4HNL, double SMECM, double zm, double zp ) const;
       static double labangle( double * x, double * par ); // function formula for correction
       // get minimum and maximum deviation from parent momentum to hit detector, [deg]
       double GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool seekingMax ) const;
@@ -304,8 +294,7 @@ namespace genie{
       mutable genie::hnl::FluxContainer fGnmf;
 
       mutable double POTScaleWeight;
-      //mutable std::vector<double> fScales;
-      mutable std::unordered_map<int, double> fScales;
+      mutable std::vector<double> fScales;
       
       mutable bool fDoingOldFluxCalc = false;
       mutable bool fRerollPoints = false;
