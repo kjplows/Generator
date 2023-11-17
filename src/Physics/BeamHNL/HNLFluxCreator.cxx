@@ -377,7 +377,10 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 
   double betaLab = std::min( 1.0, (1 - 1.0 / gamma)/( betaMag * costh_pardet ) ); // noughth guess
   // Guard against very light HNL, where the velocity is essentially 1.
-  if( fMass < 1.0e-3 ) betaLab = 1.0; 
+  if( fMass < 1.0e-3 ) {
+      betaLab = 1.0;
+      boost_correction = 1.0 / ( gamma * ( 1.0 - betaMag * betaLab * costh_pardet ) );
+  }
   
   // Construct a sequence of guesses for the betaLab. Hopefully this converges.
   int iBoost = 0; const int maxIBoost = 10; double prev_boost = -1.0;
