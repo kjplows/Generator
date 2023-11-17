@@ -340,7 +340,8 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 
 // assert production as K+- --> N + mu+-
   assert( fU4l2s.at(1) > 0.0 );
-  if( !utils::hnl::IsProdKinematicallyAllowed( kHNLProdKaon2Muon ) ){
+  if( !utils::hnl::IsProdKinematicallyAllowed( kHNLProdKaon2Muon ) ||
+      std::abs( decay_ptype != kPdgKP ) ){
       this->FillNonsense( iEntry, gnmf ); return gnmf;
   }
   prodChan = kHNLProdKaon2Muon;
@@ -374,6 +375,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   // decay channel specified, now time to make kinematics
   TLorentzVector p4HNL_REST = HNLEnergy( prodChan, p4par ); 
   // this is a random direction rest-frame HNL. 
+<<<<<<< HEAD
   fECM = p4HNL_REST.E();
 
   // first guess: betaHNL ~= 1 . Do the Lorentz boosts knocking betaHNL downwards until we hit fTvec
@@ -391,12 +393,37 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   }
   double betaLab = std::min( 1.0, (1 - 1.0 / gamma)/( betaMag * costh_pardet ) ); // noughth guess
 
+=======
+  fECM = p4HNL_rest.E();
+
+  // first guess: betaHNL ~= 1 . Do the Lorentz boosts knocking betaHNL downwards until we hit det centre
+  double betaMag = boost_beta.Mag();
+  double gamma   = std::sqrt( 1.0 / ( 1.0 - betaMag * betaMag ) );
+
+  double costh_pardet = 0.0;
+  double boost_correction = 1.0;
+  
+  if( parentMomentum > 0.0 ){
+      costh_pardet = ( p4par.X() * detO.X() +
+		       p4par.Y() * detO.Y() +
+		       p4par.Z() * detO.Z() ) / ( parentMomentum * detO.Mag() );
+  }
+  if( costh_pardet < -1.0 ) costh_pardet = -1.0;
+  if( costh_pardet > 1.0 ) costh_pardet = 1.0;
+
+  double betaLab = std::min( 1.0, (1 - 1.0 / gamma)/( betaMag * costh_pardet ) ); // noughth guess
+  
+>>>>>>> dd18258963c611d508af13202d1cdd11596440d2
   // Construct a sequence of guesses for the betaLab. Hopefully this converges.
   int iBoost = 0; const int maxIBoost = 10; double prev_boost = -1.0;
   while( iBoost < maxIBoost && betaLab <= 1.0 && betaLab >= 0.0 && boost_correction > 0.0 && 
 	 prev_boost != boost_correction ){
     prev_boost = boost_correction;
+<<<<<<< HEAD
     boost_correction = this->BoostCorrectionStep( p4par, p4HNL_REST, detO, betaLab );
+=======
+    boost_correction = this->BoostCorrectionStep( p4par, p4HNL_rest, detO, betaLab );
+>>>>>>> dd18258963c611d508af13202d1cdd11596440d2
 
     LOG( "HNL", pDEBUG )
       << "\nWorking with boost correction step " << iBoost
@@ -436,6 +463,15 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   if( absolutePoint.X() == 999.9 && absolutePoint.Y() == 999.9 && absolutePoint.Z() == 999.9 ){
     this->FillNonsense( iEntry, gnmf ); return gnmf;
   }
+<<<<<<< HEAD
+=======
+  
+  TVector3 fRVec_beam( absolutePoint.X() - FDx, absolutePoint.Y() - FDy, absolutePoint.Z() - FDz ); // NEAR, m
+  // rotate it and get unit
+  TVector3 fRVec_unit = (this->ApplyUserRotation( fRVec_beam )).Unit(); // BEAM, m/m
+  TVector3 fRVec_actualBeam = this->ApplyUserRotation( fRVec_beam ); // BEAM, m
+  TVector3 fRVec_user = this->ApplyUserRotation( fRVec_beam, dumori, fDetRotation, false ); // USER m
+>>>>>>> dd18258963c611d508af13202d1cdd11596440d2
   
   TVector3 fRVec( absolutePoint.X() - fDx, absolutePoint.Y() - fDy, absolutePoint.Z() - fDz ); // m
   TVector3 fRVec_unit = fRVec.Unit(); // m/m
@@ -473,9 +509,24 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 				  -p4HNL_REST.Py(), -p4HNL_REST.Pz() );
 
   // update polarisation
+<<<<<<< HEAD
   TLorentzVector p4Lep_good = p4Lep_REST_good; // in parent rest frame
   p4Lep_good.Boost( boost_beta ); // rest --> lab
   TVector3 boost_beta_HNL = p4HNL.BoostVector();
+=======
+  // now make a TLorentzVector in lab frame to boost back to rest. 
+  double timeBit = detO.Mag(); // / units::kSpeedOfLight ; // s
+  TLorentzVector detO_4v( detO.X(), detO.Y(), detO.Z(), timeBit ); detO_4v.Boost( -boost_beta ); // BEAM with BEAM
+  TVector3 detO_rest_unit = (detO_4v.Vect()).Unit();
+  double pLep_rest = std::sqrt( fLPx*fLPx + fLPy*fLPy + fLPz*fLPz );
+  TLorentzVector p4Lep_rest_good( -1.0 * pLep_rest * detO_rest_unit.X(),
+				  -1.0 * pLep_rest * detO_rest_unit.Y(),
+				  -1.0 * pLep_rest * detO_rest_unit.Z(),
+				  fLPE );
+  TLorentzVector p4Lep_good = p4Lep_rest_good; // in parent rest frame
+  p4Lep_good.Boost( boost_beta ); // in lab frame
+  TVector3 boost_beta_HNL = p4HNL_near.BoostVector();
+>>>>>>> dd18258963c611d508af13202d1cdd11596440d2
   p4Lep_good.Boost( -boost_beta_HNL ); // in HNL rest frame
 
   fLPx = ( fixPol ) ? fFixedPolarisation.at(0) : p4Lep_good.Px() / p4Lep_good.P();
@@ -505,7 +556,11 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   fSMECM = decay_necm;
   fZm = zm; fZp = zp;
 
+<<<<<<< HEAD
   double accCorr = this->CalculateAcceptanceCorrection( p4par, p4HNL_REST, decay_necm, zm, zp );
+=======
+  double accCorr = this->CalculateAcceptanceCorrection( p4par, p4HNL_rest, decay_necm, zm, zp );
+>>>>>>> dd18258963c611d508af13202d1cdd11596440d2
   //if( !fDoingOldFluxCalc ){
   if( fRerollPoints ){
     // if accCorr == 0 then we must ~bail and find the next event.~ 
@@ -521,9 +576,20 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
       // find random point in BBox and force momentum to point to that point
       // first, separation in beam frame
       absolutePoint = this->PointToRandomPointInBBox( ); // always NEAR, m
+<<<<<<< HEAD
       fRVec.SetXYZ( absolutePoint.X() - fTvec.X(),
 			 absolutePoint.Y() - fTvec.Y(),
 			 absolutePoint.Z() - fTvec.Z() );
+=======
+      /*
+      fRVec_beam.SetXYZ( absolutePoint.X() - (fCx + fDetOffset.at(0)),
+			 absolutePoint.Y() - (fCy + fDetOffset.at(1)),
+			 absolutePoint.Z() - (fCz + fDetOffset.at(2)) );
+      */
+      fRVec_beam.SetXYZ( absolutePoint.X() - (FDx),
+			 absolutePoint.Y() - (FDy),
+			 absolutePoint.Z() - (FDz) );
+>>>>>>> dd18258963c611d508af13202d1cdd11596440d2
       // rotate it and get unit
       fRVec_unit = (this->ApplyUserRotation( fRVec )).Unit();
       // force HNL to point along this direction
@@ -1838,6 +1904,42 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
     << "\nmeaning zm = " << zm << ", zp = " << zp << " [deg]";
 }
 //----------------------------------------------------------------------------
+double FluxCreator::BoostCorrectionStep( TLorentzVector p4par, TLorentzVector p4HNL_rest, 
+					 TVector3 detO, double betaPrev ) const
+{
+  // taking betaPrev as the element (n-1) in a sequence of \beta_{n}, construct the next element.
+  // Construct a rest-frame vector such that, when boosted, it will follow the worldline
+  // with spatial component detO and time component ||detO||/betaPrev
+  // Obtain the boost correction from that.
+
+  TLorentzVector detO_4v;
+  detO_4v.SetXYZT( detO.X(), detO.Y(), detO.Z(), detO.Mag() / betaPrev );
+  LOG( "HNL", pDEBUG ) << "BEFORE boost: " << utils::print::X4AsString( &detO_4v );
+  TVector3 boost_par = p4par.BoostVector();
+  detO_4v.Boost( -boost_par ); // rest frame
+  LOG( "HNL", pDEBUG ) << "AFTER boost: " << utils::print::X4AsString( &detO_4v );
+
+  TVector3 detO_REST_unit = (detO_4v.Vect()).Unit();
+  // This is the rest-frame HNL constrained to point such that its lab-frame transformation
+  // follows the worldline (timeBit, detO) == detO_4v
+  TLorentzVector p4HNL_rest_good( p4HNL_rest.P() * detO_REST_unit.X(),
+				  p4HNL_rest.P() * detO_REST_unit.Y(),
+				  p4HNL_rest.P() * detO_REST_unit.Z(),
+				  p4HNL_rest.E() );
+
+  // boost this into the lab frame
+  TLorentzVector p4HNL_good = p4HNL_rest;
+  p4HNL_good.Boost( boost_par );
+
+  LOG( "HNL", pDEBUG )
+    << "\nLooking at betaPrev = " << betaPrev << " : it is"
+    << "\np4HNL_good = " << utils::print::P4AsString( &p4HNL_good )
+    << "\np4HNL_rest = " << utils::print::P4AsString( &p4HNL_rest );
+
+  if( p4HNL_good.E() < p4HNL_rest.E() ) return 1.0;
+  return p4HNL_good.E() / p4HNL_rest.E();
+}
+//----------------------------------------------------------------------------
 double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorentzVector p4HNL,
 						   double SMECM, double zm, double zp ) const
 {
@@ -1875,6 +1977,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
   double tHigh2 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, false );
   double tLow2 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, false );
 
+<<<<<<< HEAD
   /* 
    * Now notice there are three cases. 
    Either zm >= max (labangle), in which case all the solutions hit zero. Zero acceptance.
@@ -1886,6 +1989,9 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, TLorent
   if( tHigh1 == 0 && tLow2 == 0 ){
     range1 = std::abs( tHigh2 - tLow1 );
   }
+=======
+  double range1 = std::abs( tHigh1 - tLow1 ) + std::abs( tHigh2 - tLow2 );
+>>>>>>> dd18258963c611d508af13202d1cdd11596440d2
 
   LOG( "HNL", pDEBUG ) 
     << "\nArgs: zm, zp, M, ECM, SMECM, EPar, MPar = "
