@@ -329,6 +329,7 @@ int TestFluxFromDk2nu()
   TTree * outTree = new TTree( "outTree", "Flux information tree" );
   double Enu = -9999.9, wgt = -9999.9;
   int parPDG = -999, modeType = -999;
+  double EBLab = -999.9, EBCorr = -999.9;
 
   FluxContainer vgnmf;
   FluxContainer * ptGnmf = new FluxContainer();
@@ -340,6 +341,8 @@ int TestFluxFromDk2nu()
   outTree->Branch( "Weight", &wgt, "Weight/D" );
   outTree->Branch( "Parent", &parPDG, "Parent/I" );
   outTree->Branch( "DecayMode", &modeType, "DecayMode/I" );
+  outTree->Branch( "EBetaLab", &EBLab, "EBetaLab/D" );
+  outTree->Branch( "EBetaCorr", &EBCorr, "EBetaCorr/D" );
   TBranch * fluxBranch = outTree->Branch( "Flux", "genie::hnl::FluxContainer", &vgnmf, 32000, 1 );
   fluxBranch->SetAutoDelete( kFALSE );
 
@@ -495,6 +498,9 @@ int TestFluxFromDk2nu()
 
 	Enu = p4HNL.E();
 	wgt = acceptance * nimpwt;
+
+	EBLab  = gnmf->energy_from_betaLab;
+	EBCorr = gnmf->energy_from_boostCorr;
 	
 	// fill the histos!
 	hEAll.Fill( p4HNL.E(), acceptance * nimpwt );

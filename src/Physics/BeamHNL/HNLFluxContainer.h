@@ -109,7 +109,11 @@ namespace genie{
 
       mutable double nimpwt;             ///< Weight of parent
 
-      ClassDef(FluxContainer, 1)
+      // an extra couple of branches for validation of the betaLab
+      mutable double energy_from_betaLab;
+      mutable double energy_from_boostCorr;
+
+      ClassDef(FluxContainer, 2)
       
 
     }; // class FluxContainer
