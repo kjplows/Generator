@@ -541,7 +541,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   
   // also have to factor in boost correction itself... that's same as energy boost correction squared
   // which means a true acceptance of...
-  double acceptance = acc_saa * boost_correction * boost_correction * accCorr;
+  double acceptance = acc_saa * boost_correction * boost_correction * std::abs(accCorr);
 
   // finally, a delay calculation
   // if SMv arrives at t=0, then HNL arrives at t = c * ( 1 - beta_HNL ) / L
@@ -1929,6 +1929,8 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par,
   // And get the acceptance correction, which is just the ratio of inverse derivatives
   accCorr = ( isForwards ) ? invDer_HP / invDer_SM : invDer_HM / invDer_SM;
 
+  if( !isForwards ) accCorr *= -1.0;
+
   /*
   std::string fdstring = (isForwards) ? "FORWARDS" : "BACKWARDS";
   LOG( "HNL", pDEBUG ) 
@@ -2069,43 +2071,41 @@ double FluxCreator::Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVe
   double gamma = p4par.E() / p4par.M();
   double beta  = p4par.P() / p4par.E();
 
+  if( theta == 90.0 ) return TMath::ACos( -beta * E / q ) * TMath::RadToDeg();
+
   double y = TMath::Tan( theta * TMath::DegToRad() );
   
   // Answer as calculated by Mathematica. This is Cos[Theta]
-  double constTerm = -1.0 * q * E * beta * gamma * gamma * y * y;
+  int constMod = backwards ? 1 : -1;
+  double constTerm = constMod * beta * E * std::pow( gamma * y, 2.0 );
   
-  double sqrt_1 = std::pow( q, 4.0 );
-  double sqrt_2 = std::pow( q * q * y * gamma, 2.0 );
-  double sqrt_3 = std::pow( q * y * gamma * beta * E, 2.0 );
-  double sqrt   = sqrt_1 + sqrt_2 - sqrt_3;
+  double sqrt_1  = std::pow( q, 2.0 );
+  double sqrt_2a = std::pow( y * gamma, 2.0 );
+  double sqrt_2b = q * q - std::pow( beta * E, 2.0 );
+  double sqrt   = sqrt_1 + sqrt_2a * sqrt_2b;
   if( sqrt < 0.0 ) sqrt = 0.0;
   sqrt = std::sqrt( sqrt );
 
-  double denom = q * q * (1.0 + y * y * gamma * gamma);
+  double denom = q * (1.0 + y * y * gamma * gamma);
 
   double c1 = (constTerm + sqrt) / denom;
   double c2 = (constTerm - sqrt) / denom; if( c2 == c1 ) c2 = -1.0;
 
-  double inv1 = TMath::ACos( c1 ); double inv2 = TMath::ACos( c2 );
-
-  inv1 *= TMath::RadToDeg();
-  inv2 *= TMath::RadToDeg();
-
-  inv = backwards ? 
-    std::min( 180.0, std::max( inv1, inv2 ) ) : 
-    std::max( 0.0, std::min( inv1, inv2 ) ) ;
+  inv = ( theta <= 90.0 ) ? TMath::ACos( c1 ) : TMath::ACos( c2 );
+  inv = backwards ? 180.0 - inv * TMath::RadToDeg() : inv * TMath::RadToDeg() ;
   
+  /*
   LOG( "HNL", pDEBUG )
     << "\nArgs: q, E = " << q << ", " << E 
     << "\ngamma, beta = " << gamma << ", " << beta
     << "\ntheta, y = " << theta << ", " << y
     << "\nconstTerm = " << constTerm
-    << "\nsqrt1,2,3 = " << sqrt_1 << ", " << sqrt_2 << ", " << sqrt_3
+    << "\nsqrt1,2a,2b = " << sqrt_1 << ", " << sqrt_2a << ", " << sqrt_2b
     << "\nsqrt      = " << sqrt
     << "\ndenom     = " << denom
-    << "\ninv1, inv2= " << inv1 << ", " << inv2
     << "\nbackwards = " << static_cast<int>( backwards )
     << "\n==>answer = " << inv;
+  */
 
   return inv;
 }
@@ -2165,8 +2165,10 @@ double FluxCreator::Inverted_Fcn_Numerical( double theta, TLorentzVector p4par, 
 
   inv = fFineHNL->GetX( theta );
 
+  /*
   LOG( "HNL", pDEBUG )
     << "\nNumerical arg = " << inv;
+  */
 
   return inv;
 }
