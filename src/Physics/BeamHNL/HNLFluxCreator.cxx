@@ -106,7 +106,8 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 	double tVtx = fGnmf.delay; // ns
 	TLorentzVector pVtx( xVtxNear.X() * units::m / units::cm,
 			     xVtxNear.Y() * units::m / units::cm,
-			     xVtxNear.Z() * units::m / units::cm, tVtx ); // cm ns NEAR
+			     xVtxNear.Z() * units::m / units::cm, 
+			     tVtx * units::ns / units::s ); // cm s NEAR
 	evrec->SetVertex( pVtx ); // HNL production vertex. NOT where HNL decays to visible FS.
 	
 	// construct Particle(0). Don't worry about daughter links at this stage.
@@ -546,19 +547,18 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   // finally, a delay calculation
   // if SMv arrives at t=0, then HNL arrives at t = c * ( 1 - beta_HNL ) / L
 
-  double detDist = std::sqrt( detO.X() * detO.X() +
-			      detO.Y() * detO.Y() +
-			      detO.Z() * detO.Z() ); // m
+  double detDist = fRVec_beam.Mag(); 
   const double kSpeedOfLightNs = units::kSpeedOfLight * units::ns / units::s; // m / ns
   double delay = detDist / kSpeedOfLightNs * ( 1.0 / betaHNL - 1.0 );
-  delay *= units::ns / units::s;
+  //delay *= units::ns / units::s;
 
-  /*
   LOG( "HNL", pDEBUG )
+    << "\nstart at ( " << FDx << ", " << FDy << ", " << FDz << "), end at "
+    << utils::print::Vec3AsString( &absolutePoint ) << " [m]"
     << "\ndetDist = " << detDist << " [m]"
+    << "\nEHNL = " << EHNL << " [GeV], MHNL = " << MHNL << " [GeV], PHNL = " << PHNL << " [GeV]"
     << "\nbetaHNL = " << betaHNL
     << "\ndelay = " << delay << " [ns]";
-  */
   
   // write 4-position all this happens at
 
@@ -1894,11 +1894,18 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par,
   if( tHigh2 <= 0.0 && tLow2 > 0.0 ) tHigh2 = 180.0; // wraps around to -0
 
   if( tLow1 == 0.0 && tHigh1 == 0.0 ) return 0.0; // no point in going further!
-  
-  // also check if the theta is reachable by the HNL.
-  if( ( theta >= 0.0 && theta < tLow1 ) ||
-      ( theta <= 180.0 && theta > std::max( tHigh1, tLow2 ) ) ) return 0.0;
 
+  // Check if the theta (lab) is reachable by the HNL.
+  double thetaLab_low  = this->Forwards_Fcn(tLow1, p4par, p4HNL);
+  double thetaLab_high = this->Forwards_Fcn(tHigh1, p4par, p4HNL);
+  LOG( "HNL", pDEBUG )
+    << "On forwards fcn: \nfrom arg = "
+    << tLow1 << " --> " << thetaLab_low
+    << "\nfrom arg = " << tHigh1 << " --> " << thetaLab_high
+    << "\ncf. the actual lab theta = " << theta;
+  if( ( theta >= 0.0 && theta < thetaLab_low ) ||
+      ( theta <= 180.0 && theta > thetaLab_high ) ) return 0.0;
+  
   // We have been given a lab-frame emission angle. Get the pre-image of this function
   TLorentzVector SMVector( 0.0, 0.0, SMECM, SMECM );
   double invVal_SM = this->Inverted_Fcn( theta, p4par, SMVector, false );
@@ -1931,7 +1938,6 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par,
 
   if( !isForwards ) accCorr *= -1.0;
 
-  /*
   std::string fdstring = (isForwards) ? "FORWARDS" : "BACKWARDS";
   LOG( "HNL", pDEBUG ) 
     << "\nArgs: p4par = " << utils::print::P4AsString( &p4par )
@@ -1946,7 +1952,6 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par,
     << "\nrandom number = " << ratio << ", emission = " << fdstring
     << "\nthetaRest, cosTheta = " << thetaRest << ", " << cosTheta
     << "\nEHNL_LAB = " << EHNL_LAB << ", accCorr = " << accCorr;
-  */
   
   return accCorr;
 }
@@ -2052,6 +2057,30 @@ double FluxCreator::AccCorr_Solution( double thetalab, double mass,
   return -1.0; // you should never see this.
 }
 //----------------------------------------------------------------------------
+double FluxCreator::Forwards_Fcn( double Theta, TLorentzVector p4par, TLorentzVector p4HNL ) const
+{
+  /*
+   * This method calculates the lab-frame emission angle from a rest-frame emission angle.
+   *
+   * In the following y = tan\theta
+   */
+
+  double ThetaRad = Theta * TMath::DegToRad();
+  double ct = TMath::Cos( ThetaRad ); double st = TMath::Sin( ThetaRad );
+
+  double q = p4HNL.P(); // rest frame momentum
+  double E = p4HNL.E(); // rest frame energy
+  
+  double gamma = p4par.E() / p4par.M();
+  double beta  = p4par.P() / p4par.E();
+
+  double thetaRad = TMath::ATan( q * st / ( gamma * ( beta * E + q * ct ) ) );
+  double theta = thetaRad * TMath::RadToDeg();
+  if( theta < 0.0 ) theta = 180.0 - theta;
+  
+  return theta;
+}
+//----------------------------------------------------------------------------
 double FluxCreator::Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVector p4HNL, bool backwards ) const
 {
   /*
@@ -2094,7 +2123,6 @@ double FluxCreator::Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVe
   inv = ( theta <= 90.0 ) ? TMath::ACos( c1 ) : TMath::ACos( c2 );
   inv = backwards ? 180.0 - inv * TMath::RadToDeg() : inv * TMath::RadToDeg() ;
   
-  /*
   LOG( "HNL", pDEBUG )
     << "\nArgs: q, E = " << q << ", " << E 
     << "\ngamma, beta = " << gamma << ", " << beta
@@ -2105,7 +2133,6 @@ double FluxCreator::Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVe
     << "\ndenom     = " << denom
     << "\nbackwards = " << static_cast<int>( backwards )
     << "\n==>answer = " << inv;
-  */
 
   return inv;
 }
@@ -2194,7 +2221,6 @@ double FluxCreator::Derivative( double theta, TLorentzVector p4par, TLorentzVect
 
   der = numer / denom;
 
-  /*
   LOG( "HNL", pDEBUG )
     << "\nArgs: q, E = " << q << ", " << E 
     << "\ngamma, beta = " << gamma << ", " << beta
@@ -2202,7 +2228,6 @@ double FluxCreator::Derivative( double theta, TLorentzVector p4par, TLorentzVect
     << "\nterm1, term2 = " << term1 << ", " << term2
     << "\nnumer, denom = " << numer << ", " << denom
     << "\n==> answer = " << der;
-  */
 
   return der;
 }

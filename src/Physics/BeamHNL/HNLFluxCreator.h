@@ -178,6 +178,7 @@ namespace genie{
 			       bool isPos ) const;
       double AccCorr_Solution( double thetalab, double mass, double EPar, double MPar, double ENu,
 			       bool isPos ) const;
+      double Forwards_Fcn( double Theta, TLorentzVector p4par, TLorentzVector p4HNL ) const;
       double Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVector p4HNL, bool backwards ) const;
       double Inverted_Fcn_Numerical( double theta, TLorentzVector p4par, TLorentzVector p4HNL, bool backwards ) const;
       double Derivative( double theta, TLorentzVector p4par, TLorentzVector p4HNL ) const;
