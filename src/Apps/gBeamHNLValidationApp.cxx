@@ -326,7 +326,7 @@ int TestFluxFromDk2nu()
   __attribute__((unused)) TGeoBBox *  box = (TGeoBBox *)ts;
 
   TFile * fout = TFile::Open( foutName.c_str(), "RECREATE" );
-  TTree * outTree = new TTree( "outTree", "Flux information tree" );
+  //TTree * outTree = new TTree( "outTree", "Flux information tree" );
   double Enu = -9999.9, wgt = -9999.9;
   int parPDG = -999, modeType = -999;
   double EBLab = -999.9, EBCorr = -999.9, openingAngle = -999.9;
@@ -337,6 +337,7 @@ int TestFluxFromDk2nu()
   delete ptGnmf;
   FillFluxNonsense( vgnmf );
 
+  /*
   outTree->Branch( "Energy", &Enu, "Energy/D" );
   outTree->Branch( "Weight", &wgt, "Weight/D" );
   outTree->Branch( "Parent", &parPDG, "Parent/I" );
@@ -346,8 +347,9 @@ int TestFluxFromDk2nu()
   outTree->Branch( "OpeningAngle", &openingAngle, "OpeningAngle/D" );
   TBranch * fluxBranch = outTree->Branch( "Flux", "genie::hnl::FluxContainer", &vgnmf, 32000, 1 );
   fluxBranch->SetAutoDelete( kFALSE );
+  */
 
-  TH1D hEAll, hEPion, hEKaon, hEMuon, hENeuk;
+  TH1D hEAll, hEPiP, hEPiM, hEKP, hEKM, hEMuP, hEMuM, hENeuk;
   TH1D hPop, hImpwt;
   TH1D hAcceptanceCorr, hAcceptance, hAcceptNoBCorr;
   TH3D hProdVtxPos;
@@ -355,11 +357,18 @@ int TestFluxFromDk2nu()
   TH1D hBAll, hBPion, hBKaon, hBMuon, hBNeuk;
   TH1D hParamSpace; // to store mass + couplings
 
-  hEAll  = TH1D( "hEAll",  "HNL energy - all parents", 1000, 0., 100. );
-  hEPion = TH1D( "hEPion", "HNL energy - pion parent", 1000, 0., 100. );
-  hEKaon = TH1D( "hEKaon", "HNL energy - kaon parent", 1000, 0., 100. );
-  hEMuon = TH1D( "hEMuon", "HNL energy - muon parent", 1000, 0., 100. );
-  hENeuk = TH1D( "hENeuk", "HNL energy - neuk parent", 1000, 0., 100. );
+  // Add vector of parent kinematics, for each parent species
+  TH2D hPxPyAll, hPxPyPiP, hPxPyPiM, hPxPyKP, hPxPyKM, hPxPyMuP, hPxPyMuM, hPxPyNeuk;
+  TH2D hPTPzAll, hPTPzPiP, hPTPzPiM, hPTPzKP, hPTPzKM, hPTPzMuP, hPTPzMuM, hPTPzNeuk;
+
+  hEAll  = TH1D( "hEAll",  "HNL energy - all parents",   1000, 0., 100. );
+  hEPiP  = TH1D( "hEPiP",  "HNL energy - pion + parent", 1000, 0., 100. );
+  hEPiM  = TH1D( "hEPiM",  "HNL energy - pion - parent", 1000, 0., 100. );
+  hEKP   = TH1D( "hEKP",   "HNL energy - kaon + parent", 1000, 0., 100. );
+  hEKM   = TH1D( "hEKM",   "HNL energy - kaon - parent", 1000, 0., 100. );
+  hEMuP  = TH1D( "hEMuP",  "HNL energy - muon + parent", 1000, 0., 100. );
+  hEMuM  = TH1D( "hEMuM",  "HNL energy - muon - parent", 1000, 0., 100. );
+  hENeuk = TH1D( "hENeuk", "HNL energy - neuk parent",   1000, 0., 100. );
 
   hPop   = TH1D( "hPop",   "HNL populations in energy bins", 1000, 0., 100. );
   hImpwt = TH1D( "hImpwt", "HNL importance weights", 1000, 0., 100. );
@@ -382,6 +391,40 @@ int TestFluxFromDk2nu()
   hBNeuk = TH1D( "hBNeuk", "Boost beta - neuk parent", 100, 0., 1. );
 
   hParamSpace = TH1D( "hParamSpace", "Parameter space", 5, 0., 5. );
+
+  hPxPyAll  = TH2D( "hPxPyAll",  "Parent Px [BEAM] vs Py [BEAM] - all parents", 
+		    100, -1.0, 1.0, 100, -1.0, 1.0 );
+  hPxPyPiP  = TH2D( "hPxPyPiP",  "Parent Px [BEAM] vs Py [BEAM] - pion + parent", 
+		    100, -1.0, 1.0, 100, -1.0, 1.0 );
+  hPxPyPiM  = TH2D( "hPxPyPiM",  "Parent Px [BEAM] vs Py [BEAM] - pion - parent", 
+		    100, -1.0, 1.0, 100, -1.0, 1.0 );
+  hPxPyKP   = TH2D( "hPxPyKP",   "Parent Px [BEAM] vs Py [BEAM] - kaon + parent", 
+		    100, -1.0, 1.0, 100, -1.0, 1.0 );
+  hPxPyKM   = TH2D( "hPxPyKM",   "Parent Px [BEAM] vs Py [BEAM] - kaon - parent", 
+		    100, -1.0, 1.0, 100, -1.0, 1.0 );
+  hPxPyMuP  = TH2D( "hPxPyMuP",  "Parent Px [BEAM] vs Py [BEAM] - muon + parent", 
+		    100, -1.0, 1.0, 100, -1.0, 1.0 );
+  hPxPyMuM  = TH2D( "hPxPyMuM",  "Parent Px [BEAM] vs Py [BEAM] - muon - parent", 
+		    100, -1.0, 1.0, 100, -1.0, 1.0 );
+  hPxPyNeuk = TH2D( "hPxPyNeuk", "Parent Px [BEAM] vs Py [BEAM] - neuk parent", 
+		    100, -1.0, 1.0, 100, -1.0, 1.0 );
+
+  hPTPzAll  = TH2D( "hPTPzAll",  "Parent PT [BEAM] vs Pz [BEAM] - all parents", 
+		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
+  hPTPzPiP  = TH2D( "hPTPzPiP",  "Parent PT [BEAM] vs Pz [BEAM] - pion + parent", 
+		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
+  hPTPzPiM  = TH2D( "hPTPzPiM",  "Parent PT [BEAM] vs Pz [BEAM] - pion - parent", 
+		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
+  hPTPzKP   = TH2D( "hPTPzKP",   "Parent PT [BEAM] vs Pz [BEAM] - kaon + parent", 
+		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
+  hPTPzKM   = TH2D( "hPTPzKM",   "Parent PT [BEAM] vs Pz [BEAM] - kaon - parent", 
+		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
+  hPTPzMuP  = TH2D( "hPTPzMuP",  "Parent PT [BEAM] vs Pz [BEAM] - muon + parent", 
+		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
+  hPTPzMuM  = TH2D( "hPTPzMuM",  "Parent PT [BEAM] vs Pz [BEAM] - muon - parent", 
+		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
+  hPTPzNeuk = TH2D( "hPTPzNeuk", "Parent PT [BEAM] vs Pz [BEAM] - neuk parent", 
+		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
 
   TLorentzVector p4HNL;
   TLorentzVector x4HNL;
@@ -495,7 +538,7 @@ int TestFluxFromDk2nu()
 	nPOT = 1.0; // = gnmf->norig;
 
 	// fill tree
-	outTree->Fill();
+	//outTree->Fill();
 
 	Enu = p4HNL.E();
 	wgt = acceptance * nimpwt;
@@ -507,6 +550,33 @@ int TestFluxFromDk2nu()
 	TVector3 startPoint = gnmf->startPoint;
 	TVector3 endPoint   = gnmf->targetPoint;
 	openingAngle = endPoint.Angle(startPoint) * TMath::RadToDeg();
+
+	// let's get the parent momentum too
+	TVector3 p3par = p4par.Vect(); // NEAR coords
+
+	// rotate to BEAM coords. Extrinsic Euler X-Z-X
+	double ppx = p3par.X(), ppy = p3par.Y(), ppz = p3par.Z();
+	double ax1 = gCfgUserAx1, ax2 = gCfgUserAx2, az = gCfgUserAz;
+	
+	// Ax2 first
+	ppy = ppy * std::cos( ax2 ) - ppz * std::sin( ax2 );
+	ppz = ppy * std::sin( ax2 ) + ppz * std::cos( ax2 );
+	// then Az
+	ppx = ppx * std::cos( az ) - ppy * std::sin( az );
+	ppy = ppx * std::sin( az ) + ppy * std::cos( az );
+	// Ax1 last
+	ppy = ppy * std::cos( ax1 ) - ppz * std::sin( ax1 );
+	ppz = ppy * std::sin( ax1 ) + ppz * std::cos( ax1 );
+	
+	TVector3 p3par_BEAM( ppx, ppy, ppz );
+	double pTpar_BEAM = std::sqrt( ppx * ppx + ppy * ppy );
+
+	/*
+	LOG( "gevald_hnl", pDEBUG )
+	  << "\nRotated by vector: ( " << ax1 << ", " << az << ", " << ax2 << " )"
+	  << "\nPre-rotation  NEAR vector: " << utils::print::Vec3AsString( &p3par )
+	  << "\nPost-rotation BEAM vector: " << utils::print::Vec3AsString( &p3par_BEAM );
+	*/
 	
 	// fill the histos!
 	hEAll.Fill( p4HNL.E(), acceptance * nimpwt );
@@ -518,23 +588,52 @@ int TestFluxFromDk2nu()
 	hAcceptanceCorr.Fill( accCorr, nimpwt );
 	hAcceptance.Fill( p4HNL.E(), nimpwt * acceptance );
 	hAcceptNoBCorr.Fill( p4HNL.E(), nimpwt * acceptance / ( bCorr * bCorr ) );
+
+	hPxPyAll.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
+	hPTPzAll.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	
 	switch( parPDG ){
 	case kPdgPiP:
-	  hEPion.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hEPiP.Fill( p4HNL.E(), acceptance * nimpwt ); 
 	  hBPion.Fill( betaMag, nimpwt );
+	  hPxPyPiP.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
+	  hPTPzPiP.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
+	  break;
+	case kPdgPiM:
+	  hEPiM.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hBPion.Fill( betaMag, nimpwt );
+	  hPxPyPiM.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
+	  hPTPzPiM.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	  break;
 	case kPdgKP:
-	  hEKaon.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hEKP.Fill( p4HNL.E(), acceptance * nimpwt ); 
 	  hBKaon.Fill( betaMag, nimpwt );
+	  hPxPyKP.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
+	  hPTPzKP.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
+	  break;
+	case kPdgKM:
+	  hEKM.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hBKaon.Fill( betaMag, nimpwt );
+	  hPxPyKM.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
+	  hPTPzKM.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	  break;
 	case kPdgK0L:
 	  hENeuk.Fill( p4HNL.E(), acceptance * nimpwt ); 
 	  hBNeuk.Fill( betaMag, nimpwt );
+	  hPxPyNeuk.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
+	  hPTPzNeuk.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	  break;
 	case kPdgMuon:
-	  hEMuon.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hEMuM.Fill( p4HNL.E(), acceptance * nimpwt ); 
 	  hBMuon.Fill( betaMag, nimpwt );
+	  hPxPyMuM.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
+	  hPTPzMuM.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
+	  break;
+	case kPdgAntiMuon:
+	  hEMuP.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hBMuon.Fill( betaMag, nimpwt );
+	  hPxPyMuP.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
+	  hPTPzMuP.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	  break;
 	}
 	
@@ -577,7 +676,7 @@ int TestFluxFromDk2nu()
   hParamSpace.SetBinContent( 4, gCfgTCoupling );
   hParamSpace.SetBinContent( 5, nPOT );
 
-  outTree->Write();
+  //outTree->Write();
   fout->Write();
   fout->Close();
 
