@@ -365,6 +365,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   // Choose a random point in the detector to calculate the flux at for this entry
   TVector3 absolutePoint = this->PointToRandomPointInBBox( ); // in NEAR coords, m
   if( absolutePoint.X() == 999.9 && absolutePoint.Y() == 999.9 && absolutePoint.Z() == 999.9 ){
+    LOG( "HNL", pDEBUG ) << "Nonsense point, not proceeding";
     this->FillNonsense( iEntry, gnmf ); return gnmf;
   }
   
@@ -412,6 +413,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   }
 
   if( zm == -999.9 && zp == 999.9 ){
+    LOG( "HNL", pDEBUG ) << "Nonsense ang-dev zm, zp, not proceeding";
     this->FillNonsense( iEntry, gnmf ); return gnmf;
   }
 
@@ -422,6 +424,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   }
   
   // Get the acceptance correction now. It will also give the correct energy of the HNL.
+  LOG( "HNL", pDEBUG ) << "Trying theta = " << thetaLab << "...";
   double accCorr = this->CalculateAcceptanceCorrection( p4par, p4HNL_rest, decay_necm, zm, zp, thetaLab, EHNL );
   if( fRerollPoints ){
     // if accCorr == 0 then we must ~bail and find the next event.~ 
@@ -463,6 +466,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
       }
       
       if( zm == -999.9 && zp == 999.9 ){
+	LOG( "HNL", pDEBUG ) << "Nonsense ang-dev zm, zp, not proceeding";
 	this->FillNonsense( iEntry, gnmf ); return gnmf;
       }
       
@@ -473,11 +477,13 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
       }
       
       // and the acceptance correction is...
+      LOG( "HNL", pDEBUG ) << "Trying theta = " << thetaLab << "...";
       accCorr = this->CalculateAcceptanceCorrection( p4par_near, p4HNL_rest, decay_necm, zm, zp, thetaLab, EHNL );
       iAccFail++;
     }
   }
   if( accCorr == 0.0 ){ // NOW we can give up and return.
+    LOG( "HNL", pDEBUG ) << "accCorr == 0.0, not proceeding";
     this->FillNonsense( iEntry, gnmf ); return gnmf;
   }
 
@@ -1830,11 +1836,13 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
   double minusDen = startVec.Mag() * minusVec.Mag(); assert( minusDen > 0.0 && "Zeta-minus denominator sensible" ); // USER AND USER
 
   zm = TMath::ACos( minusNum / minusDen ) * TMath::RadToDeg();
+  if( zm > 90.0 ) zm = 180.0 - zm;
 
   double plusNum = startVec.X() * plusVec.X() + startVec.Y() * plusVec.Y() + startVec.Z() * plusVec.Z(); // USER AND USER
   double plusDen = startVec.Mag() * plusVec.Mag(); assert( plusDen > 0.0 && "Zeta-plus denominator sensible" ); // USER AND USER
 
   zp = TMath::ACos( plusNum / plusDen ) * TMath::RadToDeg();
+  if( zp > 90.0 ) zp = 180.0 - zp;
 
   if( zm > zp ){
     double tmpzp = zp;
@@ -1842,15 +1850,13 @@ void FluxCreator::GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &
     zm = tmpzp;
   }
 
-  /*
   LOG( "HNL", pDEBUG )
     << "\nIn DETECTOR coordinates:"
     << "\nentered at ( " << minusPoint[0] << ", " << minusPoint[1] << ", " << minusPoint[2] << " ) [cm]"
     << "\nexited  at ( " << plusPoint[0] << ", " << plusPoint[1] << ", " << plusPoint[2] << " ) [cm]"
-    << "\nstarted at ( " << decVec.X() << ", " << decVec.Y() << ", " << decVec.Z() << " ) [cm]"
+    << "\nstarted at ( " << startVec.X() << ", " << startVec.Y() << ", " << startVec.Z() << " ) [cm]"
     << "\nmomentum   ( " << detPpar.X() << ", " << detPpar.Y() << ", " << detPpar.Z() << " )"
     << "\nmeaning zm = " << zm << ", zp = " << zp << " [deg]";
-  */
 }
 //----------------------------------------------------------------------------
 double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par, 
@@ -1874,43 +1880,68 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par,
   assert( zm >= 0.0 && zp >= zm && "Zeta-plus >= zeta-minus >= 0.0" );
   if( zp == zm ) return accCorr;
   if( zp > 180.0 ) zp = 180.0;
+  if( theta > 90.0 ){ double tmpzp = zp; zp = 180.0 - zm; zm = 180.0 - tmpzp; }
 
-  double M = p4HNL.M();
+  //double M = p4HNL.M();
 
-  double ECM = p4HNL.E();
+  //double ECM = p4HNL.E();
 
-  double EPar = p4par.E();
-  double MPar = p4par.M();
+  //double EPar = p4par.E();
+  //double MPar = p4par.M();
 
   // Calculate the pre-image under SM neutrino of [zm, zp]. Always one as it's monotonic
-  double tLow_SM = this->AccCorr_Solution( zm, 0.0, EPar, MPar, SMECM, true );
-  double tHigh_SM = this->AccCorr_Solution( zp, 0.0, EPar, MPar, SMECM, true );
+  TLorentzVector SMVector( 0.0, 0.0, SMECM, SMECM );
+  double backwards = false;
+  if( theta > 90.0 ) backwards = !(backwards); // reflection about x=90 deg.
 
-  // And of the HNL. The below functions perform all necessary checks
-  double tLow1 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, true );
-  double tHigh1 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, true );
-  double tHigh2 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, false );
-  double tLow2 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, false );
-  if( tHigh2 <= 0.0 && tLow2 > 0.0 ) tHigh2 = 180.0; // wraps around to -0
+  //double tLow_SM = this->AccCorr_Solution( zm, 0.0, EPar, MPar, SMECM, true );
+  //double tHigh_SM = this->AccCorr_Solution( zp, 0.0, EPar, MPar, SMECM, true );
+  double tLow_SM  = this->Inverted_Fcn( zm, p4par, SMVector, backwards );
+  double tHigh_SM = this->Inverted_Fcn( zp, p4par, SMVector, backwards );
 
+  // And of the HNL. First check if there can be a solution at all...
+  double bNu = p4HNL.P() / p4HNL.E(); double bPar = p4par.P() / p4par.E(); double gPar = p4par.E() / p4par.M();
+  double tanMaxTheta = ( bNu >= bPar ) ? 0.0 : 1.0 / ( gPar * std::sqrt( ( bPar / bNu ) * ( bPar / bNu ) - 1.0 ) ) ;
+  double maxTheta = ( bNu >= bPar ) ? 180.0 : TMath::ATan( tanMaxTheta ) * TMath::RadToDeg();
+  if( maxTheta < 0.0 ) maxTheta += 180.0;
+
+  if( theta > maxTheta ) return 0.0; // no way.
+
+  //double tLow1 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, true );
+  //double tHigh1 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, true );
+  //double tHigh2 = this->AccCorr_Solution( zm, M, EPar, MPar, ECM, false );
+  //double tLow2 = this->AccCorr_Solution( zp, M, EPar, MPar, ECM, false );
+  double tLow1  = this->Inverted_Fcn( zm, p4par, p4HNL, backwards );
+  double tHigh1 = this->Inverted_Fcn( zp, p4par, p4HNL, backwards );
   if( tLow1 == 0.0 && tHigh1 == 0.0 ) return 0.0; // no point in going further!
 
+  double tHigh2 = ( maxTheta < 180.0 ) ? this->Inverted_Fcn( zm, p4par, p4HNL, !(backwards) ) : 0.0;
+  double tLow2  = ( maxTheta < 180.0 ) ? this->Inverted_Fcn( zp, p4par, p4HNL, !(backwards) ) : 0.0;
+  
+  if( tHigh2 <= 0.0 && tLow2 > 0.0 ) tHigh2 = 180.0; // wraps around to -0
+
   // Check if the theta (lab) is reachable by the HNL.
+  LOG( "HNL", pDEBUG ) 
+    << "zm, theta, zp = " << zm << ", " << theta << ", " << zp;
+  if( ( theta >= 0.0 && theta < zm ) || ( theta <= 180.0 && theta > zp ) ) return 0.0;
+  /*
   double thetaLab_low  = this->Forwards_Fcn(tLow1, p4par, p4HNL);
   double thetaLab_high = this->Forwards_Fcn(tHigh1, p4par, p4HNL);
   LOG( "HNL", pDEBUG )
-    << "On forwards fcn: \nfrom arg = "
+    << "zm = " << zm << ", zp = " << zp
+    << "\nOn forwards fcn: \nfrom arg = "
     << tLow1 << " --> " << thetaLab_low
     << "\nfrom arg = " << tHigh1 << " --> " << thetaLab_high
     << "\ncf. the actual lab theta = " << theta;
+
   if( ( theta >= 0.0 && theta < thetaLab_low ) ||
-      ( theta <= 180.0 && theta > thetaLab_high ) ) return 0.0;
-  
+    ( theta <= 180.0 && theta > thetaLab_high ) ) return 0.0;
+  */
+
   // We have been given a lab-frame emission angle. Get the pre-image of this function
-  TLorentzVector SMVector( 0.0, 0.0, SMECM, SMECM );
-  double invVal_SM = this->Inverted_Fcn( theta, p4par, SMVector, false );
-  double invVal_HP = this->Inverted_Fcn( theta, p4par, p4HNL, false );
-  double invVal_HM = ( tLow2 >= 0.0 ) ? this->Inverted_Fcn( theta, p4par, p4HNL, true ) : 0.0;
+  double invVal_SM = this->Inverted_Fcn( theta, p4par, SMVector, backwards );
+  double invVal_HP = this->Inverted_Fcn( theta, p4par, p4HNL, backwards );
+  double invVal_HM = ( tLow2 >= 0.0 ) ? this->Inverted_Fcn( theta, p4par, p4HNL, !(backwards) ) : 0.0;
 
   // we also need to get the derivatives of the collimation function at these points.
   double deriv_SM = this->Derivative( invVal_SM, p4par, SMVector );
@@ -2020,7 +2051,7 @@ double FluxCreator::AccCorr_Solution( double thetalab, double mass,
 
   double qNu = std::sqrt( ENu * ENu - mass * mass );
   double bNu = qNu / ENu;
-  double gNu = (bNu < 1.0) ? ENu / mass : -1.0;
+  //double gNu = (bNu < 1.0) ? ENu / mass : -1.0;
 
   double tanMaxTheta = ( bNu >= bPar ) ? 180.0 : 1.0 / ( gPar * std::sqrt( ( bPar / bNu ) * ( bPar / bNu ) - 1.0 ) );
   double maxTheta = TMath::ATan( tanMaxTheta ) * TMath::RadToDeg();
@@ -2103,35 +2134,30 @@ double FluxCreator::Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVe
   if( theta == 90.0 ) return TMath::ACos( -beta * E / q ) * TMath::RadToDeg();
 
   double y = TMath::Tan( theta * TMath::DegToRad() );
-  
+
+  // be EXTREMELY careful with the trig!
+  int sqMod = ( backwards ) ? 1 : -1;
+
   // Answer as calculated by Mathematica. This is Cos[Theta]
-  int constMod = backwards ? 1 : -1;
-  double constTerm = constMod * beta * E * std::pow( gamma * y, 2.0 );
-  
-  double sqrt_1  = std::pow( q, 2.0 );
-  double sqrt_2a = std::pow( y * gamma, 2.0 );
-  double sqrt_2b = q * q - std::pow( beta * E, 2.0 );
-  double sqrt   = sqrt_1 + sqrt_2a * sqrt_2b;
-  if( sqrt < 0.0 ) sqrt = 0.0;
-  sqrt = std::sqrt( sqrt );
+  double constTerm = -1 * y * y * q * beta * gamma * gamma * E;
+  double sqt = std::pow( q, 4.0 ) + std::pow( y * q * q * gamma, 2.0 ) - std::pow( y * q * beta * gamma * E, 2.0 );
+  double numer = constTerm + sqMod * std::sqrt( sqt );
+  double denom = q * q + std::pow( q * gamma * y, 2.0 );
 
-  double denom = q * (1.0 + y * y * gamma * gamma);
-
-  double c1 = (constTerm + sqrt) / denom;
-  double c2 = (constTerm - sqrt) / denom; if( c2 == c1 ) c2 = -1.0;
-
-  inv = ( theta <= 90.0 ) ? TMath::ACos( c1 ) : TMath::ACos( c2 );
-  inv = backwards ? 180.0 - inv * TMath::RadToDeg() : inv * TMath::RadToDeg() ;
+  double ratio = numer / denom;
+  inv = std::acos( ratio ) * TMath::RadToDeg();
+  if( ratio < 0.0  ) inv = 180.0 - inv;
   
   LOG( "HNL", pDEBUG )
     << "\nArgs: q, E = " << q << ", " << E 
     << "\ngamma, beta = " << gamma << ", " << beta
     << "\ntheta, y = " << theta << ", " << y
-    << "\nconstTerm = " << constTerm
-    << "\nsqrt1,2a,2b = " << sqrt_1 << ", " << sqrt_2a << ", " << sqrt_2b
-    << "\nsqrt      = " << sqrt
-    << "\ndenom     = " << denom
     << "\nbackwards = " << static_cast<int>( backwards )
+    << "\nsqMod = " << sqMod
+    << "\nconstTerm = " << constTerm
+    << "\nsqt       = " << sqt << ", sqrt(sqt) = " << std::sqrt( sqt )
+    << "\ndenom     = " << denom
+    << "\nratio     = " << ratio
     << "\n==>answer = " << inv;
 
   return inv;
@@ -2595,8 +2621,8 @@ std::string FluxCreator::CheckGeomPoint( Double_t x, Double_t y, Double_t z ) co
   point[0] = x;
   point[1] = y;
   point[2] = z;
-  TGeoVolume *vol = gGeoManager->GetTopVolume();
-  TGeoNode *node = gGeoManager->FindNode(point[0], point[1], point[2]);
+  __attribute__((unused)) TGeoVolume *vol = gGeoManager->GetTopVolume();
+  __attribute__((unused)) TGeoNode *node = gGeoManager->FindNode(point[0], point[1], point[2]);
   gGeoManager->MasterToLocal(point, local);
   return gGeoManager->GetPath();
 }
