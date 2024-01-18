@@ -81,10 +81,11 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   }
 
   this->SetStartingParameters( event_rec );
+  LOG( "HNL", pDEBUG ) << "Starting parameters SET.";
 
   double weight = 1.0; // pure geom weight
 
-  TVector3 startPoint, momentum, entryPoint, exitPoint;
+  TVector3 startPoint, momentum, entryPoint, exitPoint; // USER mm, GeV/GeV
   startPoint.SetXYZ( fSx, fSy, fSz );
   momentum.SetXYZ( fPx, fPy, fPz );
   
@@ -117,7 +118,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 
   double maxLength = std::sqrt( std::pow( maxDx , 2.0 ) +
 				std::pow( maxDy , 2.0 ) +
-				std::pow( maxDz , 2.0 ) );
+				std::pow( maxDz , 2.0 ) ); // mm
   
   TLorentzVector * p4HNL = event_rec->Particle(0)->GetP4();
   double betaMag = p4HNL->P() / p4HNL->E();
@@ -125,11 +126,13 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   
   double elapsed_length = this->CalcTravelLength( betaMag, fCoMLifetime, maxLength ); //mm
   __attribute__((unused)) double ratio_length = elapsed_length / maxLength;
+
+  TVector3 HNLOriginPoint( fNx * units::m / units::mm, fNy * units::m / units::mm, fNz * units::m / units::mm ); // USER mm
   
   // from these we can also make the weight. It's P( survival ) * P( decay in detector | survival )
-  double distanceBeforeDet = std::sqrt( std::pow( (entryPoint.X() - startPoint.X()), 2.0 ) + 
-					std::pow( (entryPoint.Y() - startPoint.Y()), 2.0 ) + 
-					std::pow( (entryPoint.Y() - startPoint.Z()), 2.0 ) ); // mm
+  double distanceBeforeDet = std::sqrt( std::pow( (HNLOriginPoint.X() - entryPoint.X()), 2.0 ) + 
+					std::pow( (HNLOriginPoint.Y() - entryPoint.Y()), 2.0 ) + 
+					std::pow( (HNLOriginPoint.Z() - entryPoint.Z()), 2.0 ) ); // mm
   
   double timeBeforeDet = distanceBeforeDet / ( betaMag * kNewSpeedOfLight ); // ns lab
   double timeInsideDet = maxLength / ( betaMag * kNewSpeedOfLight ); // ns lab
@@ -142,6 +145,19 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   weight *= 1.0 / survProb;
   double decayProb = 1.0 - std::exp( - timeInsideDet / fCoMLifetime );
   weight *= 1.0 / decayProb;
+
+  LOG( "HNL", pDEBUG ) 
+    << "\nOutput of lifetime calc:"
+    << "\nLifetime = " << fCoMLifetime << " [CoM ns]"
+    << "\nDistance to detector = " << distanceBeforeDet * units::mm / units::m
+    << " : inside detector = " << maxLength * units::mm / units::m << " [m]"
+    << "\nTime before detector = " << timeBeforeDet / LabToRestTime
+    << " : inside detector = " << timeInsideDet / LabToRestTime << " [LAB ns]"
+    << "\nTime before detector = " << timeBeforeDet
+    << " : inside detector = " << timeInsideDet << " [CoM ns]"
+    << "\n"
+    << "PSurv = " << survProb
+    << " : PDec = " << decayProb;
 
   // save the survival and decay probabilities
   if( event_rec->Particle(1) && event_rec->Particle(2) ){
@@ -165,6 +181,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   // the validation app doesn't run the Decayer. So we will insert two neutrinos (not a valid
   // decay mode), to store entry and exit point
   if( !isUsingDk2nu ){
+    LOG( "HNL", pDEBUG ) << "About to insert two neutrinos into a NULL event record";
     assert( !event_rec->Particle(1) && "Event record only has HNL if gevald_hnl -M 3" );
     
     TLorentzVector tmpp4( 0.0, 0.0, 0.0, 0.5 );
@@ -187,8 +204,10 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 
   // also set entry and exit points. Do this in x4 of Particles(1,2)
   if( event_rec->Particle(1) && event_rec->Particle(2) ){
-    (event_rec->Particle(1))->SetPosition( entryPoint.X(), entryPoint.Y(), entryPoint.Z(), event_rec->Particle(1)->Vt() );
-    (event_rec->Particle(2))->SetPosition( exitPoint.X(), exitPoint.Y(), exitPoint.Z(), event_rec->Particle(2)->Vt() );
+    //(event_rec->Particle(1))->SetPosition( entryPoint.X(), entryPoint.Y(), entryPoint.Z(), event_rec->Particle(1)->Vt() );
+    //(event_rec->Particle(2))->SetPosition( exitPoint.X(), exitPoint.Y(), exitPoint.Z(), event_rec->Particle(2)->Vt() );
+    (event_rec->Particle(1))->SetPosition( entryPoint.X(), entryPoint.Y(), entryPoint.Z(), survProb );
+    (event_rec->Particle(2))->SetPosition( exitPoint.X(), exitPoint.Y(), exitPoint.Z(), decayProb );
   }
 
   delete p4HNL;
@@ -435,6 +454,8 @@ void VertexGenerator::ImportBoundingBox( TGeoBBox * box ) const
 //____________________________________________________________________________
 void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
 {
+  if(event_rec) LOG("HNL", pDEBUG) << *event_rec;
+
   isUsingDk2nu = (event_rec->Particle(1) != NULL); // validation App doesn't run Decayer
   isParticleGun = (event_rec->Particle(0)->FirstMother() < -1); // hack
   isUsingRootGeom = true;
@@ -495,25 +516,40 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
 
   // set starting point for calculations. Where would the flux go?
   TLorentzVector * x4Flux = 0;
-  if( !isParticleGun ){
+  if( !isParticleGun && event_rec->Particle(1) ){
     x4Flux = event_rec->Particle(1)->GetX4(); // USER, m
     x4Flux->SetXYZT( x4Flux->X() * units::m / units::cm,
 		     x4Flux->Y() * units::m / units::cm,
 		     x4Flux->Z() * units::m / units::cm, 0.0 ); // USER, cm
   } else {
-    x4Flux = x4HNL_user;
+    if( !isParticleGun && event_rec->Vertex() ){
+      x4Flux = event_rec->Vertex(); // USER, m
+      x4Flux->SetXYZT( x4Flux->X() * units::m / units::cm,
+		       x4Flux->Y() * units::m / units::cm,
+		       x4Flux->Z() * units::m / units::cm, 0.0 ); // USER, cm
+    } 
+    else x4Flux = x4HNL_user;
   }
   TVector3 startPoint( xMult * x4Flux->X(), xMult * x4Flux->Y(), xMult * x4Flux->Z() ); // USER mm
 
+  // make sure we keep track of where, precisely, the HNL was made!
+  fNx = event_rec->Particle(0)->GetX4()->X() - fCx; // USER m
+  fNy = event_rec->Particle(0)->GetX4()->Y() - fCy;
+  fNz = event_rec->Particle(0)->GetX4()->Z() - fCz;
+
+  fNxROOT = fNx * units::m / units::cm;
+  fNyROOT = fNy * units::m / units::cm;
+  fNzROOT = fNz * units::m / units::cm;
+
   LOG( "HNL", pDEBUG )
     << "\nx4HNL_user = " << utils::print::X4AsString( x4HNL_user ) << " [mm]"
+    << "\nOrigin point = ( " << fNx << ", " << fNy << ", " << fNz << " ) [m, USER]"
     << "\nstartPoint = " << utils::print::Vec3AsString( &startPoint ) << " [mm]";
 
   //double mtomm = units::m / units::mm;
   
   TLorentzVector * p4HNL = event_rec->Particle(0)->GetP4();
   TVector3 momentum( p4HNL->Px(), p4HNL->Py(), p4HNL->Pz() );
-
 
   fSx = startPoint.X(); fSy = startPoint.Y(); fSz = startPoint.Z();
   fSxROOT = fSx * units::mm / units::cm;

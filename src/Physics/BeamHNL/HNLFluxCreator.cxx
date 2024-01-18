@@ -122,9 +122,12 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 	// Use the x4 position of the HNL. First, ensure the Vertex() is correctly set.
 	TLorentzVector * vx4 = evrec->Particle(0)->GetX4();
 	evrec->SetVertex( *vx4 );
-	TLorentzVector tmpx4( fLPx, fLPy, fGnmf.parPdg, fGnmf.lepPdg );
+	//TLorentzVector tmpx4( fLPx, fLPy, fGnmf.parPdg, fGnmf.lepPdg );
+	TVector3 tmpx3 = fGnmf.startPoint; // TVector3 tmpt3 = fGnmf.targetPoint;
+	TLorentzVector tmpx4( tmpx3.X(), tmpx3.Y(), tmpx3.Z(), 0.0 );
 	if( fLPz >= 0.0 ) evrec->SetXSec( 1.0 );
 	else evrec->SetXSec( -1.0 );
+
 	evrec->Particle(0)->SetPosition( tmpx4 );
 
 	delete vx4;
@@ -365,7 +368,6 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   // Choose a random point in the detector to calculate the flux at for this entry
   TVector3 absolutePoint = this->PointToRandomPointInBBox( ); // in NEAR coords, m
   if( absolutePoint.X() == 999.9 && absolutePoint.Y() == 999.9 && absolutePoint.Z() == 999.9 ){
-    LOG( "HNL", pDEBUG ) << "Nonsense point, not proceeding";
     this->FillNonsense( iEntry, gnmf ); return gnmf;
   }
   
@@ -413,7 +415,6 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   }
 
   if( zm == -999.9 && zp == 999.9 ){
-    LOG( "HNL", pDEBUG ) << "Nonsense ang-dev zm, zp, not proceeding";
     this->FillNonsense( iEntry, gnmf ); return gnmf;
   }
 
@@ -424,7 +425,6 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   }
   
   // Get the acceptance correction now. It will also give the correct energy of the HNL.
-  LOG( "HNL", pDEBUG ) << "Trying theta = " << thetaLab << "...";
   double accCorr = this->CalculateAcceptanceCorrection( p4par, p4HNL_rest, decay_necm, zm, zp, thetaLab, EHNL );
   if( fRerollPoints ){
     // if accCorr == 0 then we must ~bail and find the next event.~ 
@@ -466,7 +466,6 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
       }
       
       if( zm == -999.9 && zp == 999.9 ){
-	LOG( "HNL", pDEBUG ) << "Nonsense ang-dev zm, zp, not proceeding";
 	this->FillNonsense( iEntry, gnmf ); return gnmf;
       }
       
@@ -477,13 +476,11 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
       }
       
       // and the acceptance correction is...
-      LOG( "HNL", pDEBUG ) << "Trying theta = " << thetaLab << "...";
       accCorr = this->CalculateAcceptanceCorrection( p4par_near, p4HNL_rest, decay_necm, zm, zp, thetaLab, EHNL );
       iAccFail++;
     }
   }
   if( accCorr == 0.0 ){ // NOW we can give up and return.
-    LOG( "HNL", pDEBUG ) << "accCorr == 0.0, not proceeding";
     this->FillNonsense( iEntry, gnmf ); return gnmf;
   }
 
@@ -608,7 +605,7 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
 
   gnmf.startPoint.SetXYZ( fDvec_beam.X(), fDvec_beam.Y(), fDvec_beam.Z() ); // NEAR m
   gnmf.targetPoint.SetXYZ( fTargetPoint.X(), fTargetPoint.Y(), fTargetPoint.Z() ); // NEAR m
-  gnmf.startPointUser.SetXYZ( fDvec_user.X() - fCx, fDvec_user.Y() - fCy, fDvec_user.Z() - fCz ); // USER m
+  gnmf.startPointUser.SetXYZ( fDvec_user.X(), fDvec_user.Y(), fDvec_user.Z() ); // USER m
   gnmf.targetPointUser.SetXYZ( fTargetPoint.X() - fCx, fTargetPoint.Y() - fCy, fTargetPoint.Z() - fCz ); // USER m
   gnmf.delay = delay; // ns
 
@@ -1970,6 +1967,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par,
   if( !isForwards ) accCorr *= -1.0;
 
   std::string fdstring = (isForwards) ? "FORWARDS" : "BACKWARDS";
+  /*
   LOG( "HNL", pDEBUG ) 
     << "\nArgs: p4par = " << utils::print::P4AsString( &p4par )
     << ", p4HNL = " << utils::print::P4AsString( &p4HNL )
@@ -1983,6 +1981,7 @@ double FluxCreator::CalculateAcceptanceCorrection( TLorentzVector p4par,
     << "\nrandom number = " << ratio << ", emission = " << fdstring
     << "\nthetaRest, cosTheta = " << thetaRest << ", " << cosTheta
     << "\nEHNL_LAB = " << EHNL_LAB << ", accCorr = " << accCorr;
+  */
   
   return accCorr;
 }
@@ -2148,6 +2147,7 @@ double FluxCreator::Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVe
   inv = std::acos( ratio ) * TMath::RadToDeg();
   if( ratio < 0.0  ) inv = 180.0 - inv;
   
+  /*
   LOG( "HNL", pDEBUG )
     << "\nArgs: q, E = " << q << ", " << E 
     << "\ngamma, beta = " << gamma << ", " << beta
@@ -2159,6 +2159,7 @@ double FluxCreator::Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVe
     << "\ndenom     = " << denom
     << "\nratio     = " << ratio
     << "\n==>answer = " << inv;
+  */
 
   return inv;
 }
@@ -2247,6 +2248,7 @@ double FluxCreator::Derivative( double theta, TLorentzVector p4par, TLorentzVect
 
   der = numer / denom;
 
+  /*
   LOG( "HNL", pDEBUG )
     << "\nArgs: q, E = " << q << ", " << E 
     << "\ngamma, beta = " << gamma << ", " << beta
@@ -2254,6 +2256,7 @@ double FluxCreator::Derivative( double theta, TLorentzVector p4par, TLorentzVect
     << "\nterm1, term2 = " << term1 << ", " << term2
     << "\nnumer, denom = " << numer << ", " << denom
     << "\n==> answer = " << der;
+  */
 
   return der;
 }

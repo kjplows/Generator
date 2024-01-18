@@ -137,11 +137,13 @@ namespace hnl {
     mutable double tunits = genie::units::ns; mutable std::string tunitString = "ns";
 
     mutable double fSx = 0.0, fSy = 0.0, fSz = 0.0; //start point
+    mutable double fNx = 0.0, fNy = 0.0, fNz = 0.0; //origin point of HNL
     mutable double fPx = 0.0, fPy = 0.0, fPz = 0.0; //momentum
     mutable double fEx = 0.0, fEy = 0.0, fEz = 0.0; //entry point
     mutable double fXx = 0.0, fXy = 0.0, fXz = 0.0; //exit  point
 
     mutable double fSxROOT = 0.0, fSyROOT = 0.0, fSzROOT = 0.0; // start point in cm
+    mutable double fNxROOT = 0.0, fNyROOT = 0.0, fNzROOT = 0.0; // origin point of HNL in cm
     mutable double fExROOT = 0.0, fEyROOT = 0.0, fEzROOT = 0.0; // entry point in cm
     mutable double fXxROOT = 0.0, fXyROOT = 0.0, fXzROOT = 0.0; // exit  point in cm
 

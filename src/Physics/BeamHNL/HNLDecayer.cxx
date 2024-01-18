@@ -595,7 +595,9 @@ void Decayer::ReadCreationInfo( GHepRecord * event ) const
     fProdLepPdg = tmpx4->T();
 
     // now reset the x4 of the HNL to whatever the vertex is
-    event->Particle(0)->SetPosition( vv->X(), vv->Y(), vv->Z(), vv->T() );
+    // RETHERE: This calculation is now BROKEN, because the x4 of HNL contains HNL origin point.
+    // Need to come up with a way to put this info in the EventRecord!
+    //event->Particle(0)->SetPosition( vv->X(), vv->Y(), vv->Z(), vv->T() );
     event->SetXSec(0.0);
   } else { delete tmpx4; return; }
   delete tmpx4;
