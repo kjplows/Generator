@@ -121,7 +121,6 @@ using namespace genie::hnl;
 #define __CAN_GENERATE_EVENTS_USING_A_FLUX__
 //#include "Tools/Flux/GNuMIFlux.h"
 #include <TH1.h>
-void FillFluxNonsense( FluxContainer & ggn );
 #endif // #ifdef __GENIE_FLUX_DRIVERS_ENABLED__
 
 #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
@@ -138,7 +137,7 @@ typedef enum t_HNLValidation {
   kValFluxFromDk2nu   = 1,
   kValDecay           = 2,
   kValGeom            = 3,
-  kValFullSim         = 4
+  kValDecayingFlux    = 4
   
 } HNLValidation_t;
 
@@ -150,6 +149,9 @@ const EventRecordVisitorI * HNLGenerator(void);
 
 #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
 int      TestFluxFromDk2nu  (void);
+#ifdef __CAN_USE_ROOT_GEOM__
+int      TestDecayingFlux   (void);
+#endif
 #endif
 
 int      TestDecay          (void);
@@ -275,6 +277,7 @@ int main(int argc, char ** argv)
   case kValFluxFromDk2nu: return TestFluxFromDk2nu(); break;
   case kValDecay:         return TestDecay();         break;
   case kValGeom:          return TestGeom();          break;
+  case kValDecayingFlux:  return TestDecayingFlux();  break;
   default: LOG( "gevald_hnl", pFATAL ) << "I didn't recognise this mode. Goodbye world!"; break;
   }
 
@@ -296,8 +299,7 @@ int TestFluxFromDk2nu()
     << "\n--> Production vertex locations"
     << "\n--> Counters for each production mode"
     << "\n--> Spectrum of acceptance correction as function of parent boost factor"
-    << "\n--> Boost factor spectrum of parents broken down by type"
-    << "\n--> TTree containing nu energy, weight, parent, decay mode, and FluxContainer object";
+    << "\n--> Boost factor spectrum of parents broken down by type";
   
   const Algorithm * algFluxCreator = AlgFactory::Instance()->GetAlgorithm("genie::hnl::FluxCreator", "Default");
 
@@ -326,30 +328,7 @@ int TestFluxFromDk2nu()
   __attribute__((unused)) TGeoBBox *  box = (TGeoBBox *)ts;
 
   TFile * fout = TFile::Open( foutName.c_str(), "RECREATE" );
-  //TTree * outTree = new TTree( "outTree", "Flux information tree" );
-  double Enu = -9999.9, wgt = -9999.9;
-  int parPDG = -999, modeType = -999;
-  double EBLab = -999.9, EBCorr = -999.9, openingAngle = -999.9;
-
-  FluxContainer vgnmf;
-  FluxContainer * ptGnmf = new FluxContainer();
-  vgnmf = *ptGnmf;
-  delete ptGnmf;
-  FillFluxNonsense( vgnmf );
-
-  /*
-  outTree->Branch( "Energy", &Enu, "Energy/D" );
-  outTree->Branch( "Weight", &wgt, "Weight/D" );
-  outTree->Branch( "Parent", &parPDG, "Parent/I" );
-  outTree->Branch( "DecayMode", &modeType, "DecayMode/I" );
-  outTree->Branch( "AcceptanceCorrection", &EBLab, "AcceptanceCorrection/D" );
-  outTree->Branch( "BoostCorrection", &EBCorr, "BoostCorrection/D" );
-  outTree->Branch( "OpeningAngle", &openingAngle, "OpeningAngle/D" );
-  TBranch * fluxBranch = outTree->Branch( "Flux", "genie::hnl::FluxContainer", &vgnmf, 32000, 1 );
-  fluxBranch->SetAutoDelete( kFALSE );
-  */
-
-  TH1D hEAll, hEPiP, hEPiM, hEKP, hEKM, hEMuP, hEMuM, hENeuk;
+  TH1D hEAll, hEPion, hEKaon, hEMuon, hENeuk;
   TH1D hPop, hImpwt;
   TH1D hAcceptanceCorr, hAcceptance, hAcceptNoBCorr;
   TH3D hProdVtxPos;
@@ -357,18 +336,11 @@ int TestFluxFromDk2nu()
   TH1D hBAll, hBPion, hBKaon, hBMuon, hBNeuk;
   TH1D hParamSpace; // to store mass + couplings
 
-  // Add vector of parent kinematics, for each parent species
-  TH2D hPxPyAll, hPxPyPiP, hPxPyPiM, hPxPyKP, hPxPyKM, hPxPyMuP, hPxPyMuM, hPxPyNeuk;
-  TH2D hPTPzAll, hPTPzPiP, hPTPzPiM, hPTPzKP, hPTPzKM, hPTPzMuP, hPTPzMuM, hPTPzNeuk;
-
-  hEAll  = TH1D( "hEAll",  "HNL energy - all parents",   1000, 0., 100. );
-  hEPiP  = TH1D( "hEPiP",  "HNL energy - pion + parent", 1000, 0., 100. );
-  hEPiM  = TH1D( "hEPiM",  "HNL energy - pion - parent", 1000, 0., 100. );
-  hEKP   = TH1D( "hEKP",   "HNL energy - kaon + parent", 1000, 0., 100. );
-  hEKM   = TH1D( "hEKM",   "HNL energy - kaon - parent", 1000, 0., 100. );
-  hEMuP  = TH1D( "hEMuP",  "HNL energy - muon + parent", 1000, 0., 100. );
-  hEMuM  = TH1D( "hEMuM",  "HNL energy - muon - parent", 1000, 0., 100. );
-  hENeuk = TH1D( "hENeuk", "HNL energy - neuk parent",   1000, 0., 100. );
+  hEAll  = TH1D( "hEAll",  "HNL energy - all parents", 1000, 0., 100. );
+  hEPion = TH1D( "hEPion", "HNL energy - pion parent", 1000, 0., 100. );
+  hEKaon = TH1D( "hEKaon", "HNL energy - kaon parent", 1000, 0., 100. );
+  hEMuon = TH1D( "hEMuon", "HNL energy - muon parent", 1000, 0., 100. );
+  hENeuk = TH1D( "hENeuk", "HNL energy - neuk parent", 1000, 0., 100. );
 
   hPop   = TH1D( "hPop",   "HNL populations in energy bins", 1000, 0., 100. );
   hImpwt = TH1D( "hImpwt", "HNL importance weights", 1000, 0., 100. );
@@ -392,40 +364,7 @@ int TestFluxFromDk2nu()
 
   hParamSpace = TH1D( "hParamSpace", "Parameter space", 5, 0., 5. );
 
-  hPxPyAll  = TH2D( "hPxPyAll",  "Parent Px [BEAM] vs Py [BEAM] - all parents", 
-		    100, -1.0, 1.0, 100, -1.0, 1.0 );
-  hPxPyPiP  = TH2D( "hPxPyPiP",  "Parent Px [BEAM] vs Py [BEAM] - pion + parent", 
-		    100, -1.0, 1.0, 100, -1.0, 1.0 );
-  hPxPyPiM  = TH2D( "hPxPyPiM",  "Parent Px [BEAM] vs Py [BEAM] - pion - parent", 
-		    100, -1.0, 1.0, 100, -1.0, 1.0 );
-  hPxPyKP   = TH2D( "hPxPyKP",   "Parent Px [BEAM] vs Py [BEAM] - kaon + parent", 
-		    100, -1.0, 1.0, 100, -1.0, 1.0 );
-  hPxPyKM   = TH2D( "hPxPyKM",   "Parent Px [BEAM] vs Py [BEAM] - kaon - parent", 
-		    100, -1.0, 1.0, 100, -1.0, 1.0 );
-  hPxPyMuP  = TH2D( "hPxPyMuP",  "Parent Px [BEAM] vs Py [BEAM] - muon + parent", 
-		    100, -1.0, 1.0, 100, -1.0, 1.0 );
-  hPxPyMuM  = TH2D( "hPxPyMuM",  "Parent Px [BEAM] vs Py [BEAM] - muon - parent", 
-		    100, -1.0, 1.0, 100, -1.0, 1.0 );
-  hPxPyNeuk = TH2D( "hPxPyNeuk", "Parent Px [BEAM] vs Py [BEAM] - neuk parent", 
-		    100, -1.0, 1.0, 100, -1.0, 1.0 );
-
-  hPTPzAll  = TH2D( "hPTPzAll",  "Parent PT [BEAM] vs Pz [BEAM] - all parents", 
-		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
-  hPTPzPiP  = TH2D( "hPTPzPiP",  "Parent PT [BEAM] vs Pz [BEAM] - pion + parent", 
-		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
-  hPTPzPiM  = TH2D( "hPTPzPiM",  "Parent PT [BEAM] vs Pz [BEAM] - pion - parent", 
-		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
-  hPTPzKP   = TH2D( "hPTPzKP",   "Parent PT [BEAM] vs Pz [BEAM] - kaon + parent", 
-		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
-  hPTPzKM   = TH2D( "hPTPzKM",   "Parent PT [BEAM] vs Pz [BEAM] - kaon - parent", 
-		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
-  hPTPzMuP  = TH2D( "hPTPzMuP",  "Parent PT [BEAM] vs Pz [BEAM] - muon + parent", 
-		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
-  hPTPzMuM  = TH2D( "hPTPzMuM",  "Parent PT [BEAM] vs Pz [BEAM] - muon - parent", 
-		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
-  hPTPzNeuk = TH2D( "hPTPzNeuk", "Parent PT [BEAM] vs Pz [BEAM] - neuk parent", 
-		    150, 0.0, 1.5, 1050, -0.5, 100.0 );
-
+  int parPDG;
   TLorentzVector p4HNL;
   TLorentzVector x4HNL;
   int nPion2Muon = 0, nPion2Electron = 0, nKaon2Muon = 0,
@@ -470,7 +409,7 @@ int TestFluxFromDk2nu()
 	gOptNev = maxFluxEntries;
       }
       
-      vgnmf = fluxCreator->RetrieveFluxInfo();
+      FluxContainer vgnmf = fluxCreator->RetrieveFluxInfo();
       FluxContainer * gnmf = &vgnmf;
       
       // reject nonsense
@@ -488,7 +427,6 @@ int TestFluxFromDk2nu()
 	int typeMod = (gnmf->pdg > 0) ? 1 : -1;
 
 	parPDG = gnmf->parPdg;
-	modeType = gnmf->nuProdChan;
 
 	if( parPDG == 0 || parPDG == -9999 ){ ievent++; continue; }
 	
@@ -536,47 +474,6 @@ int TestFluxFromDk2nu()
 	if( std::abs( fullTerm ) > 100.0 ) fullTerm *= 100.0 / std::abs( fullTerm );
 	
 	nPOT = 1.0; // = gnmf->norig;
-
-	// fill tree
-	//outTree->Fill();
-
-	Enu = p4HNL.E();
-	wgt = acceptance * nimpwt;
-
-	EBLab  = gnmf->accCorr;
-	EBCorr = gnmf->boostCorr;
-
-	// let's also fill the deviation angle
-	TVector3 startPoint = gnmf->startPoint;
-	TVector3 endPoint   = gnmf->targetPoint;
-	openingAngle = endPoint.Angle(startPoint) * TMath::RadToDeg();
-
-	// let's get the parent momentum too
-	TVector3 p3par = p4par.Vect(); // NEAR coords
-
-	// rotate to BEAM coords. Extrinsic Euler X-Z-X
-	double ppx = p3par.X(), ppy = p3par.Y(), ppz = p3par.Z();
-	double ax1 = gCfgUserAx1, ax2 = gCfgUserAx2, az = gCfgUserAz;
-	
-	// Ax2 first
-	ppy = ppy * std::cos( ax2 ) - ppz * std::sin( ax2 );
-	ppz = ppy * std::sin( ax2 ) + ppz * std::cos( ax2 );
-	// then Az
-	ppx = ppx * std::cos( az ) - ppy * std::sin( az );
-	ppy = ppx * std::sin( az ) + ppy * std::cos( az );
-	// Ax1 last
-	ppy = ppy * std::cos( ax1 ) - ppz * std::sin( ax1 );
-	ppz = ppy * std::sin( ax1 ) + ppz * std::cos( ax1 );
-	
-	TVector3 p3par_BEAM( ppx, ppy, ppz );
-	double pTpar_BEAM = std::sqrt( ppx * ppx + ppy * ppy );
-
-	/*
-	LOG( "gevald_hnl", pDEBUG )
-	  << "\nRotated by vector: ( " << ax1 << ", " << az << ", " << ax2 << " )"
-	  << "\nPre-rotation  NEAR vector: " << utils::print::Vec3AsString( &p3par )
-	  << "\nPost-rotation BEAM vector: " << utils::print::Vec3AsString( &p3par_BEAM );
-	*/
 	
 	// fill the histos!
 	hEAll.Fill( p4HNL.E(), acceptance * nimpwt );
@@ -588,52 +485,23 @@ int TestFluxFromDk2nu()
 	hAcceptanceCorr.Fill( accCorr, nimpwt );
 	hAcceptance.Fill( p4HNL.E(), nimpwt * acceptance );
 	hAcceptNoBCorr.Fill( p4HNL.E(), nimpwt * acceptance / ( bCorr * bCorr ) );
-
-	hPxPyAll.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
-	hPTPzAll.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	
 	switch( parPDG ){
 	case kPdgPiP:
-	  hEPiP.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hEPion.Fill( p4HNL.E(), acceptance * nimpwt ); 
 	  hBPion.Fill( betaMag, nimpwt );
-	  hPxPyPiP.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
-	  hPTPzPiP.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
-	  break;
-	case kPdgPiM:
-	  hEPiM.Fill( p4HNL.E(), acceptance * nimpwt ); 
-	  hBPion.Fill( betaMag, nimpwt );
-	  hPxPyPiM.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
-	  hPTPzPiM.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	  break;
 	case kPdgKP:
-	  hEKP.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hEKaon.Fill( p4HNL.E(), acceptance * nimpwt ); 
 	  hBKaon.Fill( betaMag, nimpwt );
-	  hPxPyKP.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
-	  hPTPzKP.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
-	  break;
-	case kPdgKM:
-	  hEKM.Fill( p4HNL.E(), acceptance * nimpwt ); 
-	  hBKaon.Fill( betaMag, nimpwt );
-	  hPxPyKM.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
-	  hPTPzKM.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	  break;
 	case kPdgK0L:
 	  hENeuk.Fill( p4HNL.E(), acceptance * nimpwt ); 
 	  hBNeuk.Fill( betaMag, nimpwt );
-	  hPxPyNeuk.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
-	  hPTPzNeuk.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	  break;
 	case kPdgMuon:
-	  hEMuM.Fill( p4HNL.E(), acceptance * nimpwt ); 
+	  hEMuon.Fill( p4HNL.E(), acceptance * nimpwt ); 
 	  hBMuon.Fill( betaMag, nimpwt );
-	  hPxPyMuM.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
-	  hPTPzMuM.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
-	  break;
-	case kPdgAntiMuon:
-	  hEMuP.Fill( p4HNL.E(), acceptance * nimpwt ); 
-	  hBMuon.Fill( betaMag, nimpwt );
-	  hPxPyMuP.Fill( p3par_BEAM.X(), p3par_BEAM.Y(), nimpwt );
-	  hPTPzMuP.Fill( pTpar_BEAM, p3par_BEAM.Z(), nimpwt );
 	  break;
 	}
 	
@@ -676,53 +544,184 @@ int TestFluxFromDk2nu()
   hParamSpace.SetBinContent( 4, gCfgTCoupling );
   hParamSpace.SetBinContent( 5, nPOT );
 
-  //outTree->Write();
   fout->Write();
   fout->Close();
 
   return 0;
 }
+//............................................................................
+#ifdef __CAN_USE_ROOT_GEOM__
 //_________________________________________________________________________________________
-void FillFluxNonsense( FluxContainer &ggn )
+int TestDecayingFlux()
 {
-  ggn.evtno = -9999;
+  assert( !gOptIsMonoEnFlux && gOptIsUsingDk2nu && "Provided input flux files" );
 
-  ggn.pdg = -9999;
-  ggn.parPdg = -9999;
-  ggn.lepPdg = -9999;
-  ggn.nuPdg = -9999;
+  string foutName("test_decaying_flux.root");
 
-  ggn.prodChan = -9999;
-  ggn.nuProdChan = -9999;
+  const Algorithm * algFluxCreator = AlgFactory::Instance()->GetAlgorithm("genie::hnl::FluxCreator", "Default");
 
-  ggn.startPoint.SetXYZ(-9999.9, -9999.9, -9999.9);
-  ggn.targetPoint.SetXYZ(-9999.9, -9999.9, -9999.9);
-  ggn.startPointUser.SetXYZ(-9999.9, -9999.9, -9999.9);
-  ggn.targetPointUser.SetXYZ(-9999.9, -9999.9, -9999.9);
-  ggn.delay = -9999.9;
+  const FluxCreator * fluxCreator = dynamic_cast< const FluxCreator * >( algFluxCreator );
 
-  ggn.polz.SetXYZ(-9999.9, -9999.9, -9999.9);
+  fluxCreator->SetInputFluxPath( gOptFluxFilePath );
+  bool geom_is_accessible = ! (gSystem->AccessPathName(gOptRootGeom.c_str()));
+  if (!geom_is_accessible) {
+    LOG("gevald_hnl", pFATAL)
+      << "The specified ROOT geometry doesn't exist! Initialization failed!";
+    exit(1);
+  }
+  if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
+  if( !gOptTopVolSelected ){
+    TGeoVolume * main_volume = gOptRootGeoManager->GetTopVolume();
+    gOptTopVolName = main_volume->GetName();
+    LOG("gevald_hnl", pINFO) << "Using top volume name " << gOptTopVolName;
+  }
+  fluxCreator->SetGeomFile( gOptRootGeom, gOptTopVolName );
 
-  ggn.p4.SetPxPyPzE(-9999.9, -9999.9, -9999.9, -9999.9);
-  ggn.parp4.SetPxPyPzE(-9999.9, -9999.9, -9999.9, -9999.9);
-  ggn.p4User.SetPxPyPzE(-9999.9, -9999.9, -9999.9, -9999.9);
-  ggn.parp4User.SetPxPyPzE(-9999.9, -9999.9, -9999.9, -9999.9);
+  const Algorithm * algVtxGen = AlgFactory::Instance()->GetAlgorithm("genie::hnl::VertexGenerator", "Default");
 
-  ggn.Ecm = -9999.9;
-  ggn.nuEcm = -9999.9;
-  ggn.XYWgt = -9999.9;
-  ggn.boostCorr = -9999.9;
-  ggn.accCorr = -9999.9;
-  ggn.zetaMinus = -9999.9;
-  ggn.zetaPlus = -9999.9;
-  ggn.acceptance = -9999.9;
+  // call the Decayer to ensure information gets processed right
+  __attribute__((unused)) const EventRecordVisitorI * mcgen = HNLGenerator();
+  const Algorithm * algHNLGen = AlgFactory::Instance()->GetAlgorithm("genie::hnl::Decayer", "Default");
+  const Decayer * hnlgen = dynamic_cast< const Decayer * >( algHNLGen );
+  
+  const VertexGenerator * vtxGen = dynamic_cast< const VertexGenerator * >( algVtxGen );
+  vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
 
-  ggn.nimpwt = -9999.9;
+  int maxFluxEntries = -1;
 
-  return;
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
+  assert( top_volume && "Top volume exists" );
+  TGeoShape * ts  = top_volume->GetShape();
+  __attribute__((unused)) TGeoBBox *  box = (TGeoBBox *)ts;
+
+  TFile * fout = TFile::Open( foutName.c_str(), "RECREATE" );
+  TH1D hAcceptance, hCrossing, hDecaying;
+  TH1D hParamSpace; // to store mass + couplings
+  hAcceptance = TH1D( "hAcceptance", "Geometrical acceptance of neutrinos", 1000, 0., 100. );
+  hCrossing   = TH1D( "hCrossing", "Flux of neutrinos that cross the detector", 1000, 0., 100. );
+  hDecaying   = TH1D( "hDecaying", "Flux of neutrinos that decay in the detector", 1000, 0., 100. );
+  hParamSpace = TH1D( "hParamSpace", "Parameter space", 5, 0., 5. );
+
+  double PSurv, PDec; double nimpwt, acceptance;
+  TLorentzVector p4HNL;
+  int ievent = 0;
+  while(true)
+    {
+      if( gOptNev >= 10000 ){
+	if( ievent % (gOptNev / 1000) == 0 ){
+	  int irat = ievent / (gOptNev / 1000);
+	  std::cerr << Form("%2.2f", 0.1 * irat) << " % ( " << ievent << " / "
+		    << gOptNev << " ) \r" << std::flush;
+	}
+      } else if( gOptNev >= 100 ) {
+	if( ievent % (gOptNev / 10) == 0 ){
+	  int irat = ievent / ( gOptNev / 10 );
+	  std::cerr << 10.0 * irat << " % " << " ( " << ievent
+		    << " / " << gOptNev << " ) \r" << std::flush;
+	}
+      }
+      
+      if( ievent == gOptNev ) break;
+
+      EventRecord * event = new EventRecord;
+      event->SetXSec( ievent ); // will be overridden, use as handy container
+
+      fluxCreator->ProcessEventRecord(event);
+      //event->Particle(0)->SetFirstMother(-2);
+      
+      // fluxCreator->ProcessEventRecord now tells us how many entries there are
+      maxFluxEntries = fluxCreator->GetNFluxEntries();
+      if( gOptNev > maxFluxEntries ){
+	LOG( "gevgen_hnl", pWARN )
+	  << "You have asked for " << gOptNev << " events, but only provided "
+	  << maxFluxEntries << " flux entries. Truncating events to " << maxFluxEntries << ".";
+	gOptNev = maxFluxEntries;
+      }
+      
+      FluxContainer vgnmf = fluxCreator->RetrieveFluxInfo();
+      FluxContainer * gnmf = &vgnmf;
+      
+      // reject nonsense
+      if( gnmf->Ecm < 0 ){
+	
+	LOG( "gevald_hnl", pDEBUG )
+	  << "Skipping nonsense for event " << ievent << " (was this parent too light?)";
+
+      } else {
+	// now to make stuff from this... i.e. fill histos
+	
+	p4HNL = gnmf->p4; // NEAR coords, GeV
+	acceptance = gnmf->acceptance;
+	nimpwt = gnmf->nimpwt;
+	
+	// update the event vertex to the USER frame end point == where the flux was eval'ed...
+	// This is because the VertexGenerator actually uses that to figure out where the ray came from and goes
+	TVector3 startpoint = gnmf->startPointUser; // USER coords
+	TVector3 endpoint   = gnmf->targetPointUser;
+	TLorentzVector userStart( startpoint.X(), startpoint.Y(), startpoint.Z(), event->Vertex()->T() );
+	TLorentzVector userEnd( endpoint.X(), endpoint.Y(), endpoint.Z(), event->Vertex()->T() );
+	event->SetVertex( userEnd );
+
+	// run the Decayer first.
+	Interaction * interaction = Interaction::HNL(genie::kPdgHNL, p4HNL.E(), 0); // always set vvv
+
+	if( event->Particle(0) ){ // we have an HNL with definite momentum, so let's set it now
+	  interaction->InitStatePtr()->SetProbeP4( *(event->Particle(0)->P4()) );
+	  interaction->InitStatePtr()->SetProbePdg( event->Particle(0)->Pdg() );
+	  LOG( "gevald_hnl", pDEBUG )
+	    << "\nsetting probe p4 = " << utils::print::P4AsString( event->Particle(0)->P4() );
+	}
+	
+	event->AttachSummary(interaction);
+	hnlgen->ProcessEventRecord(event);
+
+	// Update the event Probability(), which is the HNL lifetime
+	CoMLifetime = hnlgen->GetHNLLifetime(); // GeV^{-1}
+	event->SetProbability( CoMLifetime );
+	// now run the VertexGenerator
+	// first, set the flux target correctly..
+	event->Particle(1)->SetPosition( userEnd );
+	vtxGen->ProcessEventRecord(event);
+	
+	// The survival and decay probabilities are a bit more tricky. 
+	// Obtain these from the TIME components of the x4 from Particle(1,2);
+        PSurv = event->Particle(1)->Vt();
+	PDec = event->Particle(2)->Vt();
+		
+	// fill the histos!
+	hAcceptance.Fill( p4HNL.E(), acceptance * nimpwt );
+	hCrossing.Fill( p4HNL.E(), acceptance * nimpwt * PSurv );
+	hDecaying.Fill( p4HNL.E(), acceptance * nimpwt * PSurv * PDec );
+	
+	LOG( "gevald_hnl", pDEBUG )
+	  << " *** Output for event no " << ievent << "... ***"
+	  << "\np4HNL = " << utils::print::P4AsString( &p4HNL ) << " [GeV] "
+	  << "\nacceptance = " << acceptance
+	  << "\nnimpwt = " << nimpwt
+	  << "\nPSurv, PDec = " << PSurv << ", " << PDec;
+
+      } // if not nonsense
+
+      // clean up
+      delete event;
+
+      ievent++;
+    }
+
+  hParamSpace.SetBinContent( 1, 1000.0 * gCfgMassHNL ); // MeV
+  hParamSpace.SetBinContent( 2, gCfgECoupling );
+  hParamSpace.SetBinContent( 3, gCfgMCoupling );
+  hParamSpace.SetBinContent( 4, gCfgTCoupling );
+
+  fout->Write();
+  fout->Close();
+
+  return 0;
 }
 //............................................................................
-#endif // #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX_
+#endif // #ifdef __CAN_USE_ROOT_GEOM__
+//............................................................................
+#endif // #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
 //_________________________________________________________________________________________
 int TestDecay(void)
 {
