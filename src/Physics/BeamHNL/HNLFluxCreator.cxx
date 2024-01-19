@@ -340,6 +340,16 @@ FluxContainer FluxCreator::MakeTupleFluxEntry( int iEntry, std::string finpath )
   assert( imap < dynamicScores.size() && "HNL has been produced" ); // should have decayed to *some* HNL
   prodChan = (*pdit).first;
 
+  // convenience switch for t2k xcheck
+  if( fENFORCED_PROD_SWITCH ) {
+    assert( fU4l2s.at(1) > 0.0 );
+    if( !utils::hnl::IsProdKinematicallyAllowed( kHNLProdKaon2Muon ) ||
+	std::abs( decay_ptype ) != kPdgKP ){
+      this->FillNonsense( iEntry, gnmf ); return gnmf;
+    }
+    prodChan = kHNLProdKaon2Muon;
+  }
+
   // bookkeep this
   fProdChan = static_cast<int>(prodChan);
   switch( prodChan ){

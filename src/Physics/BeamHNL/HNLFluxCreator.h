@@ -257,6 +257,9 @@ namespace genie{
 
       mutable int fProdChan, fNuProdChan;
 
+      // a quality of life check for t2k xcheck
+      mutable bool fENFORCED_PROD_SWITCH = false;
+
       mutable TVector3 fTargetPoint, fTargetPointUser;
 
       static const int maxArray = 30, maxC = 100;
