@@ -89,8 +89,8 @@ string          kDefOptFluxFilePath = "./input-flux.root";
 string          gOptEvFilePrefix = kDefOptEvFilePrefix; // event file prefix
 
 string          kDefOptSName   = "genie::EventGenerator";
-string          kDefOptSConfig = "BeamHNL"; // just copy from the HNL config
-string          kDefOptSTune   = "GHNL20_00a_00_000";
+string          kDefOptSConfig = "ExoticLLP"; // just copy from the HNL config
+string          kDefOptSTune   = "GLLP24_00a_00_000";
 
 //
 Long_t           gOptRunNu        = 1000;                // run number
@@ -203,6 +203,8 @@ void GetCommandLineArgs(int argc, char ** argv)
     std::string stune("--tune"); char * tBit = const_cast< char * >( stune.c_str() );
     expargv[argc] = tBit;
     expargv[argc+1] = chBit;
+
+    LOG( "gevgen_exotic_llp", pNOTICE ) << stune << " " << stExtraTuneBit;
   }
 
   // Common run options.
@@ -233,12 +235,12 @@ void GetCommandLineArgs(int argc, char ** argv)
     exit(0);
   } //-n
 
-  /*
   // get LLP mass 
-  const Algorithm * algLLPGen = AlgFactory::Instance()->GetAlgorithm("genie::hnl::Decayer", "Default");
-  const Decayer * hnlgen = dynamic_cast< const Decayer * >( algLLPGen );
-  gOptMassLLP = hnlgen->GetLLPMass();
+  const Algorithm * algLLPConf = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
+  const LLPConfigurator * llp_conf = dynamic_cast< const LLPConfigurator * >( algLLPConf );
+  gOptMassLLP = llp_conf->RetrieveLLP().GetMass();
 
+  /*
   bool isMonoEnergeticFlux = true;
 #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
   if( parser.OptionExists('f') ) {

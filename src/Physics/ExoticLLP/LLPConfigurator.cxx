@@ -56,8 +56,27 @@ void LLPConfigurator::LoadConfig(void)
 
   // RETHERE Majorana vs Dirac?
   // RETHERE spin?
+
+  // Path to the XML files
+  std::string relative_path;
+  this->GetParam( "InputChannels", relative_path );
   
+  // Get the tune directory from RunOpt
+  TuneId * tune = RunOpt::Instance()->Tune();
+  // ask it where the TuneDirectory lives
+  std::string tune_dir = tune->TuneDirectory();
+
+  fInputPath = tune_dir;
+  fInputPath.append("/"); fInputPath.append( relative_path.c_str() );
+
+  LOG( "ExoticLLP", pFATAL )
+    << "\nTune directory is " << tune_dir
+    << "\nRelative path is " << relative_path
+    << "\n==> full path is " << fInputPath;
+
   // RETHERE this should read in the path to an XML and get the appropriate modes.
+  // Write the appropriate method to parse the XML!
+
   // For now, just make a single production mode K+ --> X + e+ and decay mode X --> e- e+
   std::vector<int> prodDummy = { kPdgKP, kPdgLLP, kPdgPositron };
   std::vector<int> decDummy  = { kPdgLLP, kPdgElectron, kPdgPositron };

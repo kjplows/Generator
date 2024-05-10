@@ -27,6 +27,10 @@
 #include <sstream>
 #include <utility>
 
+// -- libxml includes
+#include "libxml/xmlmemory.h"
+#include "libxml/parser.h"
+
 // -- GENIE includes
 #include "Framework/Conventions/Constants.h"
 #include "Framework/Conventions/Units.h"
@@ -34,11 +38,16 @@
 #include "Framework/ParticleData/PDGCodes.h"
 #include "Framework/ParticleData/PDGLibrary.h"
 
+#include "Framework/Utils/RunOpt.h"
+#include "Framework/Utils/TuneId.h"
+#include "Framework/Utils/XmlParserUtils.h"
+
 #include "Physics/ExoticLLP/LLPChannelCalculatorI.h"
 #include "Physics/ExoticLLP/ExoticLLP.h"
 
 namespace genie {
   
+  class TuneId;
   class PDGLibrary;
 
   namespace llp {
@@ -71,6 +80,7 @@ namespace genie {
 
       mutable ExoticLLP fLLP; //! The concrete LLP instance.
       mutable double fMass; //! LLP mass in MeV
+      mutable std::string fInputPath; //! Path to the input channels, relative to $GENIE/config/
 
     }; // class LLPConfigurator
 
