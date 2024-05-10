@@ -190,6 +190,23 @@ bool PDGLibrary::AddHNL()
   return true;
 }
 //____________________________________________________________________________
+bool PDGLibrary::AddLLP()
+{
+  // Add LLP to PDG database
+  const Registry * reg = AlgConfigPool::Instance()->CommonList("LLP", "ParameterSpace");
+  if (!reg) {
+    LOG("PDG", pERROR) << "Cannot find LLP ParameterSpace param_set";
+    return false;
+  }
+  TParticlePDG * llp = fDatabasePDG->GetParticle(kPdgLLP);
+  if (!llp) {
+    // Name Title Mass Stable Width Charge Class PDG
+    fDatabasePDG->AddParticle("LLP","LLP",reg->GetDouble("Mass"),true,0.,0,"LLP",kPdgLLP);
+    fDatabasePDG->AddParticle("LLPBar","LLPBar",reg->GetDouble("Mass"),true,0.,0,"LLP",-1*kPdgLLP);
+  }
+  return true;
+}
+//____________________________________________________________________________
 bool PDGLibrary::AddDarkSector()
 {
   // Add dark neutrino particles to PDG database

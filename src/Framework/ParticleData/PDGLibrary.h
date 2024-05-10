@@ -14,8 +14,8 @@
           Changes required to implement the GENIE Dark Neutrino module
           were installed by Iker de Icaza (Univ. of Sussex)
 
-	  Changes required to implement the GENIE BeamHNL module
-	  were installed by John Plows (Univ. of Oxford)
+	  Changes required to implement the GENIE BeamHNL and ExoticLLP modules
+	  were installed by John Plows (Univ. of Oxford, now Liverpool)
 
 \created  May 06, 2004
 
@@ -56,6 +56,7 @@ private:
   bool LoadDBase(void);
   bool AddDarkSector ();
   bool AddHNL  (void);
+  bool AddLLP  (void);
 
   static PDGLibrary * fInstance;
   TDatabasePDG      * fDatabasePDG;

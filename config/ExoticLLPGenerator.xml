@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<!--
+Configuration for the ExoticLLP simulation
+Shared by LLPConfigurator
+
+Algorithm Configurable Parameters:
+..............................................................................................................................
+Name                      Type        Opt   Comment                                           Default
+..............................................................................................................................
+
+*******************                         **********************************
+set ParameterSpace:                         Choice of parameter space position
+*******************                         **********************************
+Mass                      double      no
+HNL-Majorana              bool        no    Majorana vs Dirac HNL PROBABLY NEED THIS
+
+********************                        ********************************
+set CoordinateXForm:                        Define beam -> local coord xform
+********************                        ********************************
+These vectors describe the following transformations between the 3 salient frames NEAR, BEAM, and USER.
+Translations are in [m]. Rotations are in [rad] and follow the extrinsic "X-Z-X" convention.
+For more details, see $GENIE/src/contrib/beamhnl/CommonHNL_DEMO.xml or Appendix A3, arXiv: 2211.20210
+
+Near2Beam_R               vec-double  no    Rotation of beam axis (BEAM frame) wrt global (NEAR) frame
+
+Near2User_T               vec-double  no    Translation from NEAR to USER origin
+DetCentre_User            vec-double  no    If input ROOT geom has detector centre != file origin, 
+                                            set detector centre in file coordinate system here
+Near2User_R               vec-double  no    Rotation from NEAR to USER
+
+-->
+
+<alg_conf>
+  
+  <param_set name="Default">
+    
+    <param type="string" name="CommonLLP"> ParameterSpace,CoordinateXForm </param>
+    <param type="string" name="CommonParam"> WeakInt,CKM </param>
+
+  </param_set>
+
+</alg_conf>

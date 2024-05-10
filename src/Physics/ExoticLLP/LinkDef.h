@@ -1,0 +1,20 @@
+#ifdef __CINT__
+
+#pragma link off all globals;
+#pragma link off all classes;
+#pragma link off all functions;
+
+#pragma link C++ namespace genie;
+#pragma link C++ namespace genie::llp;
+
+#pragma link C++ class genie::llp::ChannelCalculatorI;
+
+#pragma link C++ class genie::llp::ExoticLLP;
+#pragma link C++ class genie::llp::ModeObject;
+
+#pragma link C++ class genie::llp::LLPConfigurator;
+
+#pragma link C++ class genie::DummyLLPInteractionListGenerator;
+#pragma link C++ class genie::DummyLLPPXSec;
+
+#endif

@@ -223,6 +223,8 @@ namespace genie {
   const int kPdgDNuMediator     =  2000030001; // Mediator particle for GENIE Dark Neutrino mode
   const int kPdgHNL             =  2000020000; // Heavy Neutral Lepton for GENIE BeamHNL simulation
   const int kPdgAntiHNL         = -2000020000; // Heavy Neutral Lepton for GENIE BeamHNL simulation
+  const int kPdgLLP             =  2000022022; // Generic long lived particle for ExoticLLP simulation
+  const int kPdgAntiLLP         = -2000022022; // Generic long lived particle for ExoticLLP simulation
   
   //
   // PDG codes for special particles used by external generators interfaced with GENIE

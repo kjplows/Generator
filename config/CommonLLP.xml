@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<!--
+******************************************************************************************************
+In this file, common physics parameters for the long-lived HNL simulation are defined.
+Ideally, the user would come here to tweak parameters such as HNL mass and mixings as well as switch
+on/off certain hooks such as Majorana nature, polarisation effects, etc.
+It would also be interesting to set the interesting decays here (relevant in case a specific channel is
+not specified in the arguments of the code itself, helps POT)
+
+This is a demo file meant for first-time use. You can use this by putting it in $GENIE/config/CommonHNL.xml and the fluxes and ROOT-geometries generated in $GENIE/src/contrib/beamhnl.
+It models a Dirac HNL of 200 MeV/c^2 mass and couplings |Ue4|^2 = |Um4|^2 = 10^-7, |U_t4|^2 = 0
+Signal channels are the two-body decays pi + mu, pi + e and the three-body invisible decay v + v + v.
+
+For simplicity, the BEAM and USER frames are unrotated with respect to the NEAR frame.
+
+Author:
+John Plows <komninos-john.plows \at physics.ox.ac.uk>
+University of Oxford
+April 11th, 2022
+******************************************************************************************************
+-->
+
+<common_LLP_list>
+
+  <param_set name="ParameterSpace">
+    <param type="double" name="Mass"> 0.200 </param> <!-- GeV -->
+  </param_set>
+
+  <param_set name="CoordinateXForm">
+    <param type="vec-double" name="Near2Beam_R" delim=";"> 0.0 ; 0.0 ; -0.05830 </param> <!-- rad -->
+    <!-- Euler angles, extrinsic x-z-x = 1-2-3, RM * BEAM = USER, RM = Rx(1) * Rz(2) * Rx(3). -->
+    <!-- Describes rotation of BEAM wrt NEAR frame -->
+    <param type="vec-double" name="Near2User_T" delim=";"> 0.0 ; -60.0 ; 1000.0 </param> <!-- m -->
+    <!-- USER origin in NEAR coordinates -->
+    <param type="vec-double" name="Near2User_R" delim=";"> 0.0 ; 0.0 ; 0.0 </param>
+    <!-- Euler angles, extrinsic x-z-x -->
+    <!-- Describes rotation of USER wrt NEAR frame -->
+    <param type="vec-double" name="DetCentre_User" delim=";"> 0.0 ; 0.0 ; 0.0 </param> <!-- m -->
+    <!-- Position of detector centre in USER frame, in case it is not at USER origin -->
+  </param_set>
+
+</common_LLP_list>
