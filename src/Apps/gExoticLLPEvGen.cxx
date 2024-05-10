@@ -41,6 +41,7 @@
 #include "Framework/Utils/RunOpt.h"
 #include "Framework/Utils/CmdLnArgParser.h"
 
+#include "Physics/ExoticLLP/ExoticLLP.h"
 #include "Physics/ExoticLLP/LLPConfigurator.h"
 
 using std::string;
@@ -48,6 +49,7 @@ using std::vector;
 using std::ostringstream;
 
 using namespace genie;
+using namespace genie::llp;
 
 #ifdef __GENIE_FLUX_DRIVERS_ENABLED__
 #define __CAN_GENERATE_EVENTS_USING_A_FLUX__
@@ -146,6 +148,15 @@ int main(int argc, char ** argv)
   utils::app_init::RandGen(gOptRanSeed);
 
   __attribute__((unused)) RandomGen * rnd = RandomGen::Instance();
+
+  const Algorithm * algLLPConfigurator = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
+
+  const LLPConfigurator * LLP_configurator = dynamic_cast< const LLPConfigurator * >( algLLPConfigurator );
+
+  // Let's ensure that the LLP Configurator plays ball. Ask it what the LLP mass is
+  ExoticLLP llp = LLP_configurator->RetrieveLLP();
+
+  LOG( "gevgen_exotic_llp", pFATAL ) << llp;
 
   LOG( "gevgen_exotic_llp", pFATAL )
     << "This is a TEST. Goodbye world!";

@@ -60,6 +60,9 @@ namespace genie {
       void Configure(const Registry & config);
       void Configure(string config);
 
+      // inline function to allow access to the underlying LLP
+      inline ExoticLLP RetrieveLLP() const { return fLLP; }
+
     private:
 
       void LoadConfig(void);
