@@ -25,6 +25,7 @@
 // -- C++ includes
 #include <iterator>
 #include <sstream>
+#include <tuple>
 #include <utility>
 
 // -- libxml includes
@@ -44,6 +45,9 @@
 
 #include "Physics/ExoticLLP/LLPChannelCalculatorI.h"
 #include "Physics/ExoticLLP/ExoticLLP.h"
+
+typedef std::vector< std::pair< double, std::vector<int> > > ModeVector;
+typedef std::vector< std::pair< std::vector<double>, std::vector<int> > > ModeKnotVector;
 
 namespace genie {
   
@@ -76,11 +80,21 @@ namespace genie {
 
       void LoadConfig(void);
 
+      void ParseInputFile(void) const;
+      std::tuple< ModeVector, ModeVector > 
+	ParseParamSet( xmlDocPtr & doc, xmlNodePtr pset ) const;
+      ModeVector ParseModes( xmlDocPtr & doc, xmlNodePtr node ) const;
+
+      std::vector<double> GetDoubleVector( std::string str ) const;
+      std::vector<int> GetIntVector( std::string str ) const;
+
       mutable bool fIsConfigLoaded;
 
       mutable ExoticLLP fLLP; //! The concrete LLP instance.
       mutable double fMass; //! LLP mass in MeV
+
       mutable std::string fInputPath; //! Path to the input channels, relative to $GENIE/config/
+      mutable ModeVector fProdChannels, fDecayChannels;
 
     }; // class LLPConfigurator
 
