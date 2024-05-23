@@ -47,6 +47,8 @@ namespace genie {
       bool IsProductionMode() { return ( fMode == 0 ); }
       bool IsDecayMode() { return ( fMode == 1 ); }
 
+      std::string GetName() { return fName; }
+
     }; // struct ModeObject
 
     class ExoticLLP {

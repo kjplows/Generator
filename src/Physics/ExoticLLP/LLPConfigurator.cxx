@@ -76,17 +76,34 @@ void LLPConfigurator::LoadConfig(void)
 
   // Now that we have the path, read in the XML file
   this->ParseInputFile();
+  
+  // construc the LLP!
+  ModeVector all_modes;
+  for( ModeVector::iterator mvit = fProdChannels.begin() ; 
+       mvit != fProdChannels.end() ; ++mvit ) all_modes.emplace_back( *mvit );
+  for( ModeVector::iterator mvit = fDecayChannels.begin() ; 
+       mvit != fDecayChannels.end() ; ++mvit ) all_modes.emplace_back( *mvit );
+
+  ExoticLLP * ptLLP = new ExoticLLP( fMass, all_modes );
 
   // For now, just make a single production mode K+ --> X + e+ and decay mode X --> e- e+
+  /*
   std::vector<int> prodDummy = { kPdgKP, kPdgLLP, kPdgPositron };
+  std::vector<int> prod2Dummy = { kPdgKP, kPdgLLP, kPdgAntiMuon };
+  std::vector<int> prod3Dummy = { kPdgDP, kPdgLLP, kPdgAntiTau };
   std::vector<int> decDummy  = { kPdgLLP, kPdgElectron, kPdgPositron };
+  std::vector<int> dec2Dummy  = { kPdgLLP, kPdgMuon, kPdgAntiMuon };
 
-  std::pair< double, std::vector<int> > dprod_pair = std::make_pair( 1.0, prodDummy );
-  std::pair< double, std::vector<int> > ddec_pair  = std::make_pair( 1.0, decDummy  );
+  std::pair< double, std::vector<int> > dprod_pair = std::make_pair( 0.5, prodDummy );
+  std::pair< double, std::vector<int> > dprod2_pair = std::make_pair( 0.5, prod2Dummy );
+  std::pair< double, std::vector<int> > dprod3_pair = std::make_pair( 0.5, prod3Dummy );
+  std::pair< double, std::vector<int> > ddec_pair  = std::make_pair( 0.5, decDummy  );
+  std::pair< double, std::vector<int> > ddec2_pair  = std::make_pair( 0.5, dec2Dummy  );
 
-  ModeVector dmodes = { dprod_pair, ddec_pair };
+  ModeVector dmodes = { dprod_pair, dprod2_pair, dprod3_pair, ddec_pair, ddec2_pair };
 
   ExoticLLP * ptLLP = new ExoticLLP( fMass, dmodes );
+  */
   
   fLLP = *ptLLP;
 }

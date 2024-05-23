@@ -45,6 +45,12 @@ void ExoticLLP::ConstructModes( std::vector< std::pair< double,
 
     std::vector< int > pdgList = (*mit).second;
     std::vector< int > nuPdgList = pdgList; // to reorder products later
+
+    LOG( "ExoticLLP", pFATAL ) << "Testing mode " << (mit - modes.begin());
+    std::ostringstream asts; asts << "Mode " << (mit - modes.begin()) << ": ";
+    for( std::vector<int>::iterator pdgit = nuPdgList.begin() ;
+	 pdgit != nuPdgList.end() ; ++pdgit ) asts << *pdgit << " ";
+    LOG( "ExoticLLP", pFATAL ) << asts.str();
     
     // Production or decay?
     bool isProduction = false; bool isDecay = false;
@@ -67,14 +73,26 @@ void ExoticLLP::ConstructModes( std::vector< std::pair< double,
       assert( llp_found && "LLP PDG code in each given mode in the XML" );
 
       isProduction = true;
+      /*
       // Reorder the list so that LLP is the first daughter
       std::vector< int > tmpList; tmpList.emplace_back( pdgList.at(0) );
       tmpList.emplace_back( kPdgLLP );
       for( std::vector<int>::iterator ppit = pdgList.begin(); ppit != pdgList.end(); ++ppit ) {
-	if( *ppit != pdgList.at(0) && *pit != kPdgLLP ) tmpList.emplace_back( *ppit );
+	LOG( "ExoticLLP", pFATAL ) << "Checking  " << *ppit << " at position " << tmpList.size();
+	if( *ppit != pdgList.at(0) && *pit != kPdgLLP ) { 
+	  tmpList.emplace_back( *ppit );
+	  LOG( "ExoticLLP", pFATAL ) << "Emplacing back " << *ppit << " at position " << tmpList.size();
+	}
       }
       nuPdgList = tmpList; // now contains LLP in position 1
+      */
     } // production modes
+
+    LOG( "ExoticLLP", pFATAL ) << "Testing mode " << (mit - modes.begin()) << " again!";
+    std::ostringstream bsts; bsts << "Mode " << (mit - modes.begin()) << ": ";
+    for( std::vector<int>::iterator pdgit = nuPdgList.begin() ;
+	 pdgit != nuPdgList.end() ; ++pdgit ) bsts << *pdgit << " ";
+    LOG( "ExoticLLP", pFATAL ) << bsts.str();
 
     assert( ( isProduction || isDecay ) && "Each mode is either an LLP production or LLP decay mode." );
 
@@ -85,13 +103,14 @@ void ExoticLLP::ConstructModes( std::vector< std::pair< double,
       // build the name
       std::vector<int>::iterator pit = nuPdgList.begin();
       std::string name = "";
-      if( *pit < 0 ) name.append("LLPBarTo");
-      else name.append("LLPTo");
+      if( *pit < 0 ) name.append("LLPBarTo:");
+      else name.append("LLPTo:");
       pit++;
 
       for( ; pit != nuPdgList.end(); ++pit ) {
 	TParticlePDG * tmp_particle = dbase->GetParticle(*pit);
 	name.append( tmp_particle->GetName() );
+	if( pit < nuPdgList.end() - 1 ) name.append( ":" );
       } // name construction
 
       ModeObject mobj;
@@ -113,13 +132,14 @@ void ExoticLLP::ConstructModes( std::vector< std::pair< double,
       name.append( parent_particle->GetName() );
 
       pit++;
-      if( *pit < 0 ) name.append("ToLLPBar");
-      else name.append("ToLLP");
+      if( *pit < 0 ) name.append("To:LLPBar:");
+      else name.append("To:LLP:");
 
       pit++;
       for( ; pit != nuPdgList.end(); ++pit ) {
 	TParticlePDG * tmp_particle = dbase->GetParticle(*pit);
 	name.append( tmp_particle->GetName() );
+	if( pit < nuPdgList.end() - 1 ) name.append( ":" );
       } // name construction
 
       ModeObject mobj;
@@ -148,6 +168,16 @@ namespace genie {
     {
       stream << "Test print"
 	     << "\nLLP mass: " << LLP.GetMass() << " MeV / c^2";
+
+      std::vector< ModeObject > prodModes = LLP.GetProductionModes();
+      std::vector< ModeObject > decayModes = LLP.GetDecayModes();
+
+      stream << "\nProduction modes:";
+      for( std::vector<ModeObject>::iterator vit = prodModes.begin(); vit != prodModes.end() ; ++vit )
+	stream << "\n" << (*vit).GetName();
+      stream << "\nDecay modes:";
+      for( std::vector<ModeObject>::iterator vit = decayModes.begin(); vit != decayModes.end() ; ++vit )
+	stream << "\n" << (*vit).GetName();
       return stream;
     }
   } 
