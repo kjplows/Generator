@@ -6,6 +6,10 @@ src/make/Make.config
 src/make/Make.config_no_paths
 src/Framework/Conventions/GBuild.h
 src/Framework/Conventions/GVersion.h
+src/Physics/BeamHNL/
+src/contrib/beamhnl/
+config/CommonHNL.xml
+src/Apps/gBeamHNLEvGen.cxx
 *.root
 *.gdml
 *.org
