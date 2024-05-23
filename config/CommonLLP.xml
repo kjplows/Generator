@@ -24,7 +24,8 @@ April 11th, 2022
 <common_LLP_list>
 
   <param_set name="ParameterSpace">
-    <param type="double" name="Mass"> 0.200 </param> <!-- GeV -->
+    <param type="double" name="Mass"> 0.214 </param> <!-- GeV -->
+    <param type="string" name="InputChannels"> LLP_generator_default.xml </param>
   </param_set>
 
   <param_set name="CoordinateXForm">

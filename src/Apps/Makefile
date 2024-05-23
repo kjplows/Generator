@@ -47,6 +47,9 @@ ifeq ($(strip $(GOPT_ENABLE_ATMO)),YES)
 TGT_BASE += gevgen_atmo
 TGT_BASE += gevgen_upmu
 endif
+ifeq ($(strip $(GOPT_ENABLE_EXOTIC_LLP)), YES)
+TGT_BASE += gevgen_exotic_llp
+endif
 ifeq ($(strip $(GOPT_ENABLE_HEAVY_NEUTRAL_LEPTON)),YES)
 TGT_BASE += gevgen_hnl
 TGT_BASE += gevgen_pghnl
@@ -135,6 +138,12 @@ $(GENIE_BIN_PATH)/gevgen_upmu: gUpMuFluxGen.o $(call find_libs,gevgen_upmu)
 $(GENIE_BIN_PATH)/gevgen_hadron: gEvGenHadronNucleus.o $(call find_libs,gevgen_hadron)
 	@echo "** Building gevgen_hadron"
 	$(LD) $(LDFLAGS) gEvGenHadronNucleus.o $(LIBRARIES) -o $(GENIE_BIN_PATH)/gevgen_hadron
+
+# exotic LLP event generation app
+#
+$(GENIE_BIN_PATH)/gevgen_exotic_llp: gExoticLLPEvGen.o $(call find_libs,gevgen_exotic_llp)
+	@echo "** Building gevgen_exotic_llp"
+	$(LD) $(LDFLAGS) gExoticLLPEvGen.o $(LIBRARIES) -o $(GENIE_BIN_PATH)/gevgen_exotic_llp
 
 # heavy neutral lepton event generation app
 #

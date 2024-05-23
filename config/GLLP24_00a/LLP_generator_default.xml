@@ -8,7 +8,6 @@
 <alg_conf>
 
   <param_set name="Default">
-
     <!-- Some details about this parameter set -->
     <param type="string" name="Details"> A default set for LLP production and decay modes </param>
 
@@ -32,15 +31,27 @@
 	</param>
       </modeObject>
 
-      <!-- K+ -> X + e+ -->
-      <modeObject name="KPToEP">
+      <!-- pi+ -> X + e+ -->
+      <modeObject name="PiPToEP">
 	<param type="vec-double" name="Scores" delim=";">
 	  0.200; 0.260; 0.320; 0.380; 0.440; 0.500; 0.560; 0.620; 0.900; 1.000
 	</param>
 
 	<!-- Always specify parent first -->
 	<param type="vec-int" name="PDGList" delim=";">
-	  321 ; 2000022022 ; -13
+	  211 ; 2000022022 ; -13
+	</param>
+      </modeObject>
+
+      <!-- D+ -> X + tau+ -->
+      <modeObject name="DPToTauP">
+	<param type="vec-double" name="Scores" delim=";">
+	  0.200; 0.260; 0.320; 0.380; 0.440; 0.500; 0.560; 0.620; 0.900; 1.000
+	</param>
+
+	<!-- Always specify parent first -->
+	<param type="vec-int" name="PDGList" delim=";">
+	  411 ; 2000022022 ; -15
 	</param>
       </modeObject>
 
@@ -66,13 +77,24 @@
       </modeObject>
 
       <!-- X -> v + mu+ + mu- -->
-      <modeObject name="ToNuMPMM">
+      <modeObject name="ToNuMuPMuM">
 	<param type="vec-double" name="Scores" delim=";">
 	  0.000; 0.001; 0.050; 0.090; 0.160; 0.270; 0.500; 0.745; 1.000
 	</param>
 
 	<param type="vec-int" name="PDGList" delim=";">
 	  2000022022 ; 14 ; -13 ; 13
+	</param>
+      </modeObject>
+
+      <!-- X -> pi+ + mu- -->
+      <modeObject name="ToPiPMuM">
+	<param type="vec-double" name="Scores" delim=";">
+	  0.000; 0.001; 0.050; 0.090; 0.160; 0.270; 0.500; 0.745; 1.000
+	</param>
+
+	<param type="vec-int" name="PDGList" delim=";">
+	  2000022022 ; 211 ; 13
 	</param>
       </modeObject>
 

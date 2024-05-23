@@ -127,6 +127,13 @@ if(@nret>0)
       { print GBLD   "#define __GENIE_GEANT4_INTERFACE_ENABLED__\n"; }
 else  { print GBLD "//#define __GENIE_GEANT4_INTERFACE_ENABLED__\n"; }
 
+# Exotic LLP enabled?
+#
+@nret = `grep 'GOPT_ENABLE_EXOTIC_LLP=YES' $GCONF_FILE`;
+if(@nret>0)
+      { print GBLD   "#define __GENIE_EXOTIC_LLP_ENABLED__\n"; }
+else  { print GBLD "//#define __GENIE_EXOTIC_LLP_ENABLED__\n"; }
+
 # DarkNeutrino enabled?
 #
 @nret = `grep 'GOPT_ENABLE_DARK_NEUTRINO=YES' $GCONF_FILE`;
