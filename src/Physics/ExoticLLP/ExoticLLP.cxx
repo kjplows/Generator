@@ -21,11 +21,17 @@ ExoticLLP::ExoticLLP()
 
 }
 //____________________________________________________________________________
-ExoticLLP::ExoticLLP( double mass, 
-		      std::vector< std::pair< double, std::vector< int > > > modes ) :
+ExoticLLP::ExoticLLP( double mass, ModeVector modes ) :
   fMass( mass )
 {
   ConstructModes( modes );
+}
+//____________________________________________________________________________
+ExoticLLP::ExoticLLP( double mass, ModeVector productionModes, ModeVector decayModes ):
+  fMass( mass )
+{
+  ConstructModes( productionModes );
+  ConstructModes( decayModes );
 }
 //____________________________________________________________________________
 ExoticLLP::~ExoticLLP()
@@ -33,24 +39,17 @@ ExoticLLP::~ExoticLLP()
 
 }
 //____________________________________________________________________________
-void ExoticLLP::ConstructModes( std::vector< std::pair< double, 
-				std::vector< int > > > modes ) const 
+void ExoticLLP::ConstructModes( ModeVector modes ) const 
 {
   // The PDG database GENIE uses
   TDatabasePDG * dbase = PDGLibrary::Instance()->DBase();
   
-  std::vector< std::pair< double, std::vector< int > > >::iterator mit = modes.begin();
+  ModeVector::iterator mit = modes.begin();
 
   for( ; mit != modes.end(); ++mit ) {
 
     std::vector< int > pdgList = (*mit).second;
     std::vector< int > nuPdgList = pdgList; // to reorder products later
-
-    LOG( "ExoticLLP", pFATAL ) << "Testing mode " << (mit - modes.begin());
-    std::ostringstream asts; asts << "Mode " << (mit - modes.begin()) << ": ";
-    for( std::vector<int>::iterator pdgit = nuPdgList.begin() ;
-	 pdgit != nuPdgList.end() ; ++pdgit ) asts << *pdgit << " ";
-    LOG( "ExoticLLP", pFATAL ) << asts.str();
     
     // Production or decay?
     bool isProduction = false; bool isDecay = false;
@@ -73,26 +72,7 @@ void ExoticLLP::ConstructModes( std::vector< std::pair< double,
       assert( llp_found && "LLP PDG code in each given mode in the XML" );
 
       isProduction = true;
-      /*
-      // Reorder the list so that LLP is the first daughter
-      std::vector< int > tmpList; tmpList.emplace_back( pdgList.at(0) );
-      tmpList.emplace_back( kPdgLLP );
-      for( std::vector<int>::iterator ppit = pdgList.begin(); ppit != pdgList.end(); ++ppit ) {
-	LOG( "ExoticLLP", pFATAL ) << "Checking  " << *ppit << " at position " << tmpList.size();
-	if( *ppit != pdgList.at(0) && *pit != kPdgLLP ) { 
-	  tmpList.emplace_back( *ppit );
-	  LOG( "ExoticLLP", pFATAL ) << "Emplacing back " << *ppit << " at position " << tmpList.size();
-	}
-      }
-      nuPdgList = tmpList; // now contains LLP in position 1
-      */
     } // production modes
-
-    LOG( "ExoticLLP", pFATAL ) << "Testing mode " << (mit - modes.begin()) << " again!";
-    std::ostringstream bsts; bsts << "Mode " << (mit - modes.begin()) << ": ";
-    for( std::vector<int>::iterator pdgit = nuPdgList.begin() ;
-	 pdgit != nuPdgList.end() ; ++pdgit ) bsts << *pdgit << " ";
-    LOG( "ExoticLLP", pFATAL ) << bsts.str();
 
     assert( ( isProduction || isDecay ) && "Each mode is either an LLP production or LLP decay mode." );
 
@@ -112,6 +92,22 @@ void ExoticLLP::ConstructModes( std::vector< std::pair< double,
 	name.append( tmp_particle->GetName() );
 	if( pit < nuPdgList.end() - 1 ) name.append( ":" );
       } // name construction
+
+      // Check the mode is kinematically accessible
+      // Force user to re-inspect their xml file if there's a problem
+      std::vector<int>::iterator mmit = pdgList.begin(); mmit++; mmit++;
+      double total_mass = 0.0;
+      for( ; mmit != pdgList.end() ; ++mmit ) total_mass += (dbase->GetParticle(*mmit))->Mass(); // GeV
+
+      if( total_mass > fMass && score > 0.0 ) {
+	LOG( "ExoticLLP", pFATAL )
+	  << "Error! A non-zero score " << score << " was associated with the decay mode " << name 
+	  << "\nHere is the total_mass: " << total_mass
+	  << "\nThis means your xml file contains unphysical channels - please check. Exiting now!";
+      } // error message
+
+      assert( ( total_mass <= fMass || score == 0.0 ) &&
+	      "All decay channels are kinematically accessible" );
 
       ModeObject mobj;
       mobj.fIndex = idx;
@@ -141,6 +137,21 @@ void ExoticLLP::ConstructModes( std::vector< std::pair< double,
 	name.append( tmp_particle->GetName() );
 	if( pit < nuPdgList.end() - 1 ) name.append( ":" );
       } // name construction
+
+      // Check the mode is kinematically accessible
+      // Force user to re-inspect their xml file if there's a problem
+      std::vector<int>::iterator mmit = pdgList.begin();
+      double parent_mass = (dbase->GetParticle(*mmit))->Mass(); ++mmit;
+      double total_mass = fMass; ++mmit;
+      for( ; mmit != pdgList.end() ; ++mmit ) total_mass += (dbase->GetParticle(*mmit))->Mass(); // GeV
+      if( total_mass > parent_mass && score > 0.0 ) {
+	LOG( "ExoticLLP", pFATAL )
+	  << "Error! A non-zero score " << score << " was associated with the production mode " << name 
+	  << "\nThis means your xml file contains unphysical channels - please check. Exiting now!";
+      } // error message
+
+      assert( ( total_mass <= parent_mass || score == 0.0 ) &&
+	      "All decay channels are kinematically accessible" );
 
       ModeObject mobj;
       mobj.fIndex = idx;
@@ -174,10 +185,10 @@ namespace genie {
 
       stream << "\nProduction modes:";
       for( std::vector<ModeObject>::iterator vit = prodModes.begin(); vit != prodModes.end() ; ++vit )
-	stream << "\n" << (*vit).GetName();
+	stream << "\n" << (*vit).GetName() << " with score " << (*vit).GetScore();
       stream << "\nDecay modes:";
       for( std::vector<ModeObject>::iterator vit = decayModes.begin(); vit != decayModes.end() ; ++vit )
-	stream << "\n" << (*vit).GetName();
+	stream << "\n" << (*vit).GetName() << " with score " << (*vit).GetScore();
       return stream;
     }
   } 

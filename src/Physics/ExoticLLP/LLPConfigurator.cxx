@@ -84,26 +84,8 @@ void LLPConfigurator::LoadConfig(void)
   for( ModeVector::iterator mvit = fDecayChannels.begin() ; 
        mvit != fDecayChannels.end() ; ++mvit ) all_modes.emplace_back( *mvit );
 
-  ExoticLLP * ptLLP = new ExoticLLP( fMass, all_modes );
-
-  // For now, just make a single production mode K+ --> X + e+ and decay mode X --> e- e+
-  /*
-  std::vector<int> prodDummy = { kPdgKP, kPdgLLP, kPdgPositron };
-  std::vector<int> prod2Dummy = { kPdgKP, kPdgLLP, kPdgAntiMuon };
-  std::vector<int> prod3Dummy = { kPdgDP, kPdgLLP, kPdgAntiTau };
-  std::vector<int> decDummy  = { kPdgLLP, kPdgElectron, kPdgPositron };
-  std::vector<int> dec2Dummy  = { kPdgLLP, kPdgMuon, kPdgAntiMuon };
-
-  std::pair< double, std::vector<int> > dprod_pair = std::make_pair( 0.5, prodDummy );
-  std::pair< double, std::vector<int> > dprod2_pair = std::make_pair( 0.5, prod2Dummy );
-  std::pair< double, std::vector<int> > dprod3_pair = std::make_pair( 0.5, prod3Dummy );
-  std::pair< double, std::vector<int> > ddec_pair  = std::make_pair( 0.5, decDummy  );
-  std::pair< double, std::vector<int> > ddec2_pair  = std::make_pair( 0.5, dec2Dummy  );
-
-  ModeVector dmodes = { dprod_pair, dprod2_pair, dprod3_pair, ddec_pair, ddec2_pair };
-
-  ExoticLLP * ptLLP = new ExoticLLP( fMass, dmodes );
-  */
+  //ExoticLLP * ptLLP = new ExoticLLP( fMass, all_modes );
+  ExoticLLP * ptLLP = new ExoticLLP( fMass, fProdChannels, fDecayChannels );
   
   fLLP = *ptLLP;
 }

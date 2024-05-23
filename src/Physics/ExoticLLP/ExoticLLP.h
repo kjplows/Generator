@@ -32,6 +32,8 @@
 #include "Framework/ParticleData/PDGLibrary.h"
 #include "Framework/Utils/PrintUtils.h"
 
+typedef std::vector< std::pair< double, std::vector<int> > > ModeVector;
+
 namespace genie {
 
   namespace llp {
@@ -48,6 +50,7 @@ namespace genie {
       bool IsDecayMode() { return ( fMode == 1 ); }
 
       std::string GetName() { return fName; }
+      double GetScore() { return fScore; }
 
     }; // struct ModeObject
 
@@ -57,7 +60,8 @@ namespace genie {
 
       // C'tors
       ExoticLLP();
-      ExoticLLP( double mass, std::vector< std::pair< double, std::vector< int > > >  modes );
+      ExoticLLP( double mass, ModeVector  modes );
+      ExoticLLP( double mass, ModeVector productionModes, ModeVector decayModes );
       ~ExoticLLP();
 
       // Getters
@@ -75,7 +79,7 @@ namespace genie {
       mutable std::vector< genie::llp::ModeObject > fProductionModes; //! The channels that can produce LLP
       mutable std::vector< genie::llp::ModeObject > fDecayModes;      //! The channels that LLP can produce
 
-      void ConstructModes( std::vector< std::pair< double, std::vector< int > > > modes ) const;
+      void ConstructModes( ModeVector modes ) const;
       ModeObject MakeModeObject( std::pair< double, std::vector< int > > mode ) const;
 
     }; // class ExoticLLP

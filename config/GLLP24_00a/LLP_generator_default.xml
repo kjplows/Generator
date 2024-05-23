@@ -16,13 +16,13 @@
 
       <!-- Specify the LLP masses to interpolate scores -->
       <param type="vec-double" name="Masses" delim=";">
-	0.000; 0.050; 0.100; 0.150; 0.200; 0.250; 0.300; 0.350; 0.375; 0.400
+	0.000; 0.100; 0.400; 1.000
       </param>
 
       <!-- K+ -> X + mu+ -->
       <modeObject name="KPToMuP">
 	<param type="vec-double" name="Scores" delim=";">
-	  0.800; 0.740; 0.680; 0.620; 0.560; 0.500; 0.440; 0.380; 0.100; 0.000
+	  0.800 ; 0.700 ; 0.050 ; 0.000
 	</param>
 
 	<!-- Always specify parent first -->
@@ -34,24 +34,24 @@
       <!-- pi+ -> X + e+ -->
       <modeObject name="PiPToEP">
 	<param type="vec-double" name="Scores" delim=";">
-	  0.200; 0.260; 0.320; 0.380; 0.440; 0.500; 0.560; 0.620; 0.900; 1.000
+	  0.190 ; 0.010 ; 0.000 ; 0.000
 	</param>
 
 	<!-- Always specify parent first -->
 	<param type="vec-int" name="PDGList" delim=";">
-	  211 ; 2000022022 ; -13
+	  211 ; 2000022022 ; -11
 	</param>
       </modeObject>
 
-      <!-- D+ -> X + tau+ -->
-      <modeObject name="DPToTauP">
+      <!-- D+ -> X + mu+ -->
+      <modeObject name="DPToMuP">
 	<param type="vec-double" name="Scores" delim=";">
-	  0.200; 0.260; 0.320; 0.380; 0.440; 0.500; 0.560; 0.620; 0.900; 1.000
+	  0.010 ; 0.290 ; 0.950 ; 1.000
 	</param>
 
 	<!-- Always specify parent first -->
 	<param type="vec-int" name="PDGList" delim=";">
-	  411 ; 2000022022 ; -15
+	  411 ; 2000022022 ; -13
 	</param>
       </modeObject>
 
@@ -62,13 +62,13 @@
       
       <!-- Specify the LLP masses to interpolate scores -->
       <param type="vec-double" name="Masses" delim=";">
-	0.000; 0.212; 0.250; 0.275; 0.300; 0.325; 0.350; 0.375; 0.400
+	0.000; 0.100; 0.400; 1.000
       </param>
 
       <!-- X -> v + e+ + e- -->
       <modeObject name="ToNuEPEM">
 	<param type="vec-double" name="Scores" delim=";">
-	  1.000; 0.999; 0.950; 0.910; 0.840; 0.730; 0.500; 0.255; 0.000
+	  1.000; 1.000 ; 0.600 ; 0.200
 	</param>
 
 	<param type="vec-int" name="PDGList" delim=";">
@@ -79,7 +79,7 @@
       <!-- X -> v + mu+ + mu- -->
       <modeObject name="ToNuMuPMuM">
 	<param type="vec-double" name="Scores" delim=";">
-	  0.000; 0.001; 0.050; 0.090; 0.160; 0.270; 0.500; 0.745; 1.000
+	  0.000; 0.000 ; 0.150 ; 0.180
 	</param>
 
 	<param type="vec-int" name="PDGList" delim=";">
@@ -90,7 +90,7 @@
       <!-- X -> pi+ + mu- -->
       <modeObject name="ToPiPMuM">
 	<param type="vec-double" name="Scores" delim=";">
-	  0.000; 0.001; 0.050; 0.090; 0.160; 0.270; 0.500; 0.745; 1.000
+	  0.000 ; 0.000 ; 0.250 ; 0.620
 	</param>
 
 	<param type="vec-int" name="PDGList" delim=";">
