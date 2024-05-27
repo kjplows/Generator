@@ -809,6 +809,12 @@ void VertexGenerator::LoadConfig()
   fUx = fDetTranslation.at(0); fUy = fDetTranslation.at(1); fUz = fDetTranslation.at(2);
   fAx1 = fDetRotation.at(0); fAz = fDetRotation.at(1); fAx2 = fDetRotation.at(2);
 
+  TVector3 user_origin( fCx, fCy, fCz );
+  TVector3 user_rotation( fAx1, fAz, fAx2 );
+
+  VolumeSeeker * vsek = VolumeSeeker::Instance();
+  vsek->SetConfig( user_origin, user_rotation );
+
   fTx = 0.0; fTy = 0.0; fTz = 0.0;
 
   fIsConfigLoaded = true;

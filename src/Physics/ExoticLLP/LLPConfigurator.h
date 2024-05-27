@@ -4,7 +4,7 @@
   An Algorithm that constructs an ExoticLLP instance with knowledge of its
   own mass and visible states it couples with.
 
-\class    genie::bsm::LLPConfigurator
+\class    genie::llp::LLPConfigurator
 
 \brief    Constructs concrete instance of ExoticLLP
 
@@ -45,6 +45,7 @@
 
 #include "Physics/ExoticLLP/LLPChannelCalculatorI.h"
 #include "Physics/ExoticLLP/ExoticLLP.h"
+#include "Physics/ExoticLLP/VolumeSeeker.h"
 
 typedef std::vector< std::pair< double, std::vector<int> > > ModeVector;
 typedef std::vector< std::pair< std::vector<double>, std::vector<int> > > ModeKnotVector;
@@ -57,6 +58,7 @@ namespace genie {
   namespace llp {
 
     class ExoticLLP;
+    class VolumeSeeker;
     class LLPConfigurator : public ChannelCalculatorI {
 
     public:

@@ -19,7 +19,7 @@
           
 \created   May 23rd, 2024
 
-\cpright   Copyright (c) 2003-2023, The GENIE Collaboration
+\cpright   Copyright (c) 2003-2024, The GENIE Collaboration
            For the full text of the license visit http://copyright.genie-mc.org          
 */
 //____________________________________________________________________________
@@ -30,6 +30,7 @@
 #include <cmath>
 #include <cassert>
 #include <list>
+#include <tuple>
 
 #include <TVector3.h>
 #include <TGeoManager.h>
@@ -49,11 +50,15 @@
 #include "Framework/Utils/PrintUtils.h"
 
 #include "Physics/ExoticLLP/LLPGeomRecordVisitorI.h"
+#include "Physics/ExoticLLP/VolumeSeeker.h"
+
+typedef std::tuple< std::vector<double>, std::vector<double>, std::vector<double> > CoordTuple;
 
 namespace genie {
 namespace llp {
 
   class ExoticLLP;
+  class VolumeSeeker;
 
   class VertexGenerator : public GeomRecordVisitorI {
 
@@ -89,6 +94,10 @@ namespace llp {
     // --------------------------------------------------
     // Utilities
     // --------------------------------------------------
+
+    // Return information about the frame transformations
+    CoordTuple GetFrameInfo() const 
+    { return std::make_tuple( fUserOrigin, fDetTranslation, fDetRotation ); }
 
     // simple getter
     void GetInterestingPoints( TVector3 & entryPoint, TVector3 & exitPoint, TVector3 & decayPoint ) const;
@@ -144,13 +153,13 @@ namespace llp {
     mutable double tunits = genie::units::ns; mutable std::string tunitString = "ns";
 
     mutable double fSx = 0.0, fSy = 0.0, fSz = 0.0; //start point
-    mutable double fNx = 0.0, fNy = 0.0, fNz = 0.0; //origin point of HNL
+    mutable double fNx = 0.0, fNy = 0.0, fNz = 0.0; //origin point of LLP
     mutable double fPx = 0.0, fPy = 0.0, fPz = 0.0; //momentum
     mutable double fEx = 0.0, fEy = 0.0, fEz = 0.0; //entry point
     mutable double fXx = 0.0, fXy = 0.0, fXz = 0.0; //exit  point
 
     mutable double fSxROOT = 0.0, fSyROOT = 0.0, fSzROOT = 0.0; // start point in cm
-    mutable double fNxROOT = 0.0, fNyROOT = 0.0, fNzROOT = 0.0; // origin point of HNL in cm
+    mutable double fNxROOT = 0.0, fNyROOT = 0.0, fNzROOT = 0.0; // origin point of LLP in cm
     mutable double fExROOT = 0.0, fEyROOT = 0.0, fEzROOT = 0.0; // entry point in cm
     mutable double fXxROOT = 0.0, fXyROOT = 0.0, fXzROOT = 0.0; // exit  point in cm
 

@@ -43,7 +43,9 @@
 
 #include "Physics/ExoticLLP/ExoticLLP.h"
 #include "Physics/ExoticLLP/LLPConfigurator.h"
+//#include "Physics/ExoticLLP/LLPFluxGenerator.h"
 #include "Physics/ExoticLLP/LLPVertexGenerator.h"
+#include "Physics/ExoticLLP/VolumeSeeker.h"
 
 using std::string;
 using std::vector;
@@ -163,8 +165,15 @@ int main(int argc, char ** argv)
   // inspect the LLP
   LOG( "gevgen_exotic_llp", pFATAL ) << llp;
 
+  //const Algorithm * algFluxCreator = AlgFactory::Instance()->GetAlgorithm("genie::llp::FluxCreator", "Default");
   const Algorithm * algVtxGen = AlgFactory::Instance()->GetAlgorithm("genie::llp::VertexGenerator", "Default");
+
+  //const FluxCreator * fluxCreator = dynamic_cast< const FluxCreator * >( algFluxCreator );
   const VertexGenerator * vtxGen = dynamic_cast< const VertexGenerator * >( algVtxGen );
+
+  // check the config is correct
+  VolumeSeeker * vsek = VolumeSeeker::Instance();
+  vsek->PrintConfig();
 
   // Initialize an Ntuple Writer to save GHEP records into a TTree
   NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
