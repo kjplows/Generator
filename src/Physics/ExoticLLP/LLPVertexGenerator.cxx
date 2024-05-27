@@ -3,20 +3,20 @@
   Copyright (c) 2003-2023, The GENIE Collaboration
   For the full text of the license visit http://copyright.genie-mc.org
   
-  Author: John Plows <komninos-john.plows \at physics.ox.ac.uk>
-          University of Oxford
+  Author: John Plows <kplows \at liverpool.ac.uk>
+          University of Liverpool
 */
 //____________________________________________________________________________
 
-#include "Physics/BeamHNL/HNLVertexGenerator.h"
+#include "Physics/ExoticLLP/LLPVertexGenerator.h"
 
 using namespace genie;
-using namespace genie::hnl;
+using namespace genie::llp;
 using namespace genie::units;
 
 //____________________________________________________________________________
 VertexGenerator::VertexGenerator() :
-  GeomRecordVisitorI("genie::hnl::VertexGenerator")
+  GeomRecordVisitorI("genie::llp::VertexGenerator")
 {
 
 }
@@ -44,13 +44,12 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
    *  Uses ROOT's TGeoManager to find out where the intersections with the detector volume live
    *  Label them as entry and exit point. Then use them to determine:
    *  1) A decay vertex within the detector
-   *  2) A time-of-decay (== delay of HNL to reach the decay vertex wrt a massless SM v)
-   *  3) Geom weight: Survival to detector * decay within detector.
+   *  2) A time-of-decay (== delay of LLP to reach the decay vertex wrt a massless SM v)
    */
 
   // before anything else: find the geometry!
   if( !fGeoManager ){
-    LOG( "HNL", pINFO )
+    LOG( "ExoticLLP", pINFO )
       << "Getting geometry information from " << fGeomFile;
 
     fGeoManager = TGeoManager::Import(fGeomFile.c_str());
@@ -67,7 +66,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
       fTx = tran[0] * units::cm / units::m;
       fTy = tran[1] * units::cm / units::m;
       fTz = tran[2] * units::cm / units::m;
-      LOG( "HNL", pDEBUG )
+      LOG( "ExoticLLP", pDEBUG )
 	<< "Got translation of volume with name " << top_volume->GetName() << " which is ( " 
 	<< fTx << ", " << fTy << ", " << fTz << " ) [m]";
     }
@@ -76,12 +75,10 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
     TGeoBBox * box = (TGeoBBox *) ts;
     
     this->ImportBoundingBox( box );
-    
-    //this->ImportBoundingBox(box);
   }
 
   this->SetStartingParameters( event_rec );
-  LOG( "HNL", pDEBUG ) << "Starting parameters SET.";
+  LOG( "ExoticLLP", pDEBUG ) << "Starting parameters SET.";
 
   double weight = 1.0; // pure geom weight
 
@@ -100,7 +97,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 
   }
   if( !didIntersectDet ){ // bail
-    LOG( "HNL", pERROR )
+    LOG( "ExoticLLP", pERROR )
       << "Bailing...";
     TLorentzVector v4dummy( -999.9, -999.9, -999.9, -999.9 );
     event_rec->SetVertex( v4dummy );
@@ -146,7 +143,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   double decayProb = 1.0 - std::exp( - timeInsideDet / fCoMLifetime );
   weight *= 1.0 / decayProb;
 
-  LOG( "HNL", pDEBUG ) 
+  LOG( "ExoticLLP", pDEBUG ) 
     << "\nOutput of lifetime calc:"
     << "\nLifetime = " << fCoMLifetime << " [CoM ns]"
     << "\nDistance to detector = " << distanceBeforeDet * units::mm / units::m
@@ -181,7 +178,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   // the validation app doesn't run the Decayer. So we will insert two neutrinos (not a valid
   // decay mode), to store entry and exit point
   if( !isUsingDk2nu ){
-    LOG( "HNL", pDEBUG ) << "About to insert two neutrinos into a NULL event record";
+    LOG( "ExoticLLP", pDEBUG ) << "About to insert two neutrinos into a NULL event record";
     assert( !event_rec->Particle(1) && "Event record only has HNL if gevald_hnl -M 3" );
     
     TLorentzVector tmpp4( 0.0, 0.0, 0.0, 0.5 );
@@ -223,7 +220,7 @@ void VertexGenerator::EnforceUnits( std::string length_units, std::string angle_
   aunits = utils::units::UnitFromString( angle_units );
   tunits = utils::units::UnitFromString( time_units ); tunitString = time_units;
 
-  LOG( "HNL", pWARN )
+  LOG( "ExoticLLP", pWARN )
     << "Switching units:"
     << "\nTo:   " << length_units.c_str() << " , " << angle_units.c_str() << " , " << time_units.c_str()
     << "\nConversion factors: " << lunits/old_lunits << ", " << aunits / old_aunits << ", " << tunits / old_tunits;
@@ -240,7 +237,7 @@ void VertexGenerator::EnforceUnits( std::string length_units, std::string angle_
 
   kNewSpeedOfLight /= (lunits / old_lunits) / (tunits / old_tunits);
 
-  LOG( "HNL", pDEBUG )
+  LOG( "ExoticLLP", pDEBUG )
     << "kNewSpeedOfLight = " << kNewSpeedOfLight << " [" << lunitString.c_str() << "/"
     << tunitString.c_str() << "]";
 }
@@ -271,7 +268,7 @@ double VertexGenerator::CalcTravelLength( double betaMag, double CoMLifetime, do
   double elapsed_length = elapsed_time * betaMag * kNewSpeedOfLight;
 
   /*
-  LOG( "HNL", pDEBUG )
+  LOG( "ExoticLLP", pDEBUG )
     << "\nbetaMag, maxLength, CoMLifetime = " << betaMag << ", " << maxLength << ", " << CoMLifetime
     << "\nbetaMag = " << betaMag << " ==> gamma = " << gamma
     << "\n==> maxLength [" << tunitString.c_str()
@@ -326,7 +323,7 @@ void VertexGenerator::MakeSDV() const
   * (genie::units::m / lunits)
   / (genie::units::s / tunits);
 
-  LOG("HNL", pDEBUG)
+  LOG("ExoticLLP", pDEBUG)
     << "Setting simple decay volume with unit-m side."
     << "\nSetting units to \"mm\", \"rad\", \"ns\"";
 
@@ -454,14 +451,14 @@ void VertexGenerator::ImportBoundingBox( TGeoBBox * box ) const
 //____________________________________________________________________________
 void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
 {
-  if(event_rec) LOG("HNL", pDEBUG) << *event_rec;
+  if(event_rec) LOG("ExoticLLP", pDEBUG) << *event_rec;
 
   isUsingDk2nu = (event_rec->Particle(1) != NULL); // validation App doesn't run Decayer
   isParticleGun = (event_rec->Particle(0)->FirstMother() < -1); // hack
   isUsingRootGeom = true;
 
   /*
-  LOG( "HNL", pDEBUG ) << "isParticleGun = " << (int) isParticleGun
+  LOG( "ExoticLLP", pDEBUG ) << "isParticleGun = " << (int) isParticleGun
 		       << " with first mother " << event_rec->Particle(0)->FirstMother();
   */
 
@@ -541,7 +538,7 @@ void VertexGenerator::SetStartingParameters( GHepRecord * event_rec ) const
   fNyROOT = fNy * units::m / units::cm;
   fNzROOT = fNz * units::m / units::cm;
 
-  LOG( "HNL", pDEBUG )
+  LOG( "ExoticLLP", pDEBUG )
     << "\nx4HNL_user = " << utils::print::X4AsString( x4HNL_user ) << " [mm]"
     << "\nOrigin point = ( " << fNx << ", " << fNy << ", " << fNz << " ) [m, USER]"
     << "\nstartPoint = " << utils::print::Vec3AsString( &startPoint ) << " [mm]";
@@ -595,7 +592,7 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
   gGeoManager->SetCurrentPoint( firstXROOT, firstYROOT, firstZROOT );
   gGeoManager->SetCurrentDirection( px, py, pz );
   
-  LOG( "HNL", pINFO )
+  LOG( "ExoticLLP", pINFO )
     << "Starting to figure out entrances:"
     << "\nStarting point is ( " << fSx << ", " << fSy << ", " << fSz << " ) [ " << lunitString.c_str() << " ]"
     << "\nIn our volume this becomes ( " 
@@ -606,14 +603,14 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
     << "\nStarting dirn  is ( " << fPx << ", " << fPy << ", " << fPz << " ) ";
 
   std::string pathString = this->CheckGeomPoint( firstXROOT, firstYROOT, firstZROOT );
-  LOG( "HNL", pDEBUG ) << "Here is the pathString: " << pathString;
+  LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
 
-  LOG( "HNL", pDEBUG ) << "Starting to search for intersections...";
+  LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
 
   if( isParticleGun ) {
     // We start outside the detector. First, write out the starting point in top_volume coordinates
     //RandomGen * rnd = RandomGen::Instance();
-    LOG( "HNL" , pDEBUG )
+    LOG( "ExoticLLP" , pDEBUG )
       << "isParticleGun!!"
       << "\nstartPoint = ( " << (gGeoManager->GetCurrentPoint())[0]
       << ", " << (gGeoManager->GetCurrentPoint())[1] << ", " << (gGeoManager->GetCurrentPoint())[2]
@@ -658,15 +655,15 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
       zTest += 0.01 * (zFront - zBack);
     }
     if( pathString.find( fTopVolume.c_str() ) == string::npos ){
-      LOG( "HNL", pDEBUG )
+      LOG( "ExoticLLP", pDEBUG )
 	<< "This trajectory does NOT intersect the detector. Bailing...";
       return false;
     } else { // we are ok! Set the new starting point and continue to find entry and exit points.
-      LOG( "HNL", pDEBUG )
+      LOG( "ExoticLLP", pDEBUG )
 	<< "This trajectory DOES intersect the detector. Good!";
       gGeoManager->SetCurrentPoint( xTest, yTest, zTest );
       firstXROOT = xTest; firstYROOT = yTest; firstZROOT = zTest;
-      LOG( "HNL", pDEBUG )
+      LOG( "ExoticLLP", pDEBUG )
 	<< "New starting point is at ( " << xTest << ", " << yTest << ", " << zTest << " ) [top_volume, cm]";
     }
   } // if( isParticleGun )
@@ -722,7 +719,7 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
 			  entryPoint_near.Y() + (fCy + fDetTranslation.at(1)),
 			  entryPoint_near.Z() + (fCz + fDetTranslation.at(2)) );
 
-  LOG( "HNL", pDEBUG )
+  LOG( "ExoticLLP", pDEBUG )
     << "\nEntry point found at ( " << fEx << ", " << fEy << ", " << fEz << " ) [" << lunitString.c_str() << "]"
     << "\nIn ROOT, entry at    ( " << fExROOT << ", " << fEyROOT << ", " << fEzROOT << " ) [cm]"; 
 
@@ -777,7 +774,7 @@ bool VertexGenerator::VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 
 			 exitPoint_near.Y() + (fCy + fDetTranslation.at(1)),
 			 exitPoint_near.Z() + (fCz + fDetTranslation.at(2)) );
 
-  LOG( "HNL", pDEBUG )
+  LOG( "ExoticLLP", pDEBUG )
     << "\nExit point found at ( " << fXx << ", " << fXy << ", " << fXz << " ) [" << lunitString.c_str() << "]"
     << "\nIn ROOT, exit at    ( " << fXxROOT << ", " << fXyROOT << ", " << fXzROOT << " ) [cm]"; 
 
@@ -802,17 +799,15 @@ void VertexGenerator::LoadConfig()
 {
   if( fIsConfigLoaded ) return;
 
-  LOG( "HNL", pDEBUG )
+  LOG( "ExoticLLP", pDEBUG )
     << "Loading geometry parameters from file. . .";
 
-  this->GetParamVect( "Near2User_T", fB2UTranslation );
-  this->GetParamVect( "Near2User_R", fDetRotation );
-  this->GetParamVect( "Near2Beam_R", fB2URotation );
-  this->GetParamVect( "DetCentre_User", fDetTranslation );
-  fCx = fB2UTranslation.at(0); fCy = fB2UTranslation.at(1); fCz = fB2UTranslation.at(2);
+  this->GetParamVect( "UserOrigin", fUserOrigin );
+  this->GetParamVect( "Rotation", fDetRotation );
+  this->GetParamVect( "TopVolumeCentre", fDetTranslation );
+  fCx = fUserOrigin.at(0); fCy = fUserOrigin.at(1); fCz = fUserOrigin.at(2);
   fUx = fDetTranslation.at(0); fUy = fDetTranslation.at(1); fUz = fDetTranslation.at(2);
-  fAx1 = fB2URotation.at(0); fAz = fB2URotation.at(1); fAx2 = fB2URotation.at(2);
-  fBx1 = fDetRotation.at(0); fBz = fDetRotation.at(1); fBx2 = fDetRotation.at(2);
+  fAx1 = fDetRotation.at(0); fAz = fDetRotation.at(1); fAx2 = fDetRotation.at(2);
 
   fTx = 0.0; fTy = 0.0; fTz = 0.0;
 
@@ -929,7 +924,7 @@ TGeoMatrix * VertexGenerator::FindFullTransformation( TGeoVolume * top_vol, TGeo
   int ididx = test.rfind("_");
   test = test.substr( 0, ididx );
 
-  LOG( "HNL", pNOTICE )
+  LOG( "ExoticLLP", pNOTICE )
     << "Looking for this targetPath: " << targetPath;
 
   // could be we hit the top volume, in which case we skip the loop
@@ -945,7 +940,7 @@ TGeoMatrix * VertexGenerator::FindFullTransformation( TGeoVolume * top_vol, TGeo
     assert( mat && "Matrix is not null" );
 
     int nDaughters = node->GetNdaughters();
-    LOG( "HNL", pDEBUG ) << "Node with name " << path << " has " << nDaughters << " daughters...";
+    LOG( "ExoticLLP", pDEBUG ) << "Node with name " << path << " has " << nDaughters << " daughters...";
     for( int iDaughter = 0; iDaughter < nDaughters; iDaughter++ ){
       TGeoNode * dNode = node->GetDaughter(iDaughter);
       assert( dNode && "Daughter node not null" );
@@ -953,7 +948,7 @@ TGeoMatrix * VertexGenerator::FindFullTransformation( TGeoVolume * top_vol, TGeo
       dPath.append( "/" ); dPath.append( dNode->GetName() );
       TGeoMatrix * nodeMat = dNode->GetMatrix();
 
-      LOG( "HNL", pDEBUG ) << "Got node, path, and matrix for daughter node "
+      LOG( "ExoticLLP", pDEBUG ) << "Got node, path, and matrix for daughter node "
 			   << iDaughter << " / " << nDaughters-1 << "...";
 
       // construct the full updated matrix from multiplying dMat on the left of mat
@@ -983,7 +978,7 @@ TGeoMatrix * VertexGenerator::FindFullTransformation( TGeoVolume * top_vol, TGeo
       TGeoMatrix * dMat = dynamic_cast< TGeoMatrix * >( hmat );
 
       /*
-      LOG( "HNL", pDEBUG )
+      LOG( "ExoticLLP", pDEBUG )
 	<< "\nNode with name " << targetPath << " not yet found."
 	<< "\nParsing node with name " << dPath << "..."
 	<< "\n\nThis node had the following translations: ( " 
@@ -1051,7 +1046,7 @@ TGeoMatrix * VertexGenerator::FindFullTransformation( TGeoVolume * top_vol, TGeo
   const Double_t * final_tra = final_mat->GetTranslation();
   const Double_t * final_rot = final_mat->GetRotationMatrix();
 
-  LOG( "HNL", pINFO )
+  LOG( "ExoticLLP", pINFO )
     << "Found the target volume! Here is its path and full matrix:"
     << "\nPath: " << paths.back()
     << "\nTranslations: ( " << final_tra[0] << ", " << final_tra[1] << ", " << final_tra[2]

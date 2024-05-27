@@ -238,10 +238,6 @@ ModeVector LLPConfigurator::ParseModes( xmlDocPtr & doc, xmlNodePtr node ) const
     interp = ( fMass - nearest_mass_small ) / ( nearest_mass_large - nearest_mass_small );
   }
       
-  LOG( "ExoticLLP", pFATAL ) << "Interpolating between [ "
-			     << nearest_mass_small << ", " << nearest_mass_large
-			     << " ] ==> interp = " << interp;
-
   // Okay, so now let's construct for each mode the scores
   ModeKnotVector::iterator kmit = knot_modes.begin();
       

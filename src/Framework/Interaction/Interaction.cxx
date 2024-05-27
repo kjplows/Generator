@@ -1104,3 +1104,15 @@ Interaction * Interaction::HNL(int probe, double E, int decayed_mode)
 
   return interaction;
 }
+//___________________________________________________________________________
+Interaction * Interaction::LLP(int probe, double E, int decayed_mode)
+{
+  Interaction * interaction =
+    Interaction::Create(0, probe, kScNull, kIntLLP);
+  interaction->ExclTagPtr()->SetDecayMode(decayed_mode);
+
+  InitialState * init_state = interaction->InitStatePtr();
+  init_state->SetProbeE(E);
+
+  return interaction;
+}

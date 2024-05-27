@@ -27,6 +27,8 @@
 #include <string>
 #include <vector>
 
+#include <TStreamerElement.h>
+
 #include "Framework/Conventions/Constants.h"
 #include "Framework/ParticleData/PDGCodes.h"
 #include "Framework/ParticleData/PDGLibrary.h"
@@ -82,6 +84,7 @@ namespace genie {
       void ConstructModes( ModeVector modes ) const;
       ModeObject MakeModeObject( std::pair< double, std::vector< int > > mode ) const;
 
+      ClassDef(ExoticLLP, 1)
     }; // class ExoticLLP
 
   } // namespace llp

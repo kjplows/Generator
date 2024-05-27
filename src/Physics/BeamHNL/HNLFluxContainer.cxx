@@ -101,6 +101,9 @@ void FluxContainer::ResetCopy() const
   acceptance = 0.0;
 
   nimpwt = 0.0;
+
+  energy_from_betaLab = 0.0;
+  energy_from_boostCorr = 0.0;
 }
 
 //___________________________________________________________________________

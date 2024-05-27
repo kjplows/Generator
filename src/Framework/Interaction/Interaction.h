@@ -165,6 +165,7 @@ public:
   static Interaction * DMDI      (int tgt, int nuc, int probe, const TLorentzVector & p4probe);
   static Interaction * DMDI      (int tgt, int nuc, int qrk, bool sea, int probe, const TLorentzVector & p4probe);
   static Interaction * HNL       (int probe, double E=0, int decayed_mode=-1);
+  static Interaction * LLP       (int probe, double E=0, int decayed_mode=-1);
 
 private:
 

@@ -32,6 +32,8 @@ public:
   double XSec            (const Interaction * i, KinePhaseSpace_t k) const;
   double Integral        (const Interaction * i) const;
   bool   ValidProcess    (const Interaction * i) const;
+  
+  ClassDef(DummyLLPPXSec, 1)
 };
 
 }       // genie namespace

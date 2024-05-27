@@ -96,6 +96,7 @@ namespace genie {
       mutable std::string fInputPath; //! Path to the input channels, relative to $GENIE/config/
       mutable ModeVector fProdChannels, fDecayChannels;
 
+      ClassDef(LLPConfigurator, 1)
     }; // class LLPConfigurator
 
   } // namespace llp

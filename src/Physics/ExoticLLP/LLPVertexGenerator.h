@@ -1,34 +1,41 @@
 //____________________________________________________________________________
 /*!
 
-\class     genie::hnl::VertexGenerator
+\class     genie::llp::VertexGenerator
 
-\brief     Heavy Neutral Lepton decay vertex generator
-           *** given production vertex and momentum ***
+\brief     LLP vertex generator
+           Takes a point (x0, y0, z0) and a momentum (px, py, pz) as inputs
+	   Returns two points (x1, y1, z1) and (x2, y2, z2), 
+	   and an event vertex (X, Y, Z, T).
 
-\author    John Plows <komninos-john.plows \at physics.ox.ac.uk>
+	   (x1/2, y1/2, z1/2) are entry/exit points of the ray 
+	   passing by (x0, y0, z0) parallel to (px, py, pz)
+
+	   T is the quantity ( 1 / (beta * c) - 1 ) * ( || ( X - x0, Y - y0, Z - z0 ) || ),
+	   i.e. the delay of a massive particle of velocity beta wrt a speed-of-light particle
+
+\author    John Plows <kplows \at liverpool.ac.uk>
+           University of Liverpool
           
-\created   March 31st, 2022
+\created   May 23rd, 2024
 
 \cpright   Copyright (c) 2003-2023, The GENIE Collaboration
            For the full text of the license visit http://copyright.genie-mc.org          
 */
 //____________________________________________________________________________
 
-#ifndef _HNL_DECAY_VOLUME_H_
-#define _HNL_DECAY_VOLUME_H_
+#ifndef _LLP_VERTEX_GENERATOR_H_
+#define _LLP_VERTEX_GENERATOR_H_
 
 #include <cmath>
 #include <cassert>
 #include <list>
 
 #include <TVector3.h>
-//#ifdef __GENIE_GEOM_DRIVERS_ENABLED__ // why do we crash with this guard on?
 #include <TGeoManager.h>
 #include <TGeoVolume.h>
 #include <TGeoNode.h>
 #include <TGeoBBox.h>
-//#endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
 
 //#include "Framework/Conventions/Constants.h"
 #include "Framework/Conventions/Controls.h"
@@ -41,12 +48,12 @@
 #include "Framework/Utils/UnitUtils.h"
 #include "Framework/Utils/PrintUtils.h"
 
-#include "Physics/BeamHNL/HNLGeomRecordVisitorI.h"
+#include "Physics/ExoticLLP/LLPGeomRecordVisitorI.h"
 
 namespace genie {
-namespace hnl {
+namespace llp {
 
-  class SimpleHNL;
+  class ExoticLLP;
 
   class VertexGenerator : public GeomRecordVisitorI {
 
@@ -155,7 +162,7 @@ namespace hnl {
     mutable double fOxROOT = 0.0, fOyROOT = 0.0, fOzROOT = 0.0; // origin in cm
     mutable double fLxROOT = 0.0, fLyROOT = 0.0, fLzROOT = 0.0; // dimensions in cm
 
-    mutable double fCoMLifetime = 0.0; // HNL lifetime in ns
+    mutable double fCoMLifetime = 0.0; // LLP lifetime in ns
     
     mutable double kNewSpeedOfLight = genie::units::kSpeedOfLight * ( genie::units::m / lunits ) / ( genie::units::s / tunits );
 
@@ -170,14 +177,15 @@ namespace hnl {
     mutable double uMult = 1.0, xMult = 1.0; // these need to be different.
 
     mutable double fCx, fCy, fCz;   // translation: from NEAR origin to USER origin [m]
-    mutable double fTx, fTy, fTz;   // translation of --top_volume wrt geometry file's top volume origin [m]
-    mutable double fUx, fUy, fUz;   // translation: from USER origin to top volume origin [m]
-    mutable double fBx1, fBz, fBx2; // rotation: from NEAR frame to USER frame
+    mutable double fTx, fTy, fTz;   // If user --top_volume passed, where's its origin in USER frame? [m]
+    mutable double fUx, fUy, fUz;   // translation: from USER origin to detector centre [m]
+    mutable double fAx1, fAz, fAx2; // rotation: from NEAR frame to USER frame
     mutable std::vector< double > fUserOrigin, fDetTranslation, fDetRotation;
 
+    ClassDef(VertexGenerator, 1)
   }; // class VertexGenerator
 
-} // namespace hnl
+} // namespace llp
 } // namespace genie
 
-#endif // #ifndef _HNL_DECAY_VOLUME_H_
+#endif // #ifndef _LLP_VERTEX_GENERATOR_H_

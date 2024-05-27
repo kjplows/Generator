@@ -41,7 +41,8 @@ typedef enum EInteractionType {
   kIntNDecay,      //
   kIntNOsc,        //
   kIntDarkNC,      //
-  kIntHNL          //
+  kIntHNL,         //
+  kIntLLP
 
 } InteractionType_t;
 

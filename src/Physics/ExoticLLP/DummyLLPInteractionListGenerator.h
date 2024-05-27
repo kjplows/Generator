@@ -34,6 +34,8 @@ public :
 
   // implement the InteractionListGeneratorI interface
   InteractionList * CreateInteractionList(const InitialState & init) const;
+
+  ClassDef(DummyLLPInteractionListGenerator, 1)
 };
 
 }      // genie namespace

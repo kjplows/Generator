@@ -56,6 +56,14 @@ PDGLibrary::PDGLibrary()
     exit(78);
   }
 #endif // #ifdef __GENIE_HEAVY_NEUTRAL_LEPTON_ENABLED__
+
+#ifdef __GENIE_EXOTIC_LLP_ENABLED__
+  LOG("PDG", pINFO) << "Loading ExoticLLP data";
+  if( ! AddLLP() ){
+    LOG("PDG", pFATAL) << "Could not load ExoticLLP data";
+    exit(78);
+  }
+#endif // #ifdef __GENIE_EXOTIC_LLP_ENABLED__
   
   fInstance =  0;
 }

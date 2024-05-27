@@ -26,7 +26,6 @@
 #define _LLP_CHANNEL_CALCULATOR_I_H_
 
 #include "Framework/Algorithm/Algorithm.h"
-// more includes here for XML parsing
 
 namespace genie {
 
@@ -49,6 +48,7 @@ namespace genie {
       ChannelCalculatorI(string name);
       ChannelCalculatorI(string name, string config);
 
+      ClassDef(ChannelCalculatorI, 1)
     }; // class ChannelCalculatorI
 
   } // namespace llp

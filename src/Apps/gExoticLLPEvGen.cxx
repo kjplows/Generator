@@ -43,6 +43,7 @@
 
 #include "Physics/ExoticLLP/ExoticLLP.h"
 #include "Physics/ExoticLLP/LLPConfigurator.h"
+#include "Physics/ExoticLLP/LLPVertexGenerator.h"
 
 using std::string;
 using std::vector;
@@ -85,6 +86,7 @@ string          kDefOptGeomDUnits   = "g_cm3"; // default geometry density units
 NtpMCFormat_t   kDefOptNtpFormat    = kNFGHEP; // default event tree format
 string          kDefOptEvFilePrefix = "gntp";
 string          kDefOptFluxFilePath = "./input-flux.root";
+string          kDefOptTopVolName   = "TOP"; // default top volume name 
 
 string          gOptEvFilePrefix = kDefOptEvFilePrefix; // event file prefix
 
@@ -114,7 +116,8 @@ TGeoManager *    gOptRootGeoManager = 0;                 // the workhorse geomet
 TGeoVolume  *    gOptRootGeoVolume  = 0;
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
-string           gOptRootGeomTopVol = "";                // input geometry top event generation volume
+bool             gOptTopVolSelected = false;             // did the user ask for a specific top volume?
+string           gOptTopVolName = kDefOptTopVolName;     // input geometry top event generation volume
 double           gOptGeomLUnits = 0;                     // input geometry length units
 long int         gOptRanSeed = -1;                       // random number seed
 
@@ -125,7 +128,6 @@ double fdz = 0; // half-length - z
 double fox = 0; // origin - x
 double foy = 0; // origin - y
 double foz = 0; // origin - z
-
 // vector of the allowed decay modes
 struct LLPDecayMode {
   int idx; //! index
@@ -133,6 +135,9 @@ struct LLPDecayMode {
   double score; //! conditional probability of this mode
 };
 std::vector< LLPDecayMode > allowed_decay_modes;
+
+// LLP lifetime in rest frame
+double CoMLifetime = -1.0; // GeV^{-1}
 
 //_________________________________________________________________________________________
 int main(int argc, char ** argv)
@@ -149,14 +154,147 @@ int main(int argc, char ** argv)
 
   __attribute__((unused)) RandomGen * rnd = RandomGen::Instance();
 
+  // Load the LLP and sub-algorithms
   const Algorithm * algLLPConfigurator = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
 
   const LLPConfigurator * LLP_configurator = dynamic_cast< const LLPConfigurator * >( algLLPConfigurator );
 
-  // Let's ensure that the LLP Configurator plays ball. Ask it what the LLP mass is
   ExoticLLP llp = LLP_configurator->RetrieveLLP();
-
+  // inspect the LLP
   LOG( "gevgen_exotic_llp", pFATAL ) << llp;
+
+  const Algorithm * algVtxGen = AlgFactory::Instance()->GetAlgorithm("genie::llp::VertexGenerator", "Default");
+  const VertexGenerator * vtxGen = dynamic_cast< const VertexGenerator * >( algVtxGen );
+
+  // Initialize an Ntuple Writer to save GHEP records into a TTree
+  NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
+  ntpw.CustomizeFilenamePrefix(gOptEvFilePrefix);
+  ntpw.Initialize();
+
+  LOG("gevgen_exotic_llp", pNOTICE)
+    << "Initialised Ntuple Writer";
+
+  /*
+    RETHERE do this
+  // add flux info to the tree
+  FluxContainer gnmf;
+  if( gOptIsUsingDk2nu ) {
+    // fill the flux object with nonsense to start with
+    FluxContainer * ptGnmf = new FluxContainer();
+    gnmf = *ptGnmf;
+    delete ptGnmf;
+    FillFluxNonsense( gnmf );
+    TBranch * flux = ntpw.EventTree()->Branch( "flux",
+					       "genie::hnl::FluxContainer",
+					       &gnmf, 32000, 1 );
+    flux->SetAutoDelete(kFALSE);
+  }
+  */
+
+  // add another few branches to tree.
+  /*
+    RETHERE entry / exit branches
+  ntpw.EventTree()->Branch("hnl_mass", &gOptMassHNL, "gOptMassHNL/D");
+  ntpw.EventTree()->Branch("hnl_coup_e", &gOptECoupling, "gOptECoupling/D");
+  ntpw.EventTree()->Branch("hnl_coup_m", &gOptMCoupling, "gOptMCoupling/D");
+  ntpw.EventTree()->Branch("hnl_coup_t", &gOptTCoupling, "gOptTCoupling/D");
+  ntpw.EventTree()->Branch("hnl_ismaj", &gOptIsMajorana, "gOptIsMajorana/I");
+  */
+
+  // Create a MC job monitor for a periodically updated status file
+  GMCJMonitor mcjmonitor(gOptRunNu);
+  mcjmonitor.SetRefreshRate(RunOpt::Instance()->MCJobStatusRefreshRate());
+
+  LOG("gevgen_hnl", pNOTICE)
+    << "Initialised MC job monitor";
+
+  // Set GHEP print level
+  GHepRecord::SetPrintLevel(RunOpt::Instance()->EventRecordPrintLevel());
+
+#ifdef __CAN_USE_ROOT_GEOM__
+  // Read geometry bounding box - for vertex position generation
+  if( gOptUsingRootGeom ){
+    InitBoundingBox();
+  }
+#endif // #ifdef __CAN_USE_ROOT_GEOM__
+
+  // Event loop
+  int iflux = (gOptFirstEvent < 0) ? 0 : gOptFirstEvent; int ievent = iflux;
+  int maxFluxEntries = -1;
+  //fluxCreator->SetInputFluxPath( gOptFluxFilePath );
+  //fluxCreator->SetGeomFile( gOptRootGeom, gOptTopVolName );
+  //fluxCreator->SetFirstFluxEntry( iflux );
+  vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
+
+  bool tooManyEntries = false;
+  while (1) {
+    if( tooManyEntries ){
+      if( gOptNev >= 10000 ){
+	if( (ievent-gOptFirstEvent) % (gOptNev / 1000) == 0 ){
+	  int irat = (iflux-gOptFirstEvent) / ( gOptNev / 1000 );
+	  std::cerr << 0.1 * irat << " % " << " ( " << (iflux-gOptFirstEvent)
+		    << " seen ), ( " << (ievent-gOptFirstEvent) << " / " << gOptNev  << " processed ) \r" << std::flush;
+	}
+      } else if( gOptNev >= 100 ) {
+	if( (ievent-gOptFirstEvent) % (gOptNev / 10) == 0 ){
+	  int irat = (iflux-gOptFirstEvent) / ( gOptNev / 10 );
+	  std::cerr << 10.0 * irat << " % " << " ( " << (iflux-gOptFirstEvent)
+		    << " seen ), ( " << (ievent-gOptFirstEvent) << " / " << gOptNev  << " processed ) \r" << std::flush;
+	}
+      }
+    } else {
+      if( gOptNev >= 10000 ){
+	if( (ievent-gOptFirstEvent) % (gOptNev / 1000) == 0 ){
+	  int irat = (ievent-gOptFirstEvent) / ( gOptNev / 1000 );
+	  std::cerr << 0.1 * irat << " % " << " ( " << (iflux-gOptFirstEvent)
+		    << " seen ), ( " << (ievent-gOptFirstEvent) << " / " << gOptNev <<  " processed ) \r" << std::flush;
+	}
+      } else if( gOptNev >= 100 ) {
+	if( (ievent-gOptFirstEvent) % (gOptNev / 10) == 0 ){
+	  int irat = (ievent-gOptFirstEvent) / ( gOptNev / 10 );
+	  std::cerr << 10.0 * irat << " % " << " ( " << (iflux-gOptFirstEvent)
+		    << " seen ), ( " << (ievent-gOptFirstEvent) << " / " << gOptNev  << " processed ) \r" << std::flush;
+	}
+      }
+    }
+    
+    if( tooManyEntries && ((iflux-gOptFirstEvent) == gOptNev) ) break;
+    else if( (ievent-gOptFirstEvent) == gOptNev ) break;
+    
+    if( ievent < gOptFirstEvent ){ ievent++; continue; }
+    
+    assert( ievent >= gOptFirstEvent && gOptFirstEvent >= 0 && "First event >= 0" );
+    
+    LOG("gevgen_exotic_llp", pNOTICE)
+      << " *** Generating event............ " << (ievent-gOptFirstEvent);
+
+    EventRecord * event = new EventRecord;
+    //FluxContainer retGnmf;
+    event->SetWeight(1.0);
+    event->SetProbability( 1.0 ); // CoMLifetime
+    //event->SetXSec( iflux ); // will be overridden, use as handy container
+
+    int decay = 0;
+    gOptEnergyLLP = 1.0; // RETHERE remove, obviously
+    int typeMod = 1; // RETHERE restore to bar if so required
+    Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
+
+    event->AttachSummary(interaction);
+
+    LOG("gevgen_exotic_llp", pINFO)
+         << "Generated event: " << *event;
+    
+    // Add event at the output ntuple, refresh the mc job monitor & clean-up
+    ntpw.AddEventRecord(ievent, event);
+    mcjmonitor.Update(ievent,event);
+    
+    delete event;
+    
+    ievent++;
+    
+  } // end event loop
+
+  ntpw.Save();
 
   LOG( "gevgen_exotic_llp", pFATAL )
     << "This is a TEST. Goodbye world!";
@@ -397,7 +535,7 @@ void GetCommandLineArgs(int argc, char ** argv)
   if (gOptUsingRootGeom) {
     gminfo << "Using ROOT geometry - file: " << gOptRootGeom
            << ", top volume: "
-           << ((gOptRootGeomTopVol.size()==0) ? "<master volume>" : gOptRootGeomTopVol);
+           << ((gOptTopVolName.size()==0) ? "<master volume>" : gOptTopVolName);
     // << ", length  units: " << lunits;
     // << ", density units: " << dunits;
   } else gminfo << "No ROOT geometry loaded";
@@ -436,3 +574,105 @@ void PrintSyntax(void)
    << "\n";
 }
 //_________________________________________________________________________________________
+//............................................................................
+#ifdef __CAN_USE_ROOT_GEOM__
+void InitBoundingBox(void)
+{
+// Initialise geometry bounding box, used for generating HNL vertex positions
+
+  LOG("gevgen_exotic_llp", pINFO)
+    << "Initialising geometry bounding box.";
+
+  fdx = 0; // half-length - x
+  fdy = 0; // half-length - y
+  fdz = 0; // half-length - z
+  fox = 0; // origin - x
+  foy = 0; // origin - y
+  foz = 0; // origin - z
+
+  if(!gOptUsingRootGeom){ // make a unit-m sided box
+    LOG("gevgen_exotic_llp", pINFO)
+      << "No geometry file input detected, making a unit-m side box volume.";
+
+    TGeoManager * geom = new TGeoManager( "box1", "A simple box detector" );
+
+    //--- define some materials
+    TGeoMaterial *matVacuum = new TGeoMaterial("Vacuum", 0,0,0);
+    TGeoMaterial *matAl = new TGeoMaterial("Al", 26.98,13,2.7);
+    //--- define some media
+    TGeoMedium *Vacuum = new TGeoMedium("Vacuum",1, matVacuum);
+    TGeoMedium *Al = new TGeoMedium("Root Material",2, matAl);
+
+    //--- make the top container volume
+    //const double boxSideX = 2.5, boxSideY = 2.5, boxSideZ = 2.5; // m
+    //const double bigBoxSide = 2.0 * std::max( boxSideX, std::max( boxSideY, boxSideZ ) ); // m
+    //const double worldLen = 1.01 * bigBoxSide; // m
+
+    TGeoVolume * topvol = geom->MakeBox( "TOP", Vacuum, 101.0, 101.0, 101.0 );
+    geom->SetTopVolume( topvol );
+
+    //--- make the detector box container
+    TGeoVolume * boxvol = geom->MakeBox( "VOL", Vacuum, 100.5, 100.5, 100.5 );
+    boxvol->SetVisibility(kFALSE);
+
+    //--- origin is at centre of the box
+    TGeoVolume * box = geom->MakeBox( "BOX", Al, 100.0, 100.0, 100.0 );
+    //TGeoTranslation * tr0 = new TGeoTranslation( 0.0, 0.0, 0.0 );
+    TGeoRotation * rot0 = new TGeoRotation( "rot0", 90.0, 0.0, 90.0, 90.0, 0.0, 0.0 );
+
+    //--- add directly to top volume
+    topvol->AddNode( box, 1, rot0 );
+    
+    gOptRootGeoManager = geom;
+
+    return;
+  } 
+
+  bool geom_is_accessible = ! (gSystem->AccessPathName(gOptRootGeom.c_str()));
+  if (!geom_is_accessible) {
+    LOG("gevgen_exotic_llp", pFATAL)
+      << "The specified ROOT geometry doesn't exist! Initialization failed!";
+    exit(1);
+  }
+
+  if( !gOptRootGeoManager ) gOptRootGeoManager = TGeoManager::Import(gOptRootGeom.c_str()); 
+  if( !gOptTopVolSelected ){
+    TGeoVolume * main_volume = gOptRootGeoManager->GetTopVolume();
+    gOptTopVolName = main_volume->GetName();
+    LOG("gevgen_exotic_llp", pINFO) << "Using top volume name " << gOptTopVolName;
+  }
+
+  TGeoVolume * top_volume = gOptRootGeoManager->GetVolume(gOptTopVolName.c_str());
+  assert( top_volume && "Top volume exists" );
+  TGeoShape * ts  = top_volume->GetShape();
+
+  TGeoBBox *  box = (TGeoBBox *)ts;
+
+  //get box origin and dimensions (in the same units as the geometry)
+  fdx = box->GetDX();
+  fdy = box->GetDY();
+  fdz = box->GetDZ();
+  fox = (box->GetOrigin())[0];
+  foy = (box->GetOrigin())[1];
+  foz = (box->GetOrigin())[2];
+
+  LOG("gevgen_exotic_llp", pDEBUG)
+    << "Before conversion the bounding box has:"
+    << "\nOrigin = ( " << fox << " , " << foy << " , " << foz << " )"
+    << "\nDimensions = " << fdx << " x " << fdy << " x " << fdz
+    << "\n1cm = 1.0 unit";
+
+  // Convert from local to SI units
+  fdx *= gOptGeomLUnits;
+  fdy *= gOptGeomLUnits;
+  fdz *= gOptGeomLUnits;
+  fox *= gOptGeomLUnits;
+  foy *= gOptGeomLUnits;
+  foz *= gOptGeomLUnits;
+
+  LOG("gevgen_exotic_llp", pINFO)
+    << "Initialised bounding box successfully.";
+
+}
+#endif // #ifdef __CAN_USE_ROOT_GEOM__
+//............................................................................

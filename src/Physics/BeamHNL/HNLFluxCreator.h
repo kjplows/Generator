@@ -159,31 +159,38 @@ namespace genie{
       std::map< genie::hnl::HNLProd_t, double > GetProductionProbs( int parPDG ) const;
       
       // Obtain detector dimensions + position
+      // RETHERE: BBox isn't good enough! But roll with it for now
       void MakeBBox() const;
       TVector3 ApplyUserRotation( TVector3 vec, bool doBackwards = false ) const;
       TVector3 ApplyUserRotation( TVector3 vec, TVector3 oriVec, std::vector<double> rotVec, bool doBackwards = false ) const;
 
-      // Do a single iteration of the boost correction loop
-      double BoostCorrectionStep( TLorentzVector p4par, TLorentzVector p4HNL_rest, 
-				  TVector3 detO, double betaPrev ) const;
-      
-      // calculate detector acceptance (== solid angle of proj of det onto unit-radius sphere / (4pi))
-      // NOTE THIS IS A LAB FRAME (==GEOMETRICAL) ACCEPTANCE!!!!
-      // detO == detector BBox centre wrt HNL prod vertex, L{x,y,z} BBox length on each axis. Both [m]
-      double CalculateDetectorAcceptanceSAA( TVector3 detO ) const;
+      // Methods to calculate the detector acceptance and the energy associated with it
+      double CalculateDetectorAcceptanceSAA( TVector3 detO ) const; // SAA -- small angle approximation
       // collimation effect calc, returns HNL_acc / geom_acc
-      double CalculateAcceptanceCorrection( TLorentzVector p4par, TLorentzVector p4HNL, double SMECM, double zm, double zp ) const;
+      double CalculateAcceptanceCorrection( TLorentzVector p4par, 
+					    TLorentzVector p4HNL, double SMECM, 
+					    double zm, double zp, double theta,
+					    double & EHNL_LAB ) const;
+      // helper methods for the above method
       double AccCorr_Sqrt( double thetalab, double mass, double EPar, double MPar, double ENu ) const;
       double AccCorr_Denom( double thetalab, double mass, double EPar, double MPar, double ENu ) const;
       double AccCorr_SolnArgs( double thetalab, double mass, double EPar, double MPar, double ENu,
 			       bool isPos ) const;
       double AccCorr_Solution( double thetalab, double mass, double EPar, double MPar, double ENu,
 			       bool isPos ) const;
+      double Forwards_Fcn( double Theta, TLorentzVector p4par, TLorentzVector p4HNL ) const;
+      double Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVector p4HNL, bool backwards ) const;
+      double Inverted_Fcn_Numerical( double theta, TLorentzVector p4par, TLorentzVector p4HNL, bool backwards ) const;
+      double Derivative( double theta, TLorentzVector p4par, TLorentzVector p4HNL ) const;
+      // legacy numerical method
       double CalculateAcceptanceCorrection_legacy( TLorentzVector p4par, TLorentzVector p4HNL, double SMECM, double zm, double zp ) const;
+      // helper method
       static double labangle( double * x, double * par ); // function formula for correction
+
       // get minimum and maximum deviation from parent momentum to hit detector, [deg]
       double GetAngDeviation( TLorentzVector p4par, TVector3 detO, bool seekingMax ) const;
       void GetAngDeviation( TLorentzVector p4par, TVector3 detO, double &zm, double &zp ) const;
+
       // returns 1.0 / (area of flux calc)
       double CalculateAreaNormalisation();
 
@@ -239,7 +246,7 @@ namespace genie{
 
       mutable bool doPol = true, fixPol = false;
       mutable double fLPx, fLPy, fLPz; // direction of co-produced lepton == polarisation vector
-      mutable double fLPE;
+      mutable double fLPE, fLPP;
       mutable std::vector< double > fFixedPolarisation;
 
       mutable int fLepPdg; // pdg code of co-produced lepton
@@ -249,6 +256,9 @@ namespace genie{
       mutable double fZm, fZp; // deg
 
       mutable int fProdChan, fNuProdChan;
+
+      // a quality of life check for t2k xcheck
+      mutable bool fENFORCED_PROD_SWITCH = false;
 
       mutable TVector3 fTargetPoint, fTargetPointUser;
 
