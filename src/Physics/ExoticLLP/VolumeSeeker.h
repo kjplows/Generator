@@ -55,12 +55,18 @@ namespace genie {
       //! Access instance
       static VolumeSeeker * Instance();
 
+      //! Let the VolumeSeeker know about which geometry file you're using
+      void SetGeomFile( std::string geomfile, std::string topVolume ) const;
+
       //! Have some module tell you the configuration and DO NOT allow more changes
       void SetConfig( TVector3 user_origin, TVector3 user_rotation );
       //! Output the current config
       void PrintConfig();
 
+      //! Populate all the current members. Accepts input in NEAR coordinates only
+      void PopulateEvent( TVector3 origin_point, TVector3 momentum ) const;
       //! Clear all the current members 
+      void ClearEvent() const;
       
 
     private:
@@ -69,13 +75,34 @@ namespace genie {
       VolumeSeeker( const VolumeSeeker & vsek );
       virtual ~VolumeSeeker();
 
+      //! Build the bounding box and find the top volume
+      void ImportBoundingBox( TGeoBBox * box ) const;
+      TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const;
+
+      //! Workhorse methods for NEAR <--> USER transformations
+      TVector3 Translate( TVector3 input, bool direction ) const;
+      TVector3 Rotate( TVector3 input, bool direction ) const;
+      TVector3 TranslateToUser( TVector3 input ) const { return VolumeSeeker::Translate( input, true ); }
+      TVector3 TranslateToNear( TVector3 input ) const { return VolumeSeeker::Translate( input, false ); }
+      TVector3 RotateToUser( TVector3 input ) const { return VolumeSeeker::Rotate( input, true ); }
+      TVector3 RotateToNear( TVector3 input ) const { return VolumeSeeker::Rotate( input, false ); }
+
+      //! Given an origin point and a momentum, find the entry and exit points to the detector
+      bool RaytraceDetector() const;
+
+      //! Obtain the node (in the ROOT sense) where a point exists
+      std::string CheckGeomPoint( TVector3 chkpoint ) const;
+
       static VolumeSeeker * fInstance;
 
       bool fInitialized; //! Done initialising singleton?
 
-      mutable double fLunits = genie::units::mm;  mutable std::string fLunitString = "mm";
+      mutable double fLunits = genie::units::m;  mutable std::string fLunitString = "m";
       mutable double fAunits = genie::units::rad; mutable std::string fAunitString = "rad";
       mutable double fTunits = genie::units::ns;  mutable std::string fTunitString = "ns";
+
+      mutable double fToROOTUnits = fLunits / genie::units::cm;
+      mutable double fToLUnits = 1.0 / fToROOTUnits;
       
       //! Config options for NEAR <--> USER transformations
       mutable TVector3 fUserOrigin;    //! USER (0, 0, 0) in NEAR coords [m]
@@ -94,10 +121,21 @@ namespace genie {
       mutable TVector3 fEntryPointNEAR;                //! (X, Y, Z) of ray entry into detector [m]
       mutable TVector3 fExitPointNEAR;                 //! (X, Y, Z) of ray exit from detector [m]
 
-      string fGeomFile;           //! Path to the geometry file
-      string fTopVolume;          //! Name of the top volume to be used
-      TGeoManager * fGeoManager;   //! ROOT TGeoManager
-      TGeoVolume * fGeoVolume;     //! ROOT TGeoVolume
+      mutable TVector3 fMomentum, fMomentumNEAR;       //! (px, py, pz) of particle. Directional cosines only. [GeV/GeV]
+
+      mutable std::string fGeomFile;            //! Path to the geometry file
+      mutable std::string fTopVolume;           //! Name of the top volume to be used
+      mutable TGeoManager * fGeoManager;        //! ROOT TGeoManager
+      mutable TGeoVolume * fGeoVolume;          //! ROOT TGeoVolume
+
+      mutable double fLx, fLy, fLz;             //! Bounding box dimensions [m]
+      mutable double fLxROOT, fLyROOT, fLzROOT; //! Bounding box dimensions [cm]
+      mutable double fOx, fOy, fOz;             //! Bounding box origin [m]
+      mutable double fOxROOT, fOyROOT, fOzROOT; //! Bounding box origin [cm]
+
+      mutable TVector3 fTopVolumeOrigin;        //! Origin of top_volume in USER coords [m]
+      mutable TVector3 fTopVolumeOriginROOT;    //! Origin of top_volume in USER coords [cm]
+      mutable TVector3 fTopVolumeOriginNEAR;    //! Origin of top_volume in NEAR coords [m]
 
       struct Cleaner {
 	void DummyMethodAndSilentCompiler() {} // see RandomGen.h
