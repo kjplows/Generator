@@ -351,8 +351,11 @@ TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVol
     << final_rot[6] << ", " << final_rot[7] << ", " << final_rot[8] << " ) )";
 
   // Also set the member variables at this stage
-  fTopVolumeOriginROOT.SetXYZ( final_tra[0], final_tra[1], final_tra[2] );
-  fTopVolumeOrigin = fTopVolumeOriginROOT * fToLUnits;
+  //fTopVolumeOriginROOT.SetXYZ( final_tra[0], final_tra[1], final_tra[2] );
+  //fTopVolumeOrigin = fTopVolumeOriginROOT * fToLUnits;
+  fTopVolumeOrigin.SetXYZ( final_tra[0] * fToLUnits, 
+			   final_tra[1] * fToLUnits, 
+			   final_tra[2] * fToLUnits );
   fTopVolumeOriginNEAR = VolumeSeeker::RotateToNear( fTopVolumeOrigin );
   fTopVolumeOriginNEAR = VolumeSeeker::TranslateToNear( fTopVolumeOriginNEAR );
 
@@ -372,18 +375,30 @@ std::string VolumeSeeker::CheckGeomPoint( TVector3 chkpoint ) const
 bool VolumeSeeker::RaytraceDetector() const
 {
   // Our point starts out at fOriginPoint and has directional cosines fMomentum
+
+  LOG( "ExoticLLP", pDEBUG ) 
+    << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint ) << " [m]"
+    << "\nfOriginPointROOT =" << utils::print::Vec3AsString( &fOriginPointROOT ) << " [cm]"
+    << "\nfOriginPointNEAR =" << utils::print::Vec3AsString( &fOriginPointNEAR ) << " [m]"; 
   
-  double t_param = 0.0;
-  if( fOriginPoint.Mag() > 0.0 ) {
+  // Important subtlety! The ROOT coordinate system for a top_volume does not know about the transformation matrix
+  // Practically, this means that you must subtract fTopVolumeOriginROOT from all your ROOT calcs!!!!
+  double t_param = 0.0; TVector3 dev_vec = fTopVolumeOrigin - fOriginPoint;
+  LOG( "ExoticLLP", pDEBUG ) 
+    << "\ndev_vec = " << utils::print::Vec3AsString( &dev_vec ) << " [m]";
+  if( dev_vec.Mag() > 0.0 ) {
     // First, calculate the starting point: intercept of ray with the z = 0 plane
     // Important caveat: z = 0 is z = 0 of *detector*. This is not the same as z = 0 USER
-    double delta = fTopVolumeOrigin.Z() - fOriginPoint.Z(); // dz
+    double delta = dev_vec.Z(); // dz
     double mom_cos = fMomentum.Z(); // pz,hat
-    if( delta == 0.0 ){ delta = fTopVolumeOrigin.Y() - fOriginPoint.Y(); mom_cos = fMomentum.Y(); } // make it dy instead
-    if( delta == 0.0 ){ delta = fTopVolumeOrigin.X() - fOriginPoint.X(); mom_cos = fMomentum.X(); } // OK, it *has* to be dx
+    if( delta == 0.0 ){ delta = dev_vec.Y(); mom_cos = fMomentum.Y(); } // make it dy instead
+    if( delta == 0.0 ){ delta = dev_vec.X(); mom_cos = fMomentum.X(); } // OK, it *has* to be dx
 
     t_param = delta / mom_cos;
   } // get to z = 0 (or y = 0, or x = 0) plane
+
+  LOG( "ExoticLLP", pDEBUG ) << "\ndev_vec = " << utils::print::Vec3AsString( &dev_vec )
+			     << " ==> t_param =" << t_param;
 
   // transport to starting point (hopefully close enough to the top volume to be meaningful)
   fZeroPoint.SetXYZ( fOriginPoint.X() + t_param * fMomentum.X(),
@@ -391,7 +406,7 @@ bool VolumeSeeker::RaytraceDetector() const
 		     fOriginPoint.Z() + t_param * fMomentum.Z() );
   fZeroPointNEAR = VolumeSeeker::RotateToNear( fZeroPoint );
   fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
-  fZeroPointROOT = fZeroPoint * fToROOTUnits;
+  fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
 
   // check that this point lies in the geometry.
   std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
@@ -401,6 +416,15 @@ bool VolumeSeeker::RaytraceDetector() const
 
   // we are inside the top volume. We want to exit it twice, once going backwards and once forwards.
   // The track enters in the former point and exits in the latter.
+
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nTopvol point at " << utils::print::Vec3AsString( &fTopVolumeOrigin ) << " [m]"
+    << "\nIn NEAR, topvol at    " << utils::print::Vec3AsString( &fTopVolumeOriginNEAR ) << " [m]"; 
+
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nZero point at " << utils::print::Vec3AsString( &fZeroPoint ) << " [m]"
+    << "\nIn ROOT, zero at    " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [cm]"
+    << "\nIn NEAR, zero at    " << utils::print::Vec3AsString( &fZeroPointNEAR ) << " [m]"; 
 
   // -- Entry point
   fGeoManager->SetCurrentPoint( fZeroPointROOT.X(), fZeroPointROOT.Y(), fZeroPointROOT.Z() );
@@ -432,9 +456,10 @@ bool VolumeSeeker::RaytraceDetector() const
   fEntryPointROOT.SetXYZ( (fGeoManager->GetCurrentPoint())[0],
 			  (fGeoManager->GetCurrentPoint())[1],
 			  (fGeoManager->GetCurrentPoint())[2] ); 
-  fEntryPointROOT += fTopVolumeOriginROOT;
+  //fEntryPointROOT += fTopVolumeOriginROOT;
   // And save the member variables
   fEntryPoint = fEntryPointROOT * fToLUnits;
+  fEntryPoint += fTopVolumeOrigin;
   fEntryPointNEAR = VolumeSeeker::RotateToNear( fEntryPoint );
   fEntryPointNEAR = VolumeSeeker::TranslateToNear( fEntryPointNEAR );
   
@@ -472,9 +497,10 @@ bool VolumeSeeker::RaytraceDetector() const
   fExitPointROOT.SetXYZ( (fGeoManager->GetCurrentPoint())[0],
 			 (fGeoManager->GetCurrentPoint())[1],
 			 (fGeoManager->GetCurrentPoint())[2] ); 
-  fExitPointROOT += fTopVolumeOriginROOT;
+  //fExitPointROOT += fTopVolumeOriginROOT;
   // And save the member variables
   fExitPoint = fExitPointROOT * fToLUnits;
+  fExitPoint += fTopVolumeOrigin;
   fExitPointNEAR = VolumeSeeker::RotateToNear( fExitPoint );
   fExitPointNEAR = VolumeSeeker::TranslateToNear( fExitPointNEAR );
   

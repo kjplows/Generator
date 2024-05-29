@@ -67,6 +67,9 @@ namespace genie {
       void PopulateEvent( TVector3 origin_point, TVector3 momentum ) const;
       //! Clear all the current members 
       void ClearEvent() const;
+
+      //! Given an origin point and a momentum, find the entry and exit points to the detector
+      bool RaytraceDetector() const;
       
 
     private:
@@ -87,9 +90,6 @@ namespace genie {
       TVector3 RotateToUser( TVector3 input ) const { return VolumeSeeker::Rotate( input, true ); }
       TVector3 RotateToNear( TVector3 input ) const { return VolumeSeeker::Rotate( input, false ); }
 
-      //! Given an origin point and a momentum, find the entry and exit points to the detector
-      bool RaytraceDetector() const;
-
       //! Obtain the node (in the ROOT sense) where a point exists
       std::string CheckGeomPoint( TVector3 chkpoint ) const;
 
@@ -109,7 +109,7 @@ namespace genie {
       mutable TVector3 fUserRotation;  //! USER Euler angles (a, b, c) in NEAR coords. Extrinsic X-Z-X from NEAR --> USER. I.e. (x, y, z) = R_X(c) * R_Z(b) * R_X(a) * (X, Y, Z)
       bool fIsConfigLoaded; 
       
-      //! All vectors with ROOT in the name use the ROOT default units [cm].
+      //! All vectors with ROOT in the name use the ROOT default units [cm] and refer to the local coordinate system of the top_volume node
       mutable TVector3 fZeroPoint, fZeroPointROOT;     //! Ray intercept at z = 0 plane. [m]
       mutable TVector3 fOriginPoint, fOriginPointROOT; //! (x, y, z) of LLP production vertex [m]
       mutable TVector3 fEntryPoint, fEntryPointROOT;   //! (x, y, z) of ray entry into detector [m]
@@ -134,7 +134,6 @@ namespace genie {
       mutable double fOxROOT, fOyROOT, fOzROOT; //! Bounding box origin [cm]
 
       mutable TVector3 fTopVolumeOrigin;        //! Origin of top_volume in USER coords [m]
-      mutable TVector3 fTopVolumeOriginROOT;    //! Origin of top_volume in USER coords [cm]
       mutable TVector3 fTopVolumeOriginNEAR;    //! Origin of top_volume in NEAR coords [m]
 
       struct Cleaner {

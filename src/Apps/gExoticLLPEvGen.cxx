@@ -175,8 +175,17 @@ int main(int argc, char ** argv)
   VolumeSeeker * vsek = VolumeSeeker::Instance();
   vsek->PrintConfig();
 
+  // pass the geometry information
+  vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
   // initialise the elements of VolumeSeeker
   vsek->ClearEvent();
+
+  // Basic sanity check: Can we find the entrance to a box, from like 10 meters upstream? [NEAR]
+  TVector3 origin_point( 0.0, -60.0, 990.0 );
+  TVector3 momentum( 0.0, 0.0, 1.0 );
+
+  vsek->PopulateEvent( origin_point, momentum );
+  bool result = vsek->RaytraceDetector();
 
   // Initialize an Ntuple Writer to save GHEP records into a TTree
   NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
@@ -460,15 +469,16 @@ void GetCommandLineArgs(int argc, char ** argv)
     PrintSyntax();
     exit(0);
   }
+  */
 
   //
   // geometry
   //
 
-  string geom = "";
-  string lunits;
+  std::string geom = "";
+  std::string lunits;
 #ifdef __CAN_USE_ROOT_GEOM__
-  // string dunits;
+  // std::string dunits;
   if( parser.OptionExists('g') ) {
     LOG("gevgen_exotic_llp", pDEBUG) << "Getting input geometry";
     geom = parser.ArgAsString('g');
@@ -516,9 +526,19 @@ void GetCommandLineArgs(int argc, char ** argv)
      gOptGeomLUnits = utils::units::UnitFromString(lunits);
      // gOptGeomDUnits = utils::units::UnitFromString(dunits);
 
+     // check for top volume selection
+     if( parser.OptionExists("top_volume") ) {
+       gOptTopVolSelected = true;
+       gOptTopVolName = parser.ArgAsString("top_volume");
+       LOG("gevgen_hnl", pINFO)
+	 << "Using the following volume as top: " << gOptTopVolName;
+     } else {
+       LOG("gevgen_hnl", pINFO)
+	 << "Using default top_volume";
+     } // --top_volume
+
   } // using root geom?
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
-  */
 
   // event file prefix
   if( parser.OptionExists('o') ) {
