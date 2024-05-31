@@ -375,17 +375,10 @@ std::string VolumeSeeker::CheckGeomPoint( TVector3 chkpoint ) const
 bool VolumeSeeker::RaytraceDetector() const
 {
   // Our point starts out at fOriginPoint and has directional cosines fMomentum
-
-  LOG( "ExoticLLP", pDEBUG ) 
-    << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint ) << " [m]"
-    << "\nfOriginPointROOT =" << utils::print::Vec3AsString( &fOriginPointROOT ) << " [cm]"
-    << "\nfOriginPointNEAR =" << utils::print::Vec3AsString( &fOriginPointNEAR ) << " [m]"; 
   
   // Important subtlety! The ROOT coordinate system for a top_volume does not know about the transformation matrix
   // Practically, this means that you must subtract fTopVolumeOriginROOT from all your ROOT calcs!!!!
   double t_param = 0.0; TVector3 dev_vec = fTopVolumeOrigin - fOriginPoint;
-  LOG( "ExoticLLP", pDEBUG ) 
-    << "\ndev_vec = " << utils::print::Vec3AsString( &dev_vec ) << " [m]";
   if( dev_vec.Mag() > 0.0 ) {
     // First, calculate the starting point: intercept of ray with the z = 0 plane
     // Important caveat: z = 0 is z = 0 of *detector*. This is not the same as z = 0 USER
@@ -396,9 +389,6 @@ bool VolumeSeeker::RaytraceDetector() const
 
     t_param = delta / mom_cos;
   } // get to z = 0 (or y = 0, or x = 0) plane
-
-  LOG( "ExoticLLP", pDEBUG ) << "\ndev_vec = " << utils::print::Vec3AsString( &dev_vec )
-			     << " ==> t_param =" << t_param;
 
   // transport to starting point (hopefully close enough to the top volume to be meaningful)
   fZeroPoint.SetXYZ( fOriginPoint.X() + t_param * fMomentum.X(),
@@ -411,20 +401,14 @@ bool VolumeSeeker::RaytraceDetector() const
   // check that this point lies in the geometry.
   std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
 
+  LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
   LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
-  LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
+  //LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
+
+  if( pathString.find( fTopVolume.c_str() ) == string::npos ) return false; // No luck.
 
   // we are inside the top volume. We want to exit it twice, once going backwards and once forwards.
   // The track enters in the former point and exits in the latter.
-
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nTopvol point at " << utils::print::Vec3AsString( &fTopVolumeOrigin ) << " [m]"
-    << "\nIn NEAR, topvol at    " << utils::print::Vec3AsString( &fTopVolumeOriginNEAR ) << " [m]"; 
-
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nZero point at " << utils::print::Vec3AsString( &fZeroPoint ) << " [m]"
-    << "\nIn ROOT, zero at    " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [cm]"
-    << "\nIn NEAR, zero at    " << utils::print::Vec3AsString( &fZeroPointNEAR ) << " [m]"; 
 
   // -- Entry point
   fGeoManager->SetCurrentPoint( fZeroPointROOT.X(), fZeroPointROOT.Y(), fZeroPointROOT.Z() );
@@ -462,12 +446,7 @@ bool VolumeSeeker::RaytraceDetector() const
   fEntryPoint += fTopVolumeOrigin;
   fEntryPointNEAR = VolumeSeeker::RotateToNear( fEntryPoint );
   fEntryPointNEAR = VolumeSeeker::TranslateToNear( fEntryPointNEAR );
-  
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nEntry point found at " << utils::print::Vec3AsString( &fEntryPoint ) << " [m]"
-    << "\nIn ROOT, entry at    " << utils::print::Vec3AsString( &fEntryPointROOT ) << " [cm]"
-    << "\nIn NEAR, entry at    " << utils::print::Vec3AsString( &fEntryPointNEAR ) << " [m]"; 
-  
+    
   // -- Exit point
   fGeoManager->SetCurrentPoint( fZeroPointROOT.X(), fZeroPointROOT.Y(), fZeroPointROOT.Z() );
   fGeoManager->SetCurrentDirection( fMomentum.X(), fMomentum.Y(), fMomentum.Z() );
@@ -503,12 +482,102 @@ bool VolumeSeeker::RaytraceDetector() const
   fExitPoint += fTopVolumeOrigin;
   fExitPointNEAR = VolumeSeeker::RotateToNear( fExitPoint );
   fExitPointNEAR = VolumeSeeker::TranslateToNear( fExitPointNEAR );
-  
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nExit point found at " << utils::print::Vec3AsString( &fExitPoint ) << " [m]"
-    << "\nIn ROOT, exit at    " << utils::print::Vec3AsString( &fExitPointROOT ) << " [cm]"
-    << "\nIn NEAR, exit at    " << utils::print::Vec3AsString( &fExitPointNEAR ) << " [m]"; 
-  
+
+  LOG( "ExoticLLP", pDEBUG ) << "Entry: " << utils::print::Vec3AsString( &fEntryPoint )
+			     << " - Exit: " << utils::print::Vec3AsString( &fExitPoint );
+    
   return true;
+}
+//____________________________________________________________________________
+AngularRegion VolumeSeeker::AngularAcceptance() const
+{
+  AngularRegion alpha;
+
+  // Bookkeep the origin point and momentum, just in case
+  const TVector3 booked_origin_point = fOriginPoint;
+  const TVector3 booked_origin_point_ROOT = fOriginPointROOT;
+  const TVector3 booked_momentum = fMomentum;
+
+  // First, define the looking direction
+  const TVector3 axis = fMomentum.Unit();
+
+  // Get the separation between top volume origin and start point
+  const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+
+  // Calculate the (theta, phi) of that point
+  // ROOT defines theta in [0, pi] and phi in [-pi, pi]
+  double seed_theta = seed_vector.Theta();
+  double seed_phi   = seed_vector.Phi();
+
+  // We make a potentially strong assumption here, that the top_volume is simply connected.
+  // The calculation will be garbage if not, and we'll crash out rather than give garbage.
+  assert( VolumeSeeker::RaytraceDetector() && "The origin point of the top_volume lies inside the top volume" );
+
+  // Rasterise on phi : calculate the range of theta that gives raytraces
+  double thetaMax = 0.0; double thetaMin = 0.0;
+  // Starting coarsely, 
+  double deflection = 0.0; // radians
+  VolumeSeeker::Deflect( seed_theta, seed_phi, deflection, true );
+  thetaMax = seed_theta + deflection;
+  deflection = 0.0;
+  VolumeSeeker::Deflect( seed_theta, seed_phi, deflection, false );
+  thetaMin = seed_theta + deflection;
+
+  // Add this to the angular region
+  Point min_point = std::pair< double, double >( thetaMin, seed_phi );
+  Point max_point = std::pair< double, double >( thetaMax, seed_phi );
+  PointRaster seed_raster = std::pair< Point, Point >( min_point, max_point );
+  alpha.emplace_back( seed_raster );
+
+  LOG( "ExoticLLP", pDEBUG )
+    << "Deflections: (th0, ph0) = ( " << seed_theta * 180.0 / constants::kPi 
+    << ", " << seed_phi * 180.0 / constants::kPi
+    << " ) -- theta_min, max = " << thetaMin * 180.0 / constants::kPi
+    << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
+
+  // just in case, restore the original member variables
+  fOriginPoint = booked_origin_point;
+  fOriginPointROOT = booked_origin_point_ROOT;
+  fMomentum = booked_momentum;
+  
+  return alpha;
+}
+//____________________________________________________________________________
+void VolumeSeeker::Deflect( double th0, double ph0, 
+			    double & deflection, bool goUp ) const
+{
+  double delta = (goUp) ? m_coarse_theta_deflection * constants::kPi / 180.0 : 
+    -1 * m_coarse_theta_deflection * constants::kPi / 180.0;
+  double new_theta = th0;
+  while( VolumeSeeker::RaytraceDetector() && new_theta >= 0.0 && new_theta <= constants::kPi ){
+    deflection += delta;
+    LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " 
+			       << deflection * 180.0 / constants::kPi << " deg...";
+    new_theta = th0 + deflection;
+    TVector3 new_momentum( std::sin( new_theta ) * std::cos( ph0 ),
+			   std::sin( new_theta ) * std::sin( ph0 ), std::cos( new_theta ) );
+    fMomentum = new_momentum;
+  } // coarse loop
+  deflection -= delta;
+  new_theta = th0 + deflection;
+  fMomentum.SetXYZ( std::sin( new_theta ) * std::cos( ph0 ),
+		    std::sin( new_theta ) * std::sin( ph0 ), std::cos( new_theta ) );
+  double epsilon = (goUp) ? m_fine_theta_deflection * constants::kPi / 180.0 : 
+    -1 * m_fine_theta_deflection * constants::kPi / 180.0;
+  while( VolumeSeeker::RaytraceDetector() && new_theta >= 0.0 && new_theta <= constants::kPi ){
+    deflection += epsilon;
+    LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg...";
+    new_theta = th0 + deflection;
+    TVector3 new_momentum( std::sin( new_theta ) * std::cos( ph0 ),
+			   std::sin( new_theta ) * std::sin( ph0 ), std::cos( new_theta ) );
+    fMomentum = new_momentum;
+  } // fine loop
+  deflection -= epsilon;
+  new_theta = th0 + deflection;
+  fMomentum.SetXYZ( std::sin( new_theta ) * std::cos( ph0 ),
+		    std::sin( new_theta ) * std::sin( ph0 ), std::cos( new_theta ) );
+
+  LOG( "ExoticLLP", pDEBUG ) << "DONE with final deflection " << deflection * 180.0 / constants::kPi
+			     << " deg.";
 }
 //____________________________________________________________________________

@@ -187,6 +187,18 @@ int main(int argc, char ** argv)
   vsek->PopulateEvent( origin_point, momentum );
   bool result = vsek->RaytraceDetector();
 
+  // Now we will try to see if the angles make sense.
+  AngularRegion accepted_region = vsek->AngularAcceptance();
+
+  std::ostringstream angsts;
+  angsts << "Showing angular region!!! Values are (theta, phi) at theta_{min, max} for each raster.";
+  for( AngularRegion::iterator ait = accepted_region.begin();
+       ait != accepted_region.end(); ++ait ) {
+    angsts << "\nRaster points: ( " << ((*ait).first).first << ", " << ((*ait).first).second << " ) , "
+	   << "( " << ((*ait).second).first << ", " << ((*ait).second).second << " )";
+  }
+  LOG( "gevgen_exotic_llp", pDEBUG ) << angsts.str();
+
   // Initialize an Ntuple Writer to save GHEP records into a TTree
   NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
   ntpw.CustomizeFilenamePrefix(gOptEvFilePrefix);

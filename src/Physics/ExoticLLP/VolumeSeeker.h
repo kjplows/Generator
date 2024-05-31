@@ -38,11 +38,16 @@
 #include <TGeoBBox.h>
 
 #include "Framework/Conventions/Controls.h"
+#include "Framework/Conventions/Constants.h"
 #include "Framework/Conventions/Units.h"
 #include "Framework/Messenger/Messenger.h"
 
 #include "Framework/Utils/UnitUtils.h"
 #include "Framework/Utils/PrintUtils.h"
+
+typedef std::pair< double, double > Point; //! To store (theta, phi) values
+typedef std::pair< Point, Point > PointRaster; //! To associate (thetamin, thetamax) for each phi
+typedef std::vector< PointRaster > AngularRegion; // The bounding shape, in (theta, phi) space
 
 namespace genie {
 
@@ -69,8 +74,11 @@ namespace genie {
       void ClearEvent() const;
 
       //! Given an origin point and a momentum, find the entry and exit points to the detector
+      // RETHERE make private
       bool RaytraceDetector() const;
       
+      //! Define a region in (theta, phi) space that an HNL can be accepted in...
+      AngularRegion AngularAcceptance() const;
 
     private:
 
@@ -92,6 +100,15 @@ namespace genie {
 
       //! Obtain the node (in the ROOT sense) where a point exists
       std::string CheckGeomPoint( TVector3 chkpoint ) const;
+
+      //! Some controls
+      const double m_coarse_theta_deflection = 2.0; // deg
+      const double m_fine_theta_deflection = 0.1; // deg
+      const double m_coarse_phi_deflection = 5.0; // deg
+      const double m_fine_phi_deflection = 0.25; // deg
+
+      //! And utility functions for calling Raytrace() a lot of times
+      void Deflect( double th0, double ph0, double & deflection, bool goUp ) const;
 
       static VolumeSeeker * fInstance;
 
