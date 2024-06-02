@@ -191,7 +191,7 @@ int main(int argc, char ** argv)
   AngularRegion accepted_region = vsek->AngularAcceptance();
 
   std::ostringstream angsts;
-  angsts << "Showing angular region!!! Values are (theta, phi) at theta_{min, max} for each raster.";
+  angsts << "Showing angular region!!! Values are (theta, phi) [rad] at theta_{min, max} for each raster.";
   for( AngularRegion::iterator ait = accepted_region.begin();
        ait != accepted_region.end(); ++ait ) {
     angsts << "\nRaster points: ( " << ((*ait).first).first << ", " << ((*ait).first).second << " ) , "
