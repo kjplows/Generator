@@ -440,7 +440,7 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
     }
   }
 
-  LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
+  //LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
   //LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
 
   if( pathString.find( fTopVolume.c_str() ) == string::npos ) return false; // No luck.
@@ -521,8 +521,8 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   fExitPointNEAR = VolumeSeeker::RotateToNear( fExitPoint );
   fExitPointNEAR = VolumeSeeker::TranslateToNear( fExitPointNEAR );
 
-  LOG( "ExoticLLP", pDEBUG ) << "Entry: " << utils::print::Vec3AsString( &fEntryPoint )
-			     << " - Exit: " << utils::print::Vec3AsString( &fExitPoint );
+  //LOG( "ExoticLLP", pDEBUG ) << "Entry: " << utils::print::Vec3AsString( &fEntryPoint )
+  //		     << " - Exit: " << utils::print::Vec3AsString( &fExitPoint );
     
   return true;
 }
@@ -590,35 +590,20 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
     << "\nprojection_phi   = " << utils::print::Vec3AsString( &projection_phi )
     << "\nseed_theta       = " << seed_theta * 180.0 / constants::kPi
     << "\nseed_phi         = " << seed_phi * 180.0 / constants::kPi;
-
-  // Let's find the deflections in the middle first
-  double thetaMax = 0.0; double thetaMin = 0.0;
   
-  // One loop to find the maximum possible angles
-  double deflection_up = 0.0, deflection_down = 0.0;
-  VolumeSeeker::Deflect( deflection_up, true );
-  VolumeSeeker::Deflect( deflection_down, false );
+  // check that Rasterise() does what you want it to
+  VolumeSeeker::Rasterise( alpha, true );
+  VolumeSeeker::Rasterise( alpha, false );
 
-  // if zero OK and up = +30 and min = -10 then max = +30 min = 0
-  // if zero not OK and up = +30 and min = +10 then max = +30 min = +10
-  // if zero not OK and up = -30 amd min = -10 then max = +30 min = +10
+  // sort the angular region in increasing phi
+  std::sort( alpha.begin(), alpha.end(), 
+	     []( const PointRaster & a, const PointRaster &b ){
+	       // first and second points of a PointRaster have same phi
+	       Point pta = a.first, ptb = b.first;
+	       return pta.second < ptb.second;
+	     } );
 
-  bool zero_okay = ( deflection_up * deflection_down <= 0.0 );
-
-  thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
-  thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
-
-  // Add this to the angular region
-  Point min_point = std::pair< double, double >( thetaMin, seed_phi );
-  Point max_point = std::pair< double, double >( thetaMax, seed_phi );
-  PointRaster seed_raster = std::pair< Point, Point >( min_point, max_point );
-  alpha.emplace_back( seed_raster );
-
-  LOG( "ExoticLLP", pDEBUG )
-    << "Deflections: (seed_theta, seed_phi) = ( " << seed_theta * 180.0 / constants::kPi 
-    << ", " << seed_phi * 180.0 / constants::kPi
-    << " ) -- theta_min, max = " << thetaMin * 180.0 / constants::kPi
-    << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
+  LOG( "ExoticLLP", pDEBUG ) << "Angular region has " << alpha.size() << " rasters.";
 
   // just in case, restore the original member variables
   fOriginPoint = booked_origin_point;
@@ -626,6 +611,191 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   fMomentum = booked_momentum;
   
   return alpha;
+}
+//____________________________________________________________________________
+double VolumeSeeker::AngularSize( AngularRegion alpha ) const
+{
+  // The AngularRegion object is a collection of PointRasters, each of which has two points
+  // Fundamentally, we split the region into an upper and a lower bound.
+  // Get the size of each and return their difference
+
+  std::vector< Point > upper_points, lower_points;
+  for( AngularRegion::iterator ait = alpha.begin() ; ait != alpha.end() ; ++ait ) {
+    upper_points.emplace_back( (*ait).second );
+    lower_points.emplace_back( (*ait).first );
+  }
+
+  double up_size   = VolumeSeeker::Simpson( upper_points );
+  double down_size = VolumeSeeker::Simpson( lower_points );
+
+  //return up_size - down_size;
+  return up_size;
+}
+//____________________________________________________________________________
+double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const
+{
+  // we have a collection of points == pairs of (theta, phi).
+  // Need to calculate an integral that goes like (sin\theta d\theta) d\phi
+  // So apply Simpson's rule on the theta part (thanks Fubini) and obtain the answer
+
+  double total = 0.0;
+  
+  Point previous_point = *(pt_vec.begin());
+  for( std::vector<Point>::iterator ptit = pt_vec.begin() ; ptit != pt_vec.end() ; ++ptit ) {
+    LOG( "ExoticLLP", pDEBUG ) << "Here is the previous point: " 
+			       << previous_point.first * 180.0 / constants::kPi
+			       << ", " << previous_point.second * 180.0 / constants::kPi
+			       << " - Here is the current point: " 
+			       << (*ptit).first * 180.0 / constants::kPi
+			       << ", " << (*ptit).second * 180.0 / constants::kPi;
+    if( *ptit == previous_point ) continue; // skip the first point
+    
+    Point current_point = *ptit;
+    // Check if there are duplicates in theta, which means there was no meaningful change. Same term
+    if( current_point.first == previous_point.first ) continue;
+
+    // Simple width on phi
+    double phi_bit = current_point.second - previous_point.second;
+    // Simpson's 1/3 rule on theta
+    //double theta_bit = std::abs( current_point.first - previous_point.first ) / 6.0;
+    double theta_bit = 1.0 / 6.0;
+    
+    double prev_sin = 1.0 - std::cos( previous_point.first );
+    double curr_sin = 1.0 - std::cos( current_point.first );
+    double imed_sin = 1.0 - std::cos( ( previous_point.first + current_point.first ) / 2.0 );
+
+    theta_bit *= ( prev_sin + 4.0 * imed_sin + curr_sin );
+
+    LOG( "ExoticLLP", pDEBUG ) << "phi_bit = " << phi_bit << ", theta_bit = " << theta_bit
+			       << ",  prev_sin = " << prev_sin
+			       << ", imed_sin = " << imed_sin << ", curr_sin = " << curr_sin;
+
+    total += phi_bit * theta_bit;
+    LOG( "ExoticLLP", pDEBUG ) << "Updated total to " << total;
+
+    previous_point = current_point; // update
+  } // add terms to the integral
+
+  return total;
+}
+//____________________________________________________________________________
+void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
+{
+  // obligatory momentum protection
+  const TVector3 booked_momentum = fMomentum;
+
+  double sweep = 0.0;
+  double thetaMax = 0.0, thetaMin = 0.0;
+  double deflection_up = 0.0, deflection_down = 0.0;
+
+  // first, check that the middle point isn't in. If it isn't, insert it.
+  if( alpha.size() == 0.0 ){
+    // One loop to find the maximum possible angles
+    VolumeSeeker::Deflect( deflection_up, true );
+    VolumeSeeker::Deflect( deflection_down, false );
+    
+    bool zero_okay = ( deflection_up * deflection_down <= 0.0 );
+    
+    thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
+    thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
+    
+    /*
+    LOG( "ExoticLLP", pDEBUG )
+      << "Deflections: phi = " << 0.0
+      << ", theta_min, max = " << thetaMin * 180.0 / constants::kPi
+      << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
+    */
+    
+    // Add this to the angular region
+    Point min_point = std::pair< double, double >( thetaMin, sweep );
+    Point max_point = std::pair< double, double >( thetaMax, sweep );
+    PointRaster raster = std::pair< Point, Point >( min_point, max_point );
+    alpha.emplace_back( raster );
+  }
+
+  // This is a deflection on phi. So it follows fPhiAxis
+  // Each step is a test on phi, and if there is a raytrace anywhere along that phi, for any theta,
+  // then start at that raytace and call Deflect.
+
+  double delta = (goRight) ? m_coarse_phi_deflection * constants::kPi / 180.0 :
+    -1 * m_coarse_phi_deflection * constants::kPi / 180.0;
+  // RETHERE -- for now, assume there is a raytrace at (theta, phi) = (th0, ph0 + delta)
+  while( VolumeSeeker::RaytraceDetector( true ) && std::abs(sweep) <= constants::kPi &&
+	 ( deflection_up != deflection_down || sweep == 0.0 ) ) {
+    deflection_up = 0.0; deflection_down = 0.0; thetaMax = 0.0; thetaMin = 0.0;
+    sweep += delta;
+
+    // Calculate the fPhiAxis component
+    double scale = booked_momentum.Mag() * std::tan( sweep );
+    fMomentum = booked_momentum + scale * fPhiAxis;
+
+    VolumeSeeker::Deflect( deflection_up, true );
+    VolumeSeeker::Deflect( deflection_down, false );
+    
+    bool zero_okay = ( deflection_up * deflection_down <= 0.0 );
+    
+    thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
+    thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
+
+    LOG( "ExoticLLP", pDEBUG )
+      << "Deflections: phi = " << sweep * 180.0 / constants::kPi
+      << ", theta_min, max = " << thetaMin * 180.0 / constants::kPi
+      << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
+
+    // and add to the raster
+    if( thetaMin != thetaMax ) {
+      Point min_point = std::pair< double, double >( thetaMin, sweep );
+      Point max_point = std::pair< double, double >( thetaMax, sweep );
+      PointRaster raster = std::pair< Point, Point >( min_point, max_point );
+      alpha.emplace_back( raster );
+    }
+  } // coarse loop
+
+  sweep -= delta;
+  double coarse_scale = booked_momentum.Mag() * std::tan( sweep );
+  fMomentum = booked_momentum + coarse_scale * fPhiAxis;
+
+  // Also remove the last raster point, gets erroneously added
+  alpha.pop_back();
+
+  double epsilon = (goRight) ? m_fine_phi_deflection * constants::kPi / 180.0 :
+    -1 * m_fine_phi_deflection * constants::kPi / 180.0;
+  while( VolumeSeeker::RaytraceDetector( true ) && std::abs(sweep) <= constants::kPi &&
+	 ( deflection_up != deflection_down || sweep == 0.0 ) ) {
+    deflection_up = 0.0; deflection_down = 0.0; thetaMax = 0.0; thetaMin = 0.0;
+    sweep += epsilon;
+
+    // Calculate the fPhiAxis component
+    double scale = booked_momentum.Mag() * std::tan( sweep );
+    fMomentum = booked_momentum + scale * fPhiAxis;
+
+    VolumeSeeker::Deflect( deflection_up, true );
+    VolumeSeeker::Deflect( deflection_down, false );
+    
+    bool zero_okay = ( deflection_up * deflection_down <= 0.0 );
+    
+    thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
+    thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
+
+    /*
+    LOG( "ExoticLLP", pDEBUG )
+      << "Deflections: phi = " << sweep * 180.0 / constants::kPi
+      << ", theta_min, max = " << thetaMin * 180.0 / constants::kPi
+      << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
+    */
+
+    // and add to the raster
+    if( thetaMin != thetaMax ) {
+      Point min_point = std::pair< double, double >( thetaMin, sweep );
+      Point max_point = std::pair< double, double >( thetaMax, sweep );
+      PointRaster raster = std::pair< Point, Point >( min_point, max_point );
+      alpha.emplace_back( raster );
+    }
+  } // coarse loop
+  sweep -= epsilon;
+  
+  // all done, reset
+  fMomentum = booked_momentum;
 }
 //____________________________________________________________________________
 void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
@@ -643,8 +813,8 @@ void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
     deflection += delta;
     // Now calculate the fThetaAxis component
     double scale = booked_momentum.Mag() * std::tan( deflection );
-    LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg..."
-			       << "\nScale = " << scale;
+    //LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg..."
+    //			       << "\nScale = " << scale;
     fMomentum = booked_momentum + scale * fThetaAxis;
   } // coarse loop
   deflection -= delta;
@@ -656,15 +826,15 @@ void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
   while( VolumeSeeker::RaytraceDetector( true ) && std::abs(deflection) <= constants::kPi ){
     deflection += epsilon;
     double scale = booked_momentum.Mag() * std::tan( deflection );
-        LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg..."
-				   << "\nScale = " << scale;
+    //LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg..."
+    //				   << "\nScale = " << scale;
     fMomentum = booked_momentum + scale * fThetaAxis;
   } // fine loop
   deflection -= epsilon;
 
   fMomentum = booked_momentum;
 
-  LOG( "ExoticLLP", pDEBUG ) << "DONE with final deflection " << deflection * 180.0 / constants::kPi
-  			     << " deg.";
+  //LOG( "ExoticLLP", pDEBUG ) << "DONE with final deflection " << deflection * 180.0 / constants::kPi
+  //			     << " deg.";
 }
 //____________________________________________________________________________

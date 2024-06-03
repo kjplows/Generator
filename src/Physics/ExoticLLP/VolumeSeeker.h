@@ -47,7 +47,7 @@
 
 typedef std::pair< double, double > Point; //! To store (theta, phi) values
 typedef std::pair< Point, Point > PointRaster; //! To associate (thetamin, thetamax) for each phi
-typedef std::vector< PointRaster > AngularRegion; // The bounding shape, in (theta, phi) space
+typedef std::vector< PointRaster > AngularRegion; //! The bounding shape, in (theta, phi) space
 
 namespace genie {
 
@@ -79,6 +79,9 @@ namespace genie {
       
       //! Define a region in (theta, phi) space that an HNL can be accepted in...
       AngularRegion AngularAcceptance() const;
+      //! And calculate its size
+      double AngularSize( AngularRegion alpha ) const;
+      double Simpson( std::vector<Point> pt_vec ) const;
 
     private:
 
@@ -105,13 +108,14 @@ namespace genie {
       //bool RaytraceDetector() const;
 
       //! Some controls
-      const double m_coarse_theta_deflection = 2.0; // deg
-      const double m_fine_theta_deflection = 0.1; // deg
-      const double m_coarse_phi_deflection = 5.0; // deg
-      const double m_fine_phi_deflection = 0.25; // deg
+      const double m_coarse_theta_deflection = 1.0; // deg
+      const double m_fine_theta_deflection = 0.05; // deg
+      const double m_coarse_phi_deflection = 2.0; // deg
+      const double m_fine_phi_deflection = 0.1; // deg
 
       //! And utility functions for calling Raytrace() a lot of times
-      void Deflect( double & deflection, bool goUp ) const;
+      void Deflect( double & deflection, bool goUp ) const; // calls Raytrace() with set theta, phi
+      void Rasterise( AngularRegion & alpha, bool goRight ) const; // calls Deflect() with set phi
 
       static VolumeSeeker * fInstance;
 

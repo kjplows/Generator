@@ -202,6 +202,10 @@ int main(int argc, char ** argv)
   }
   LOG( "gevgen_exotic_llp", pDEBUG ) << angsts.str();
 
+  // Get the size of this raster
+  double size = vsek->AngularSize( accepted_region );
+  LOG( "gevgen_exotic_llp", pDEBUG ) << "Size of the region is " << size;
+
   // Initialize an Ntuple Writer to save GHEP records into a TTree
   NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
   ntpw.CustomizeFilenamePrefix(gOptEvFilePrefix);
