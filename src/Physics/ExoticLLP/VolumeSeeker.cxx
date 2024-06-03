@@ -379,6 +379,7 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   // Important subtlety! The ROOT coordinate system for a top_volume does not know about the transformation matrix
   // Practically, this means that you must subtract fTopVolumeOriginROOT from all your ROOT calcs!!!!
   double t_param = 0.0; TVector3 dev_vec = fTopVolumeOrigin - fOriginPoint;
+  
   if( dev_vec.Mag() > 0.0 ) {
     // First, calculate the starting point: intercept of ray with the z = 0 plane
     // Important caveat: z = 0 is z = 0 of *detector*. This is not the same as z = 0 USER
@@ -401,7 +402,13 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   // check that this point lies in the geometry.
   std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
 
-  //LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
+    /*
+  LOG( "ExoticLLP", pDEBUG ) << "\nfOriginPoint   = " << utils::print::Vec3AsString( &fOriginPoint ) 
+			     << "\nfZeroPoint     = " << utils::print::Vec3AsString( &fZeroPoint ) 
+			     << "\nfZeroPointROOT = " << utils::print::Vec3AsString( &fZeroPointROOT ) 
+			     << "\nt_param = " << t_param;
+  LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
+  */
 
   // if allowing for grace, check a little bit further in. 
   // distance, in 1% increments
@@ -433,7 +440,7 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
     }
   }
 
-  //LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
+  LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
   //LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
 
   if( pathString.find( fTopVolume.c_str() ) == string::npos ) return false; // No luck.
@@ -530,7 +537,7 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   const TVector3 booked_momentum = fMomentum;
 
   // First, define the looking direction
-  const TVector3 axis = fMomentum.Unit();
+  fAxis = fMomentum.Unit();
 
   // We make a potentially strong assumption here, that the top_volume is simply connected.
   // The calculation will be garbage if not, and we'll crash out rather than give garbage.
@@ -539,20 +546,67 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   // Get the separation between top volume origin and start point
   const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
 
-  // Calculate the (theta, phi) of that point
-  // ROOT defines theta in [0, pi] and phi in [-pi, pi]
-  double seed_theta = seed_vector.Theta();
-  double seed_phi   = seed_vector.Phi();
+  // Of course, the angles are defined with respect to the momentum axis...
+  // We need to first project seed_vector onto the theta = 0 plane
+  // where the theta = 0 plane is defined by fMomentum and the tranverse component of seed_vector
+  TVector3 transverse_seed = seed_vector - fAxis.Dot( seed_vector ) * fAxis;
+  if( transverse_seed.Mag() > 0.0 ) fThetaAxis = transverse_seed.Unit();
+  else{
+    if( fAxis.Y() == 0.0 ) fThetaAxis = TVector3( 0.0, 1.0, 0.0 );
+    else if( fAxis.X() == 0.0 ) fThetaAxis = TVector3( 1.0, 0.0, 0.0 );
+    else if( fAxis.Z() == 0.0 ) fThetaAxis = TVector3( 0.0, 0.0, 1.0 );
+    else fThetaAxis = TVector3( fAxis.Y(), -fAxis.X(), 0.0 );
+  }
 
-  // Rasterise on phi : calculate the range of theta that gives raytraces
+  // Now that lets us complete the "momentum" system of coordinates
+  fPhiAxis = fAxis.Cross( fThetaAxis );
+
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nfAxis      = " << utils::print::Vec3AsString(&fAxis)
+    << "\nfThetaAxis = " << utils::print::Vec3AsString(&fThetaAxis)
+    << "\nfPhiAxis   = " << utils::print::Vec3AsString(&fPhiAxis);
+
+  // Get the projection of that vector onto the appropriate coordinate system
+  const double sep_from_theta = seed_vector.Dot( fPhiAxis );
+  const double sep_from_phi   = seed_vector.Dot( fThetaAxis );
+
+  TVector3 projection_theta = seed_vector - sep_from_theta * fPhiAxis;
+  TVector3 projection_phi = seed_vector - sep_from_phi * fThetaAxis;
+  
+  // acos runs from [0, pi]
+  double seed_theta = std::acos( fAxis.Dot( projection_theta ) /
+				 std::max( projection_theta.Mag(), 1.0e-10 ) );
+  double seed_phi = std::acos( fAxis.Dot( projection_phi ) / 
+			       std::max( projection_phi.Mag(), 1.0e-10 ) );
+  if( fAxis.Dot( projection_phi ) < 0.0 ) seed_phi *= -1.0;
+
+  if( transverse_seed.Mag() == 0.0 ) { seed_theta = 0.0; seed_phi = 0.0; } // no separation!
+
+  // So, to check: The projection on the theta and phi planes is just the 2D angle
+  // between axis and the projection
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nseed_vector      = " << utils::print::Vec3AsString( &seed_vector )
+    << "\nprojection_theta = " << utils::print::Vec3AsString( &projection_theta )
+    << "\nprojection_phi   = " << utils::print::Vec3AsString( &projection_phi )
+    << "\nseed_theta       = " << seed_theta * 180.0 / constants::kPi
+    << "\nseed_phi         = " << seed_phi * 180.0 / constants::kPi;
+
+  // Let's find the deflections in the middle first
   double thetaMax = 0.0; double thetaMin = 0.0;
-  // Starting coarsely, 
-  double deflection = 0.0; // radians
-  VolumeSeeker::Deflect( seed_theta, seed_phi, deflection, true );
-  thetaMax = seed_theta + deflection;
-  deflection = 0.0;
-  VolumeSeeker::Deflect( seed_theta, seed_phi, deflection, false );
-  thetaMin = seed_theta + deflection;
+  
+  // One loop to find the maximum possible angles
+  double deflection_up = 0.0, deflection_down = 0.0;
+  VolumeSeeker::Deflect( deflection_up, true );
+  VolumeSeeker::Deflect( deflection_down, false );
+
+  // if zero OK and up = +30 and min = -10 then max = +30 min = 0
+  // if zero not OK and up = +30 and min = +10 then max = +30 min = +10
+  // if zero not OK and up = -30 amd min = -10 then max = +30 min = +10
+
+  bool zero_okay = ( deflection_up * deflection_down <= 0.0 );
+
+  thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
+  thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
 
   // Add this to the angular region
   Point min_point = std::pair< double, double >( thetaMin, seed_phi );
@@ -561,7 +615,7 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   alpha.emplace_back( seed_raster );
 
   LOG( "ExoticLLP", pDEBUG )
-    << "Deflections: (th0, ph0) = ( " << seed_theta * 180.0 / constants::kPi 
+    << "Deflections: (seed_theta, seed_phi) = ( " << seed_theta * 180.0 / constants::kPi 
     << ", " << seed_phi * 180.0 / constants::kPi
     << " ) -- theta_min, max = " << thetaMin * 180.0 / constants::kPi
     << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
@@ -574,41 +628,43 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   return alpha;
 }
 //____________________________________________________________________________
-void VolumeSeeker::Deflect( double th0, double ph0, 
-			    double & deflection, bool goUp ) const
+void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
 {
+  // bookkeep the momentum that we had
+  const TVector3 booked_momentum = fMomentum;
+
+  // This is a deflection on theta. So it follows fThetaAxis
+  // Each step sets a deflection angle and adds the appropriately scaled 
+  // vector on fThetaAxis to see if there is a raytrace there
+  
   double delta = (goUp) ? m_coarse_theta_deflection * constants::kPi / 180.0 : 
     -1 * m_coarse_theta_deflection * constants::kPi / 180.0;
-  double new_theta = th0;
-  while( VolumeSeeker::RaytraceDetector( true ) && new_theta >= 0.0 && new_theta <= constants::kPi ){
+  while( VolumeSeeker::RaytraceDetector( true ) && std::abs(deflection) <= constants::kPi ){
     deflection += delta;
-    LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " 
-			       << deflection * 180.0 / constants::kPi << " deg...";
-    new_theta = th0 + deflection;
-    TVector3 new_momentum( std::sin( new_theta ) * std::cos( ph0 ),
-			   std::sin( new_theta ) * std::sin( ph0 ), std::cos( new_theta ) );
-    fMomentum = new_momentum;
+    // Now calculate the fThetaAxis component
+    double scale = booked_momentum.Mag() * std::tan( deflection );
+    LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg..."
+			       << "\nScale = " << scale;
+    fMomentum = booked_momentum + scale * fThetaAxis;
   } // coarse loop
   deflection -= delta;
-  new_theta = th0 + deflection;
-  fMomentum.SetXYZ( std::sin( new_theta ) * std::cos( ph0 ),
-		    std::sin( new_theta ) * std::sin( ph0 ), std::cos( new_theta ) );
+  double coarse_scale = booked_momentum.Mag() * std::tan( deflection );
+  fMomentum = booked_momentum + coarse_scale * fThetaAxis;
+
   double epsilon = (goUp) ? m_fine_theta_deflection * constants::kPi / 180.0 : 
     -1 * m_fine_theta_deflection * constants::kPi / 180.0;
-  while( VolumeSeeker::RaytraceDetector( true ) && new_theta >= 0.0 && new_theta <= constants::kPi ){
+  while( VolumeSeeker::RaytraceDetector( true ) && std::abs(deflection) <= constants::kPi ){
     deflection += epsilon;
-    LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg...";
-    new_theta = th0 + deflection;
-    TVector3 new_momentum( std::sin( new_theta ) * std::cos( ph0 ),
-			   std::sin( new_theta ) * std::sin( ph0 ), std::cos( new_theta ) );
-    fMomentum = new_momentum;
+    double scale = booked_momentum.Mag() * std::tan( deflection );
+        LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg..."
+				   << "\nScale = " << scale;
+    fMomentum = booked_momentum + scale * fThetaAxis;
   } // fine loop
   deflection -= epsilon;
-  new_theta = th0 + deflection;
-  fMomentum.SetXYZ( std::sin( new_theta ) * std::cos( ph0 ),
-		    std::sin( new_theta ) * std::sin( ph0 ), std::cos( new_theta ) );
 
-  //LOG( "ExoticLLP", pDEBUG ) << "DONE with final deflection " << deflection * 180.0 / constants::kPi
-  //			     << " deg.";
+  fMomentum = booked_momentum;
+
+  LOG( "ExoticLLP", pDEBUG ) << "DONE with final deflection " << deflection * 180.0 / constants::kPi
+  			     << " deg.";
 }
 //____________________________________________________________________________

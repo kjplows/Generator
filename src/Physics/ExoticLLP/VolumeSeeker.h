@@ -111,7 +111,7 @@ namespace genie {
       const double m_fine_phi_deflection = 0.25; // deg
 
       //! And utility functions for calling Raytrace() a lot of times
-      void Deflect( double th0, double ph0, double & deflection, bool goUp ) const;
+      void Deflect( double & deflection, bool goUp ) const;
 
       static VolumeSeeker * fInstance;
 
@@ -142,6 +142,15 @@ namespace genie {
       mutable TVector3 fExitPointNEAR;                 //! (X, Y, Z) of ray exit from detector [m]
 
       mutable TVector3 fMomentum, fMomentumNEAR;       //! (px, py, pz) of particle. Directional cosines only. [GeV/GeV]
+
+      /*
+	The following 3 vectors describe a RH coordinate system in USER space.
+	Axis is the momentum axis (unit vector)
+	ThetaAxis is the vector that is perpendicular to Axis, and along with Axis defines a plane.
+	This plane contains both the OriginPoint as well as the TopVolumeCentre.
+	PhiAxis completes the coordinate system (== Axis.Cross(ThetaAxis))
+       */
+      mutable TVector3 fAxis, fThetaAxis, fPhiAxis;    //! A right handed coordinate system in USER space.
 
       mutable std::string fGeomFile;            //! Path to the geometry file
       mutable std::string fTopVolume;           //! Name of the top volume to be used
