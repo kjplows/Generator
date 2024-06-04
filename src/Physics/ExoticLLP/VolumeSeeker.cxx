@@ -625,11 +625,47 @@ double VolumeSeeker::AngularSize( AngularRegion alpha ) const
     lower_points.emplace_back( (*ait).first );
   }
 
-  double up_size   = VolumeSeeker::Simpson( upper_points );
-  double down_size = VolumeSeeker::Simpson( lower_points );
+  double up_size   = VolumeSeeker::Trapezoid( upper_points );
+  double down_size = VolumeSeeker::Trapezoid( lower_points );
 
-  //return up_size - down_size;
-  return up_size;
+  return up_size - down_size;
+  //return up_size;
+}
+//____________________________________________________________________________
+double VolumeSeeker::Trapezoid( std::vector<Point> pt_vec ) const
+{
+  double total = 0.0;
+
+  Point previous_point = *(pt_vec.begin());
+  for( std::vector<Point>::iterator ptit = pt_vec.begin() ; ptit != pt_vec.end() ; ++ptit ) {
+    LOG( "ExoticLLP", pDEBUG ) << "Here is the previous point: " 
+			       << previous_point.first * 180.0 / constants::kPi
+			       << ", " << previous_point.second * 180.0 / constants::kPi
+			       << " - Here is the current point: " 
+			       << (*ptit).first * 180.0 / constants::kPi
+			       << ", " << (*ptit).second * 180.0 / constants::kPi;
+    if( *ptit == previous_point ) continue; // skip the first point
+
+    Point current_point = *ptit;
+    
+    double width = current_point.second - previous_point.second;
+    double small_height = std::min( 1.0 - std::cos( current_point.first ),
+				    1.0 - std::cos( previous_point.first ) );
+    double large_height = std::max( 1.0 - std::cos( current_point.first ),
+				    1.0 - std::cos( previous_point.first ) );
+
+    // trapezoid area is w * (h + H)/2
+    total += width * ( small_height + large_height ) / 2.0;
+
+    LOG( "ExoticLLP", pDEBUG ) << "width = " << width << ", "
+			       << "small_height = " << small_height << ", "
+			       << "large_height = " << large_height << ", "
+			       << "total = " << total;
+
+    previous_point = current_point; // update
+  }
+
+  return total;
 }
 //____________________________________________________________________________
 double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const

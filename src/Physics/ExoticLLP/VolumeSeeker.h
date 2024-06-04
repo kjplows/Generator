@@ -81,6 +81,7 @@ namespace genie {
       AngularRegion AngularAcceptance() const;
       //! And calculate its size
       double AngularSize( AngularRegion alpha ) const;
+      double Trapezoid( std::vector<Point> pt_vec ) const;
       double Simpson( std::vector<Point> pt_vec ) const;
 
     private:
