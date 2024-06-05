@@ -379,6 +379,12 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   // Important subtlety! The ROOT coordinate system for a top_volume does not know about the transformation matrix
   // Practically, this means that you must subtract fTopVolumeOriginROOT from all your ROOT calcs!!!!
   double t_param = 0.0; TVector3 dev_vec = fTopVolumeOrigin - fOriginPoint;
+
+  // Modify the deviation vector! Want the "front face".
+  // Find the projection of fAxis onto the bounding box dimensions
+  double proj_length = std::abs( fAxis.X() * fLx + fAxis.Y() * fLy + fAxis.Z() * fLz );
+  // and move back a little
+  dev_vec -= proj_length * fAxis;
   
   if( dev_vec.Mag() > 0.0 ) {
     // First, calculate the starting point: intercept of ray with the z = 0 plane
@@ -411,18 +417,23 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   */
 
   // if allowing for grace, check a little bit further in. 
-  // distance, in 1% increments
+  // distance, in 1% increments of the bounding box diagonal
   if( grace ) {
     double grace_modifier = 1.0;
     double t_original = t_param;
+    double upper_bound = std::sqrt( fLx*fLx + fLy*fLy + fLz*fLz );
     bool inside_bbox = true;
     while( pathString.find( fTopVolume.c_str() ) == string::npos &&
 	   grace_modifier > 0.0 && inside_bbox ) {
       grace_modifier -= 0.01;
       t_param = t_original * grace_modifier;
+      double axis_mod = (1.0 - grace_modifier) * upper_bound;
+      /*
       fZeroPoint.SetXYZ( fOriginPoint.X() + t_param * fMomentum.X(),
 			 fOriginPoint.Y() + t_param * fMomentum.Y(),
 			 fOriginPoint.Z() + t_param * fMomentum.Z() );
+      */
+      fZeroPoint -= axis_mod * fAxis;
       fZeroPointNEAR = VolumeSeeker::RotateToNear( fZeroPoint );
       fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
       fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
@@ -584,12 +595,14 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
 
   // So, to check: The projection on the theta and phi planes is just the 2D angle
   // between axis and the projection
+  /*
   LOG( "ExoticLLP", pDEBUG )
     << "\nseed_vector      = " << utils::print::Vec3AsString( &seed_vector )
     << "\nprojection_theta = " << utils::print::Vec3AsString( &projection_theta )
     << "\nprojection_phi   = " << utils::print::Vec3AsString( &projection_phi )
     << "\nseed_theta       = " << seed_theta * 180.0 / constants::kPi
     << "\nseed_phi         = " << seed_phi * 180.0 / constants::kPi;
+  */
   
   // check that Rasterise() does what you want it to
   VolumeSeeker::Rasterise( alpha, true );
@@ -638,12 +651,14 @@ double VolumeSeeker::Trapezoid( std::vector<Point> pt_vec ) const
 
   Point previous_point = *(pt_vec.begin());
   for( std::vector<Point>::iterator ptit = pt_vec.begin() ; ptit != pt_vec.end() ; ++ptit ) {
+    /*
     LOG( "ExoticLLP", pDEBUG ) << "Here is the previous point: " 
 			       << previous_point.first * 180.0 / constants::kPi
 			       << ", " << previous_point.second * 180.0 / constants::kPi
 			       << " - Here is the current point: " 
 			       << (*ptit).first * 180.0 / constants::kPi
 			       << ", " << (*ptit).second * 180.0 / constants::kPi;
+    */
     if( *ptit == previous_point ) continue; // skip the first point
 
     Point current_point = *ptit;
@@ -656,11 +671,6 @@ double VolumeSeeker::Trapezoid( std::vector<Point> pt_vec ) const
 
     // trapezoid area is w * (h + H)/2
     total += width * ( small_height + large_height ) / 2.0;
-
-    LOG( "ExoticLLP", pDEBUG ) << "width = " << width << ", "
-			       << "small_height = " << small_height << ", "
-			       << "large_height = " << large_height << ", "
-			       << "total = " << total;
 
     previous_point = current_point; // update
   }
@@ -678,12 +688,14 @@ double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const
   
   Point previous_point = *(pt_vec.begin());
   for( std::vector<Point>::iterator ptit = pt_vec.begin() ; ptit != pt_vec.end() ; ++ptit ) {
+    /*
     LOG( "ExoticLLP", pDEBUG ) << "Here is the previous point: " 
 			       << previous_point.first * 180.0 / constants::kPi
 			       << ", " << previous_point.second * 180.0 / constants::kPi
 			       << " - Here is the current point: " 
 			       << (*ptit).first * 180.0 / constants::kPi
 			       << ", " << (*ptit).second * 180.0 / constants::kPi;
+    */
     if( *ptit == previous_point ) continue; // skip the first point
     
     Point current_point = *ptit;
@@ -693,7 +705,6 @@ double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const
     // Simple width on phi
     double phi_bit = current_point.second - previous_point.second;
     // Simpson's 1/3 rule on theta
-    //double theta_bit = std::abs( current_point.first - previous_point.first ) / 6.0;
     double theta_bit = 1.0 / 6.0;
     
     double prev_sin = 1.0 - std::cos( previous_point.first );
@@ -701,10 +712,6 @@ double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const
     double imed_sin = 1.0 - std::cos( ( previous_point.first + current_point.first ) / 2.0 );
 
     theta_bit *= ( prev_sin + 4.0 * imed_sin + curr_sin );
-
-    LOG( "ExoticLLP", pDEBUG ) << "phi_bit = " << phi_bit << ", theta_bit = " << theta_bit
-			       << ",  prev_sin = " << prev_sin
-			       << ", imed_sin = " << imed_sin << ", curr_sin = " << curr_sin;
 
     total += phi_bit * theta_bit;
     LOG( "ExoticLLP", pDEBUG ) << "Updated total to " << total;
@@ -753,8 +760,22 @@ void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
   // Each step is a test on phi, and if there is a raytrace anywhere along that phi, for any theta,
   // then start at that raytace and call Deflect.
 
-  double delta = (goRight) ? m_coarse_phi_deflection * constants::kPi / 180.0 :
-    -1 * m_coarse_phi_deflection * constants::kPi / 180.0;
+  // Actually first get the diagonal of the bbox and then build the coarse deflection
+  // basically, want to poll N points in each direction
+
+  const double full_diagonal = std::sqrt( fLx*fLx + fLy*fLy + fLz*fLz );
+  const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+  const double baseline = seed_vector.Mag();
+  const double base_angle = std::atan( full_diagonal / baseline );
+
+  /*
+  LOG( "ExoticLLP", pDEBUG )
+    << "Base angle = " << base_angle * 180.0 / constants::kPi << ", step = "
+    << base_angle / m_coarse_phi_deflection * 180.0 / constants::kPi;
+  */
+
+  double delta = (goRight) ? base_angle / m_coarse_phi_deflection :
+    -1 * base_angle / m_coarse_phi_deflection;
   // RETHERE -- for now, assume there is a raytrace at (theta, phi) = (th0, ph0 + delta)
   while( VolumeSeeker::RaytraceDetector( true ) && std::abs(sweep) <= constants::kPi &&
 	 ( deflection_up != deflection_down || sweep == 0.0 ) ) {
@@ -773,10 +794,12 @@ void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
     thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
     thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
 
+    /*
     LOG( "ExoticLLP", pDEBUG )
       << "Deflections: phi = " << sweep * 180.0 / constants::kPi
       << ", theta_min, max = " << thetaMin * 180.0 / constants::kPi
       << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
+    */
 
     // and add to the raster
     if( thetaMin != thetaMax ) {
@@ -794,8 +817,8 @@ void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
   // Also remove the last raster point, gets erroneously added
   alpha.pop_back();
 
-  double epsilon = (goRight) ? m_fine_phi_deflection * constants::kPi / 180.0 :
-    -1 * m_fine_phi_deflection * constants::kPi / 180.0;
+  double epsilon = (goRight) ? base_angle / m_fine_phi_deflection :
+    -1 * base_angle / m_fine_phi_deflection;
   while( VolumeSeeker::RaytraceDetector( true ) && std::abs(sweep) <= constants::kPi &&
 	 ( deflection_up != deflection_down || sweep == 0.0 ) ) {
     deflection_up = 0.0; deflection_down = 0.0; thetaMax = 0.0; thetaMin = 0.0;
@@ -842,9 +865,20 @@ void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
   // This is a deflection on theta. So it follows fThetaAxis
   // Each step sets a deflection angle and adds the appropriately scaled 
   // vector on fThetaAxis to see if there is a raytrace there
+
+  const double full_diagonal = std::sqrt( fLx*fLx + fLy*fLy + fLz*fLz );
+  const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+  const double baseline = seed_vector.Mag();
+  const double base_angle = std::atan( full_diagonal / baseline );
+
+  /*
+  LOG( "ExoticLLP", pDEBUG )
+    << "Base angle = " << base_angle * 180.0 / constants::kPi << ", step = "
+    << base_angle / m_coarse_theta_deflection * 180.0 / constants::kPi;
+  */
   
-  double delta = (goUp) ? m_coarse_theta_deflection * constants::kPi / 180.0 : 
-    -1 * m_coarse_theta_deflection * constants::kPi / 180.0;
+  double delta = (goUp) ? base_angle / m_coarse_theta_deflection : 
+    -1 * base_angle / m_coarse_theta_deflection;
   while( VolumeSeeker::RaytraceDetector( true ) && std::abs(deflection) <= constants::kPi ){
     deflection += delta;
     // Now calculate the fThetaAxis component
@@ -857,8 +891,8 @@ void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
   double coarse_scale = booked_momentum.Mag() * std::tan( deflection );
   fMomentum = booked_momentum + coarse_scale * fThetaAxis;
 
-  double epsilon = (goUp) ? m_fine_theta_deflection * constants::kPi / 180.0 : 
-    -1 * m_fine_theta_deflection * constants::kPi / 180.0;
+  double epsilon = (goUp) ? base_angle / m_fine_theta_deflection : 
+    -1 * base_angle / m_fine_theta_deflection;
   while( VolumeSeeker::RaytraceDetector( true ) && std::abs(deflection) <= constants::kPi ){
     deflection += epsilon;
     double scale = booked_momentum.Mag() * std::tan( deflection );

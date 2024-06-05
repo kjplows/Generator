@@ -109,10 +109,10 @@ namespace genie {
       //bool RaytraceDetector() const;
 
       //! Some controls
-      const double m_coarse_theta_deflection = 1.0; // deg
-      const double m_fine_theta_deflection = 0.05; // deg
-      const double m_coarse_phi_deflection = 2.0; // deg
-      const double m_fine_phi_deflection = 0.1; // deg
+      const double m_coarse_theta_deflection = 50.0; // modifier
+      const double m_fine_theta_deflection = 250.0; // modifier
+      const double m_coarse_phi_deflection = 50.0; // modifier
+      const double m_fine_phi_deflection = 250.0; // modifier
 
       //! And utility functions for calling Raytrace() a lot of times
       void Deflect( double & deflection, bool goUp ) const; // calls Raytrace() with set theta, phi
