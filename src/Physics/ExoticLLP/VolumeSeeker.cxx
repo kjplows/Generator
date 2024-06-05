@@ -64,6 +64,8 @@ void VolumeSeeker::SetGeomFile( std::string geomfile, std::string topVolume ) co
   LOG( "ExoticLLP", pINFO )
       << "Getting geometry information from " << fGeomFile;
   fGeoManager = TGeoManager::Import(fGeomFile.c_str());
+  LOG( "ExoticLLP", pINFO )
+    << "Successfully imported geometry";
 
   TGeoVolume * main_volume = fGeoManager->GetTopVolume();
   TGeoVolume * top_volume = fGeoManager->GetVolume( fTopVolume.c_str() );
@@ -145,10 +147,12 @@ TVector3 VolumeSeeker::Rotate( TVector3 input, bool direction ) const
 void VolumeSeeker::PopulateEvent( TVector3 origin_point, TVector3 momentum ) const
 {
   fOriginPointNEAR = origin_point;
-  fMomentumNEAR = momentum.Unit();
+  //fMomentumNEAR = momentum.Unit();
+  fMomentumNEAR = momentum;
 
   // The momentum just needs to be rotated to USER
   fMomentum = VolumeSeeker::RotateToUser( fMomentumNEAR );
+  fAxis = fMomentum.Unit();
 
   // The origin needs to be translated to USER origin first and then rotated
   TVector3 translated_origin = VolumeSeeker::TranslateToUser( fOriginPointNEAR );
@@ -188,6 +192,9 @@ void VolumeSeeker::ImportBoundingBox( TGeoBBox * box ) const
   fOxROOT = (box->GetOrigin())[0];
   fOyROOT = (box->GetOrigin())[1];
   fOzROOT = (box->GetOrigin())[2];
+
+  LOG( "ExoticLLP", pDEBUG ) << "Successfully imported bounding box with dimensions "
+			     << fLx << " x " << fLy << " x " << fLz << " [ " << fLunitString << " ]";
 }
 //____________________________________________________________________________
 TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const
@@ -375,26 +382,41 @@ std::string VolumeSeeker::CheckGeomPoint( TVector3 chkpoint ) const
 bool VolumeSeeker::RaytraceDetector( bool grace ) const
 {
   // Our point starts out at fOriginPoint and has directional cosines fMomentum
-  
-  // Important subtlety! The ROOT coordinate system for a top_volume does not know about the transformation matrix
-  // Practically, this means that you must subtract fTopVolumeOriginROOT from all your ROOT calcs!!!!
+
+  // Have to find the appropriate deviation vector that will get you onto the correct plane
+  // that is orthogonal to fAxis. 
+  // Important subtlety! The ROOT coordinate system for a top_volume does not know about the transformation matrix -- take care of this at the beginning
   double t_param = 0.0; TVector3 dev_vec = fTopVolumeOrigin - fOriginPoint;
 
-  // Modify the deviation vector! Want the "front face".
-  // Find the projection of fAxis onto the bounding box dimensions
-  double proj_length = std::abs( fAxis.X() * fLx + fAxis.Y() * fLy + fAxis.Z() * fLz );
-  // and move back a little
-  dev_vec -= proj_length * fAxis;
+  LOG( "ExoticLLP", pDEBUG ) << "\nfMomentum    = " << utils::print::Vec3AsString( &fMomentum )
+			     << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint ) 
+			     << "\ndev_vec      = " << utils::print::Vec3AsString( &dev_vec );
   
   if( dev_vec.Mag() > 0.0 ) {
-    // First, calculate the starting point: intercept of ray with the z = 0 plane
-    // Important caveat: z = 0 is z = 0 of *detector*. This is not the same as z = 0 USER
+    /*
+      Moving along fMomentum, find the plane which is orthogonal to fAxis and intersects fTopVolumeOrigin
+
+      The line is parametrised as (x, y, z)(t) = (x0, y0, z0) + t * (px, py, pz)
+      with (x0, y0, z0) == fOriginPoint and (px, py, pz) == fMomentum
+
+      The plane is parametrised as nx * (x-x1) + ny * (y-y1) + nz * (z-z1) = 0
+      with (x1, y1, z1) == fTopVolumeOrigin and (nx, ny, nz) == fAxis
+
+      Substitute in the parametrisations to get
+      
+      t = ( fAxis Dot dev_vec ) / ( fAxis Dot fMomentum )
+      The denominator is just fMomentum.Mag() by fAxis's construction
+     */
+
+    t_param = fAxis.Dot( dev_vec ) / fAxis.Dot( fMomentum ); // guaranteed nonzero
+    /*
     double delta = dev_vec.Z(); // dz
     double mom_cos = fMomentum.Z(); // pz,hat
     if( delta == 0.0 ){ delta = dev_vec.Y(); mom_cos = fMomentum.Y(); } // make it dy instead
     if( delta == 0.0 ){ delta = dev_vec.X(); mom_cos = fMomentum.X(); } // OK, it *has* to be dx
 
     t_param = delta / mom_cos;
+    */
   } // get to z = 0 (or y = 0, or x = 0) plane
 
   // transport to starting point (hopefully close enough to the top volume to be meaningful)
@@ -405,16 +427,16 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
   fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
 
-  // check that this point lies in the geometry.
-  std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
-
-    /*
-  LOG( "ExoticLLP", pDEBUG ) << "\nfOriginPoint   = " << utils::print::Vec3AsString( &fOriginPoint ) 
+  LOG( "ExoticLLP", pDEBUG ) << "\nfMomentum      = " << utils::print::Vec3AsString( &fMomentum )
+			     << "\nfOriginPoint   = " << utils::print::Vec3AsString( &fOriginPoint ) 
 			     << "\nfZeroPoint     = " << utils::print::Vec3AsString( &fZeroPoint ) 
 			     << "\nfZeroPointROOT = " << utils::print::Vec3AsString( &fZeroPointROOT ) 
 			     << "\nt_param = " << t_param;
+
+  // check that this point lies in the geometry.
+  std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
+
   LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
-  */
 
   // if allowing for grace, check a little bit further in. 
   // distance, in 1% increments of the bounding box diagonal
@@ -445,7 +467,7 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
 		      ( ( std::abs( fZeroPointROOT.X() - fOxROOT ) < fLxROOT ) &&
 			dev_vec.X() != 0.0 ) );
 
-      //LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT] with grace modifier = " << grace_modifier << ", inside_bbox = " << (int) inside_bbox;
+      LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT] with grace modifier = " << grace_modifier << ", inside_bbox = " << (int) inside_bbox;
 
       pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
     }
@@ -547,9 +569,6 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   const TVector3 booked_origin_point_ROOT = fOriginPointROOT;
   const TVector3 booked_momentum = fMomentum;
 
-  // First, define the looking direction
-  fAxis = fMomentum.Unit();
-
   // We make a potentially strong assumption here, that the top_volume is simply connected.
   // The calculation will be garbage if not, and we'll crash out rather than give garbage.
   assert( VolumeSeeker::RaytraceDetector() && "The origin point of the top_volume lies inside the top volume" );
@@ -561,13 +580,25 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   // We need to first project seed_vector onto the theta = 0 plane
   // where the theta = 0 plane is defined by fMomentum and the tranverse component of seed_vector
   TVector3 transverse_seed = seed_vector - fAxis.Dot( seed_vector ) * fAxis;
-  if( transverse_seed.Mag() > 0.0 ) fThetaAxis = transverse_seed.Unit();
-  else{
+  if( transverse_seed.Mag() > 1.0e-3 * seed_vector.Mag() ) fThetaAxis = transverse_seed.Unit();
+  else{ // just pick a convenient direction
+    /*
     if( fAxis.Y() == 0.0 ) fThetaAxis = TVector3( 0.0, 1.0, 0.0 );
     else if( fAxis.X() == 0.0 ) fThetaAxis = TVector3( 1.0, 0.0, 0.0 );
     else if( fAxis.Z() == 0.0 ) fThetaAxis = TVector3( 0.0, 0.0, 1.0 );
     else fThetaAxis = TVector3( fAxis.Y(), -fAxis.X(), 0.0 );
+    */
+    if( fAxis.X() == 0.0 ) fThetaAxis = TVector3( 0.0, fAxis.Z(), -fAxis.Y() );
+    else if( fAxis.Y() == 0.0 ) fThetaAxis = TVector3( fAxis.Z(), 0.0, fAxis.X() );
+    else if( fAxis.Z() == 0.0 ) fThetaAxis = TVector3( fAxis.Y(), -fAxis.X(), 0.0 );
+    else fThetaAxis = TVector3( fAxis.Y() * fAxis.Z(),
+				-0.5 * fAxis.X() * fAxis.Z(),
+				-0.5 * fAxis.X() * fAxis.Y() );
   }
+
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nseed_vector      = " << utils::print::Vec3AsString(&seed_vector)
+    << "\ntransverse_seed  = " << utils::print::Vec3AsString(&transverse_seed);
 
   // Now that lets us complete the "momentum" system of coordinates
   fPhiAxis = fAxis.Cross( fThetaAxis );

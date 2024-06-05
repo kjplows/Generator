@@ -178,13 +178,16 @@ int main(int argc, char ** argv)
   // pass the geometry information
   vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
   // initialise the elements of VolumeSeeker
+  LOG( "gevgen_exotic_llp", pDEBUG ) << "Calling vsek->ClearEvent()";
   vsek->ClearEvent();
 
   // Basic sanity check: Can we find the entrance to a box, from like 10 meters upstream? [NEAR]
-  TVector3 origin_point( 0.0, -60.0, 990.0 );
-  TVector3 momentum( 0.0, 0.0, 1.0 );
+  TVector3 origin_point( 0.0, -50.0, 990.0 );
+  TVector3 momentum( 0.0, -1.0, 1.0 );
 
+  LOG( "gevgen_exotic_llp", pDEBUG ) << "Calling vsek->PopulateEvent()";
   vsek->PopulateEvent( origin_point, momentum );
+  LOG( "gevgen_exotic_llp", pDEBUG ) << "Calling vsek->RaytraceDetector()";
   bool result = vsek->RaytraceDetector();
 
   // Now we will try to see if the angles make sense.
