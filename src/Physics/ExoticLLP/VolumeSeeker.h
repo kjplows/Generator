@@ -114,7 +114,7 @@ namespace genie {
       const double m_fine_theta_deflection = 250.0; // modifier
       const double m_coarse_phi_deflection = 50.0; // modifier
       const double m_fine_phi_deflection = 250.0; // modifier
-      const double m_grace_decrement = 0.5e-3;
+      const double m_grace_decrement = 0.5e-3; 
 
       //! And utility functions for calling Raytrace() a lot of times
       void Deflect( double & deflection, bool goUp ) const; // calls Raytrace() with set theta, phi
@@ -152,7 +152,7 @@ namespace genie {
       mutable TVector3 fEntryPointNEAR;                //! (X, Y, Z) of ray entry into detector [m]
       mutable TVector3 fExitPointNEAR;                 //! (X, Y, Z) of ray exit from detector [m]
 
-      mutable TVector3 fMomentum, fMomentumNEAR;       //! (px, py, pz) of particle. Directional cosines only. [GeV/GeV]
+      mutable TVector3 fMomentum, fMomentumNEAR;       //! (px, py, pz) of particle. [GeV/c]
 
       /*
 	The following 3 vectors describe a RH coordinate system in USER space.

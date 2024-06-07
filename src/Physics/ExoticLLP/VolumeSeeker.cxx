@@ -433,8 +433,9 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   if( grace ) {
     const double maximum_grace = 1.0;
     double grace_modifier = maximum_grace;
-    double t_original = t_param;
-    double upper_bound = std::sqrt( fLx*fLx + fLy*fLy + fLz*fLz );
+
+    //double upper_bound = std::sqrt( fLx*fLx + fLy*fLy + fLz*fLz );
+    double upper_bound = std::max( fLx, std::max( fLy, fLz ) );
     bool inside_bbox = true;
 
     while( pathString.find( fTopVolume.c_str() ) == string::npos &&
@@ -600,6 +601,7 @@ std::tuple< AngularRegion, AngularRegion > VolumeSeeker::AngularAcceptance() con
   TVector3 projection_phi = seed_vector - sep_from_phi * fThetaAxis;
   
   // acos runs from [0, pi]
+  /*
   double seed_theta = std::acos( fAxis.Dot( projection_theta ) /
 				 std::max( projection_theta.Mag(), 1.0e-10 ) );
   double seed_phi = std::acos( fAxis.Dot( projection_phi ) / 
@@ -607,6 +609,7 @@ std::tuple< AngularRegion, AngularRegion > VolumeSeeker::AngularAcceptance() con
   if( fAxis.Dot( projection_phi ) < 0.0 ) seed_phi *= -1.0;
 
   if( transverse_seed.Mag() == 0.0 ) { seed_theta = 0.0; seed_phi = 0.0; } // no separation!
+  */
   
   // check that Rasterise() does what you want it to
   VolumeSeeker::Rasterise( alpha, true );
@@ -833,6 +836,7 @@ void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
     double scale = booked_momentum.Mag() * std::tan( sweep );
     fMomentum = booked_momentum + scale * fPhiAxis;
 
+
     VolumeSeeker::Deflect( deflection_up, true );
     VolumeSeeker::Deflect( deflection_down, false );
     
@@ -925,13 +929,7 @@ void VolumeSeeker::ConvertToUserAngles( const TVector3 booked_momentum, AngularR
     double thetaMin = (rst.first).first;
     double thetaMax = (rst.second).first;
 
-    LOG( "ExoticLLP", pDEBUG ) << "Here is the phi I'm using: "
-			       << phi * 180.0 / constants::kPi;
-
     // we need to calculate the new PointRaster to use.
-    // For now, let's add dummy thetas. I care that we get phi correct.
-    TVector3 dphi = booked_momentum.Mag() * std::tan(phi) * fPhiAxis;
-    TVector3 mod_p = booked_momentum + dphi;
 
     //double extracted_phi = mod_p.Phi(); Nope. Wrong formulation.
     /*
@@ -944,8 +942,6 @@ void VolumeSeeker::ConvertToUserAngles( const TVector3 booked_momentum, AngularR
 
     double bpx = booked_momentum.X(), bpy = booked_momentum.Y(), bpz = booked_momentum.Z();
     double bp3 = booked_momentum.Mag();
-
-    double ppx = mod_p.X(), ppy = mod_p.Y(), ppz = mod_p.Z(), pp3 = mod_p.Mag();
 
     double base_phi = std::acos( bpx / bp3 ); 
     double base_theta = std::acos( bpz / bp3 );
