@@ -225,7 +225,7 @@ TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVol
   int ididx = test.rfind("_");
   test = test.substr( 0, ididx );
 
-  LOG( "ExoticLLP", pNOTICE )
+  LOG( "ExoticLLP", pDEBUG )
     << "Looking for this targetPath: " << targetPath;
 
   // could be we hit the top volume, in which case we skip the loop
@@ -387,10 +387,6 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   // that is orthogonal to fAxis. 
   // Important subtlety! The ROOT coordinate system for a top_volume does not know about the transformation matrix -- take care of this at the beginning
   double t_param = 0.0; TVector3 dev_vec = fTopVolumeOrigin - fOriginPoint;
-
-  LOG( "ExoticLLP", pDEBUG ) << "\nfMomentum    = " << utils::print::Vec3AsString( &fMomentum )
-			     << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint ) 
-			     << "\ndev_vec      = " << utils::print::Vec3AsString( &dev_vec );
   
   if( dev_vec.Mag() > 0.0 ) {
     /*
@@ -427,35 +423,27 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
   fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
 
-  LOG( "ExoticLLP", pDEBUG ) << "\nfMomentum      = " << utils::print::Vec3AsString( &fMomentum )
-			     << "\nfOriginPoint   = " << utils::print::Vec3AsString( &fOriginPoint ) 
-			     << "\nfZeroPoint     = " << utils::print::Vec3AsString( &fZeroPoint ) 
-			     << "\nfZeroPointROOT = " << utils::print::Vec3AsString( &fZeroPointROOT ) 
-			     << "\nt_param = " << t_param;
-
   // check that this point lies in the geometry.
   std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
 
-  LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
+  //LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
 
-  // if allowing for grace, check a little bit further in. 
-  // distance, in 1% increments of the bounding box diagonal
+  // if allowing for grace, check a little bit further in along the fMomentum direction.
+  // in increments of the bounding box diagonal
   if( grace ) {
-    double grace_modifier = 1.0;
+    const double maximum_grace = 1.0;
+    double grace_modifier = maximum_grace;
     double t_original = t_param;
     double upper_bound = std::sqrt( fLx*fLx + fLy*fLy + fLz*fLz );
     bool inside_bbox = true;
+
     while( pathString.find( fTopVolume.c_str() ) == string::npos &&
 	   grace_modifier > 0.0 && inside_bbox ) {
-      grace_modifier -= 0.01;
-      t_param = t_original * grace_modifier;
+
+      grace_modifier -= m_grace_decrement;
       double axis_mod = (1.0 - grace_modifier) * upper_bound;
-      /*
-      fZeroPoint.SetXYZ( fOriginPoint.X() + t_param * fMomentum.X(),
-			 fOriginPoint.Y() + t_param * fMomentum.Y(),
-			 fOriginPoint.Z() + t_param * fMomentum.Z() );
-      */
-      fZeroPoint -= axis_mod * fAxis;
+
+      fZeroPoint -= axis_mod * fMomentum.Unit();
       fZeroPointNEAR = VolumeSeeker::RotateToNear( fZeroPoint );
       fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
       fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
@@ -467,7 +455,7 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
 		      ( ( std::abs( fZeroPointROOT.X() - fOxROOT ) < fLxROOT ) &&
 			dev_vec.X() != 0.0 ) );
 
-      LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT] with grace modifier = " << grace_modifier << ", inside_bbox = " << (int) inside_bbox;
+      //LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT] with grace modifier = " << grace_modifier << ", inside_bbox = " << (int) inside_bbox;
 
       pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
     }
@@ -560,9 +548,9 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   return true;
 }
 //____________________________________________________________________________
-AngularRegion VolumeSeeker::AngularAcceptance() const
+std::tuple< AngularRegion, AngularRegion > VolumeSeeker::AngularAcceptance() const
 {
-  AngularRegion alpha;
+  AngularRegion alpha, beta;
 
   // Bookkeep the origin point and momentum, just in case
   const TVector3 booked_origin_point = fOriginPoint;
@@ -596,10 +584,6 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
 				-0.5 * fAxis.X() * fAxis.Y() );
   }
 
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nseed_vector      = " << utils::print::Vec3AsString(&seed_vector)
-    << "\ntransverse_seed  = " << utils::print::Vec3AsString(&transverse_seed);
-
   // Now that lets us complete the "momentum" system of coordinates
   fPhiAxis = fAxis.Cross( fThetaAxis );
 
@@ -623,17 +607,6 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   if( fAxis.Dot( projection_phi ) < 0.0 ) seed_phi *= -1.0;
 
   if( transverse_seed.Mag() == 0.0 ) { seed_theta = 0.0; seed_phi = 0.0; } // no separation!
-
-  // So, to check: The projection on the theta and phi planes is just the 2D angle
-  // between axis and the projection
-  /*
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nseed_vector      = " << utils::print::Vec3AsString( &seed_vector )
-    << "\nprojection_theta = " << utils::print::Vec3AsString( &projection_theta )
-    << "\nprojection_phi   = " << utils::print::Vec3AsString( &projection_phi )
-    << "\nseed_theta       = " << seed_theta * 180.0 / constants::kPi
-    << "\nseed_phi         = " << seed_phi * 180.0 / constants::kPi;
-  */
   
   // check that Rasterise() does what you want it to
   VolumeSeeker::Rasterise( alpha, true );
@@ -649,12 +622,16 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
 
   LOG( "ExoticLLP", pDEBUG ) << "Angular region has " << alpha.size() << " rasters.";
 
+  // Now we'd like to construct the actual angles on the unit sphere these deflections
+  // correspond to. Let's do it!
+  VolumeSeeker::ConvertToUserAngles( booked_momentum, alpha, beta );
+
   // just in case, restore the original member variables
   fOriginPoint = booked_origin_point;
   fOriginPointROOT = booked_origin_point_ROOT;
   fMomentum = booked_momentum;
   
-  return alpha;
+  return std::make_tuple( alpha, beta );
 }
 //____________________________________________________________________________
 double VolumeSeeker::AngularSize( AngularRegion alpha ) const
@@ -669,44 +646,54 @@ double VolumeSeeker::AngularSize( AngularRegion alpha ) const
     lower_points.emplace_back( (*ait).first );
   }
 
-  double up_size   = VolumeSeeker::Trapezoid( upper_points );
-  double down_size = VolumeSeeker::Trapezoid( lower_points );
+  double size = VolumeSeeker::Trapezoid( upper_points, lower_points );
 
-  return up_size - down_size;
-  //return up_size;
+  return size;
 }
 //____________________________________________________________________________
-double VolumeSeeker::Trapezoid( std::vector<Point> pt_vec ) const
+double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn_vec ) const
 {
-  double total = 0.0;
+  double total_up = 0.0, total_dn = 0.0;
+  double small_height = 0.0, large_height = 0.0;
 
-  Point previous_point = *(pt_vec.begin());
-  for( std::vector<Point>::iterator ptit = pt_vec.begin() ; ptit != pt_vec.end() ; ++ptit ) {
-    /*
-    LOG( "ExoticLLP", pDEBUG ) << "Here is the previous point: " 
-			       << previous_point.first * 180.0 / constants::kPi
-			       << ", " << previous_point.second * 180.0 / constants::kPi
-			       << " - Here is the current point: " 
-			       << (*ptit).first * 180.0 / constants::kPi
-			       << ", " << (*ptit).second * 180.0 / constants::kPi;
-    */
-    if( *ptit == previous_point ) continue; // skip the first point
+  Point previous_point_up = *(up_vec.begin());
+  Point previous_point_dn = *(dn_vec.begin());
+  for( std::vector<Point>::iterator ptit = up_vec.begin() ; ptit != up_vec.end() ; ++ptit ) {
 
-    Point current_point = *ptit;
+    if( *ptit == previous_point_up ) continue; // skip the first point
+
+    Point current_point_up = *ptit;
+    int ttt = ptit - up_vec.begin();
+    Point current_point_dn = *( dn_vec.begin() + ttt );
+
+    // check if we have the same phi.. if we do, then bail and move on
+    // But always add the last element
+    if( current_point_up.second == previous_point_up.second &&
+	ptit != up_vec.end() - 1) continue;
     
-    double width = current_point.second - previous_point.second;
-    double small_height = std::min( 1.0 - std::cos( current_point.first ),
-				    1.0 - std::cos( previous_point.first ) );
-    double large_height = std::max( 1.0 - std::cos( current_point.first ),
-				    1.0 - std::cos( previous_point.first ) );
+    double width = std::abs(current_point_up.second - previous_point_up.second);
 
+    // Get the size of the upper region
+    double cand_one = 1.0 - std::cos( previous_point_up.first );
+    double cand_two = 1.0 - std::cos( current_point_up.first );
+    small_height, large_height = std::min( cand_one, cand_two ), std::max( cand_one, cand_two );
     // trapezoid area is w * (h + H)/2
-    total += width * ( small_height + large_height ) / 2.0;
+    total_up += width * ( small_height + large_height ) / 2.0;
 
-    previous_point = current_point; // update
+    // Get the size of the lower region
+    cand_one = 1.0 - std::cos( previous_point_dn.first );
+    cand_two = 1.0 - std::cos( current_point_dn.first );
+    small_height, large_height = std::min( cand_one, cand_two ), std::max( cand_one, cand_two );
+    // trapezoid area is w * (h + H)/2
+    total_dn += width * ( small_height + large_height ) / 2.0;
+
+    previous_point_up = current_point_up; // update
+    previous_point_dn = current_point_dn; // update
   }
 
-  return total;
+  LOG( "ExoticLLP", pDEBUG ) << "total_up, total_dn = " << total_up << ", " << total_dn;
+
+  return total_up - total_dn;
 }
 //____________________________________________________________________________
 double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const
@@ -719,14 +706,7 @@ double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const
   
   Point previous_point = *(pt_vec.begin());
   for( std::vector<Point>::iterator ptit = pt_vec.begin() ; ptit != pt_vec.end() ; ++ptit ) {
-    /*
-    LOG( "ExoticLLP", pDEBUG ) << "Here is the previous point: " 
-			       << previous_point.first * 180.0 / constants::kPi
-			       << ", " << previous_point.second * 180.0 / constants::kPi
-			       << " - Here is the current point: " 
-			       << (*ptit).first * 180.0 / constants::kPi
-			       << ", " << (*ptit).second * 180.0 / constants::kPi;
-    */
+
     if( *ptit == previous_point ) continue; // skip the first point
     
     Point current_point = *ptit;
@@ -745,7 +725,6 @@ double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const
     theta_bit *= ( prev_sin + 4.0 * imed_sin + curr_sin );
 
     total += phi_bit * theta_bit;
-    LOG( "ExoticLLP", pDEBUG ) << "Updated total to " << total;
 
     previous_point = current_point; // update
   } // add terms to the integral
@@ -785,7 +764,9 @@ void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
     Point max_point = std::pair< double, double >( thetaMax, sweep );
     PointRaster raster = std::pair< Point, Point >( min_point, max_point );
     alpha.emplace_back( raster );
-  }
+    
+    fMomentum = booked_momentum;
+  } // first element in alpha
 
   // This is a deflection on phi. So it follows fPhiAxis
   // Each step is a test on phi, and if there is a raytrace anywhere along that phi, for any theta,
@@ -799,15 +780,8 @@ void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
   const double baseline = seed_vector.Mag();
   const double base_angle = std::atan( full_diagonal / baseline );
 
-  /*
-  LOG( "ExoticLLP", pDEBUG )
-    << "Base angle = " << base_angle * 180.0 / constants::kPi << ", step = "
-    << base_angle / m_coarse_phi_deflection * 180.0 / constants::kPi;
-  */
-
   double delta = (goRight) ? base_angle / m_coarse_phi_deflection :
     -1 * base_angle / m_coarse_phi_deflection;
-  // RETHERE -- for now, assume there is a raytrace at (theta, phi) = (th0, ph0 + delta)
   while( VolumeSeeker::RaytraceDetector( true ) && std::abs(sweep) <= constants::kPi &&
 	 ( deflection_up != deflection_down || sweep == 0.0 ) ) {
     deflection_up = 0.0; deflection_down = 0.0; thetaMax = 0.0; thetaMin = 0.0;
@@ -901,12 +875,6 @@ void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
   const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
   const double baseline = seed_vector.Mag();
   const double base_angle = std::atan( full_diagonal / baseline );
-
-  /*
-  LOG( "ExoticLLP", pDEBUG )
-    << "Base angle = " << base_angle * 180.0 / constants::kPi << ", step = "
-    << base_angle / m_coarse_theta_deflection * 180.0 / constants::kPi;
-  */
   
   double delta = (goUp) ? base_angle / m_coarse_theta_deflection : 
     -1 * base_angle / m_coarse_theta_deflection;
@@ -914,8 +882,6 @@ void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
     deflection += delta;
     // Now calculate the fThetaAxis component
     double scale = booked_momentum.Mag() * std::tan( deflection );
-    //LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg..."
-    //			       << "\nScale = " << scale;
     fMomentum = booked_momentum + scale * fThetaAxis;
   } // coarse loop
   deflection -= delta;
@@ -927,15 +893,84 @@ void VolumeSeeker::Deflect( double & deflection, bool goUp ) const
   while( VolumeSeeker::RaytraceDetector( true ) && std::abs(deflection) <= constants::kPi ){
     deflection += epsilon;
     double scale = booked_momentum.Mag() * std::tan( deflection );
-    //LOG( "ExoticLLP", pDEBUG ) << "Trying deflection " << deflection * 180.0 / constants::kPi << " deg..."
-    //				   << "\nScale = " << scale;
     fMomentum = booked_momentum + scale * fThetaAxis;
   } // fine loop
   deflection -= epsilon;
 
   fMomentum = booked_momentum;
-
-  //LOG( "ExoticLLP", pDEBUG ) << "DONE with final deflection " << deflection * 180.0 / constants::kPi
-  //			     << " deg.";
 }
 //____________________________________________________________________________
+void VolumeSeeker::ConvertToUserAngles( const TVector3 booked_momentum, AngularRegion deflection_region,
+					AngularRegion & cosines_region ) const
+{
+  // Need to calculate the actual angles...
+  // Need to decide also which deflections encompass the shape
+  
+  /* We will check four points, in this order:
+   * 1) thetaMax, along + fThetaAxis
+   * 2) thetaMax, along - fThetaAxis
+   * If both points in detector, then that's the shape. Else:
+   * 3) thetaMin, along + fThetaAxis
+   * 4) thetaMin, along - fThetaAxis
+   * If checked thetaMin, either the ++ or the -- combination will be the correct one.
+   */
+
+  AngularRegion::iterator ait = deflection_region.begin();
+  
+  for( ; ait != deflection_region.end(); ++ait ){
+
+    // obtain the phi and thetaMin, thetaMax from the deflection regions
+    PointRaster rst = *ait;
+    double phi = (rst.first).second; // a raster has constant phi
+    double thetaMin = (rst.first).first;
+    double thetaMax = (rst.second).first;
+
+    LOG( "ExoticLLP", pDEBUG ) << "Here is the phi I'm using: "
+			       << phi * 180.0 / constants::kPi;
+
+    // we need to calculate the new PointRaster to use.
+    // For now, let's add dummy thetas. I care that we get phi correct.
+    TVector3 dphi = booked_momentum.Mag() * std::tan(phi) * fPhiAxis;
+    TVector3 mod_p = booked_momentum + dphi;
+
+    //double extracted_phi = mod_p.Phi(); Nope. Wrong formulation.
+    /*
+      The phi formulation (or "sweep") refers to the deflection along the plane
+      spanned by (fAxis, fPhiAxis). It is the angle between those two projections.
+      So, calculate the angles directly.
+
+      Using (x, y, z) = r * (sin\theta cos\phi, sin\theta sin\phi, cos\theta)
+     */
+
+    double bpx = booked_momentum.X(), bpy = booked_momentum.Y(), bpz = booked_momentum.Z();
+    double bp3 = booked_momentum.Mag();
+
+    double ppx = mod_p.X(), ppy = mod_p.Y(), ppz = mod_p.Z(), pp3 = mod_p.Mag();
+
+    double base_phi = std::acos( bpx / bp3 ); 
+    double base_theta = std::acos( bpz / bp3 );
+    if( bpy < 0.0 ) base_phi = 2.0 * constants::kPi - base_phi;
+
+    double extracted_phi = base_phi + phi;
+    double extracted_thetaMin = base_theta + thetaMin;
+    double extracted_thetaMax = base_theta + thetaMax;
+
+    /*
+    LOG( "ExoticLLP", pDEBUG )
+      << "\nbooked_momentum  = " << utils::print::Vec3AsString( &booked_momentum )
+      << "\nbase_phi         = " << base_phi * 180.0 / constants::kPi
+      << "\n==> got phi      = " << extracted_phi * 180.0 / constants::kPi
+      << "\nbase_theta       = " << base_theta * 180.0 / constants::kPi
+      << "\n==> got thetaMin = " << extracted_thetaMin * 180.0 / constants::kPi
+      << "\n==> got thetaMax = " << extracted_thetaMax * 180.0 / constants::kPi;
+    */
+
+    // Make the new points and add to the new raster
+    Point min_point = std::pair< double, double >( extracted_thetaMin, extracted_phi );
+    Point max_point = std::pair< double, double >( extracted_thetaMax, extracted_phi );
+    PointRaster raster = std::pair< Point, Point >( min_point, max_point );
+    cosines_region.emplace_back( raster );
+
+    fMomentum = booked_momentum;
+  } // loop over all the elements in the deflection region
+}

@@ -78,10 +78,11 @@ namespace genie {
       bool RaytraceDetector( bool grace = false ) const;
       
       //! Define a region in (theta, phi) space that an HNL can be accepted in...
-      AngularRegion AngularAcceptance() const;
+      //! First element is the deflections from momentum, second is the absolute angles on unit sphere
+      std::tuple< AngularRegion, AngularRegion > AngularAcceptance() const;
       //! And calculate its size
       double AngularSize( AngularRegion alpha ) const;
-      double Trapezoid( std::vector<Point> pt_vec ) const;
+      double Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn_vec ) const;
       double Simpson( std::vector<Point> pt_vec ) const;
 
     private:
@@ -113,10 +114,15 @@ namespace genie {
       const double m_fine_theta_deflection = 250.0; // modifier
       const double m_coarse_phi_deflection = 50.0; // modifier
       const double m_fine_phi_deflection = 250.0; // modifier
+      const double m_grace_decrement = 0.5e-3;
 
       //! And utility functions for calling Raytrace() a lot of times
       void Deflect( double & deflection, bool goUp ) const; // calls Raytrace() with set theta, phi
       void Rasterise( AngularRegion & alpha, bool goRight ) const; // calls Deflect() with set phi
+      // Note: alpha --> measures the deflections from parent momentum, 
+      //        beta --> measures the directional cosines of the geometry profile in USER
+      void ConvertToUserAngles( const TVector3 booked_momentum, AngularRegion deflection_region,
+				AngularRegion & cosines_region ) const;
 
       static VolumeSeeker * fInstance;
 

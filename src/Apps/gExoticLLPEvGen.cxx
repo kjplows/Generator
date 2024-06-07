@@ -178,36 +178,46 @@ int main(int argc, char ** argv)
   // pass the geometry information
   vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
   // initialise the elements of VolumeSeeker
-  LOG( "gevgen_exotic_llp", pDEBUG ) << "Calling vsek->ClearEvent()";
   vsek->ClearEvent();
 
   // Basic sanity check: Can we find the entrance to a box, from like 10 meters upstream? [NEAR]
-  TVector3 origin_point( 0.0, -50.0, 990.0 );
-  TVector3 momentum( 0.0, -1.0, 1.0 );
+  TVector3 origin_point( 0.0, -60.0, 990.0 );
+  TVector3 momentum( 0.0, 0.0, 1.0 );
 
-  LOG( "gevgen_exotic_llp", pDEBUG ) << "Calling vsek->PopulateEvent()";
   vsek->PopulateEvent( origin_point, momentum );
-  LOG( "gevgen_exotic_llp", pDEBUG ) << "Calling vsek->RaytraceDetector()";
   bool result = vsek->RaytraceDetector();
 
   // Now we will try to see if the angles make sense.
-  AngularRegion accepted_region = vsek->AngularAcceptance();
+  AngularRegion accepted_region_deflections, accepted_region_absolutes;
+  tie( accepted_region_deflections, accepted_region_absolutes ) = vsek->AngularAcceptance();
 
-  std::ostringstream angsts;
-  angsts << "Showing angular region!!! Values are (theta, phi) [deg] at theta_{min, max} for each raster.";
-  for( AngularRegion::iterator ait = accepted_region.begin();
-       ait != accepted_region.end(); ++ait ) {
+  std::ostringstream angsts, bngsts;
+  angsts << "Showing angular region DEFLECTIONS!!! Values are (theta, phi) [deg] at theta_{min, max} for each raster.";
+  bngsts << "Showing angular region ABSOLUTES!!! Values are (theta, phi) [deg] at theta_{min, max} for each raster.";
+  for( AngularRegion::iterator ait = accepted_region_deflections.begin();
+       ait != accepted_region_deflections.end(); ++ait ) {
     angsts << "\nRaster points: ( " << ((*ait).first).first * 180.0 / constants::kPi 
 	   << ", " << ((*ait).first).second * 180.0 / constants::kPi 
 	   << " ) , "
 	   << "( " << ((*ait).second).first * 180.0 / constants::kPi 
 	   << ", " << ((*ait).second).second * 180.0 / constants::kPi << " )";
   }
+  for( AngularRegion::iterator bit = accepted_region_absolutes.begin();
+       bit != accepted_region_absolutes.end(); ++bit ) {
+    bngsts << "\nRaster points: ( " << ((*bit).first).first * 180.0 / constants::kPi 
+	   << ", " << ((*bit).first).second * 180.0 / constants::kPi 
+	   << " ) , "
+	   << "( " << ((*bit).second).first * 180.0 / constants::kPi 
+	   << ", " << ((*bit).second).second * 180.0 / constants::kPi << " )";
+  }
   LOG( "gevgen_exotic_llp", pDEBUG ) << angsts.str();
+  LOG( "gevgen_exotic_llp", pDEBUG ) << bngsts.str();
 
   // Get the size of this raster
-  double size = vsek->AngularSize( accepted_region );
-  LOG( "gevgen_exotic_llp", pDEBUG ) << "Size of the region is " << size;
+  //double size_def = vsek->AngularSize( accepted_region_deflections );
+  double size_abs = vsek->AngularSize( accepted_region_absolutes );
+  //LOG( "gevgen_exotic_llp", pDEBUG ) << "Size of the deflected region is " << size_def;
+  LOG( "gevgen_exotic_llp", pDEBUG ) << "Size of the absolute  region is " << size_abs;
 
   // Initialize an Ntuple Writer to save GHEP records into a TTree
   NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
