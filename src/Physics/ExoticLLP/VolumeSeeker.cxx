@@ -680,6 +680,74 @@ double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn
     
     double width = std::abs(current_point_up.second - previous_point_up.second);
 
+    /*
+     * For each of the two phis, find the upper and the lower theta.
+     * Either upper * lower < 0, in which case a deflection of zero would be accepted
+     * Or upper * lower > 0, in which case it would not.
+     * In the first case, height = hUpper + hLower, h = 1 - cos
+     * In the second case, height = hLong - hShort, long,short = max,min(abs(theta))
+     
+     * Actually there are three cases! Let U1, D1, U2, D2 be the upper, lower points of prev, current.
+     * U1D1 < 0 && U2D2 < 0: Zero-deflection OK throughout the raster
+     * U1D1 > 0 && U2D2 > 0: Zero-deflection not OK throughout the raster
+     * ( U1D1 < 0 && U2D2 > 0 ) || ( U1D1 > 0 && U2D2 < 0 ): Zero-deflection changes through the raster.
+     * In that case, you have to split the width....
+
+     * To be even worse, you could have a case which looks like case 2, but D1<U1<0 and 0<D2<U2.
+     * I can't think of anyone who'd build a detector that looks like that.
+     */
+
+    double theta_up_prev = previous_point_up.first;
+    double theta_dn_prev = previous_point_dn.first;
+    double theta_up_curr = current_point_up.first;
+    double theta_dn_curr = current_point_dn.first;
+
+    double cand_U1 = 1.0 - std::cos( theta_up_prev );
+    double cand_D1 = 1.0 - std::cos( theta_dn_prev );
+    double cand_U2 = 1.0 - std::cos( theta_up_curr );
+    double cand_D2 = 1.0 - std::cos( theta_dn_curr );
+
+    /*
+     * CASE 1: Zero-deflection OK for both rasters.
+     */
+
+    if( theta_up_prev * theta_dn_prev <= 0 && theta_up_curr * theta_dn_curr <= 0 ){
+      double h1 = cand_U1 + cand_D1;
+      double h2 = cand_U2 + cand_D2;
+
+      total_up += width * (h1+h2)/2.0;
+      total_dn += 0.0;
+    }
+
+    /*
+     * CASE 2: Zero-deflection not OK for either raster.
+     */
+
+    if( theta_up_prev * theta_dn_prev > 0 && theta_up_curr * theta_dn_curr > 0 ){
+      if( theta_up_prev < 0.0 ) { 
+	// D1 < U1 < 0 --> 1-cos(D1) > 1-cos(U1) > 0
+	// Also D2 < U2 < 0 as there's no crossing of zero
+
+	total_up += width * (cand_D1 + cand_D2)/2.0;
+	total_dn += width * (cand_U1 + cand_U2)/2.0;
+      } else if( theta_dn_prev >= 0.0 ) {
+	// 0 < D1 < U1 --> 1-cos(U1) > 1-cos(D1) > 0
+	// Also 0 < D2 < U2 as there's not crossing of zero
+
+	total_up += width * (cand_U1 + cand_U2)/2.0;
+	total_dn += width * (cand_D1 + cand_D2)/2.0;
+      }
+    }
+
+    /*
+     * CASE 3: Zero-deflection OK in one raster, but not in the other. 
+     * There is a zero-crossing which we must estimate by interpolation
+     * and reduce to a simultaneous evaluation of Case 1 and Case 2.
+
+     * RETHERE need to code this in when / if needed
+     */
+
+    /*
     // Get the size of the upper region
     double cand_one = 1.0 - std::cos( previous_point_up.first );
     double cand_two = 1.0 - std::cos( current_point_up.first );
@@ -694,6 +762,7 @@ double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn
     small_height, large_height = std::min( cand_one, cand_two ), std::max( cand_one, cand_two );
     // trapezoid area is w * (h + H)/2
     total_dn += width * ( small_height + large_height ) / 2.0;
+    */
 
     previous_point_up = current_point_up; // update
     previous_point_dn = current_point_dn; // update
@@ -701,7 +770,7 @@ double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn
 
   LOG( "ExoticLLP", pDEBUG ) << "total_up, total_dn = " << total_up << ", " << total_dn;
 
-  return total_up - total_dn;
+  return total_up + total_dn;
 }
 //____________________________________________________________________________
 double VolumeSeeker::Simpson( std::vector<Point> pt_vec ) const
@@ -755,17 +824,17 @@ void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
     VolumeSeeker::Deflect( deflection_up, true );
     VolumeSeeker::Deflect( deflection_down, false );
     
-    bool zero_okay = ( deflection_up * deflection_down <= 0.0 );
+    //bool zero_okay = ( deflection_up * deflection_down <= 0.0 );
+
+    thetaMax = deflection_up; thetaMin = deflection_down;
     
-    thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
-    thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
+    //thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
+    //thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
     
-    /*
     LOG( "ExoticLLP", pDEBUG )
       << "Deflections: phi = " << 0.0
       << ", theta_min, max = " << thetaMin * 180.0 / constants::kPi
       << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
-    */
     
     // Add this to the angular region
     Point min_point = std::pair< double, double >( thetaMin, sweep );
