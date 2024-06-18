@@ -373,8 +373,8 @@ std::string VolumeSeeker::CheckGeomPoint( TVector3 chkpoint ) const
 {
   Double_t point[3] = { chkpoint.X(), chkpoint.Y(), chkpoint.Z() };
   Double_t local[3];
-  TGeoVolume * vol = fGeoManager->GetVolume( fTopVolume.c_str() );
-  TGeoNode * node = fGeoManager->FindNode( point[0], point[1], point[2] );
+  __attribute__((unused)) TGeoVolume * vol = fGeoManager->GetVolume( fTopVolume.c_str() );
+  __attribute__((unused)) TGeoNode * node = fGeoManager->FindNode( point[0], point[1], point[2] );
   fGeoManager->MasterToLocal( point, local ); // don't know why but just do it
   return fGeoManager->GetPath();
 }
@@ -423,10 +423,10 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
   fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
 
+  //LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
+
   // check that this point lies in the geometry.
   std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
-
-  //LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
 
   // if allowing for grace, check a little bit further in along the fMomentum direction.
   // in increments of the bounding box diagonal
@@ -549,21 +549,23 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   return true;
 }
 //____________________________________________________________________________
-std::tuple< AngularRegion, AngularRegion > VolumeSeeker::AngularAcceptance() const
+AngularRegion VolumeSeeker::AngularAcceptance() const
 {
-  AngularRegion alpha, beta;
+  AngularRegion alpha;
 
   // Bookkeep the origin point and momentum, just in case
   const TVector3 booked_origin_point = fOriginPoint;
   const TVector3 booked_origin_point_ROOT = fOriginPointROOT;
   const TVector3 booked_momentum = fMomentum;
 
-  // We make a potentially strong assumption here, that the top_volume is simply connected.
-  // The calculation will be garbage if not, and we'll crash out rather than give garbage.
-  assert( VolumeSeeker::RaytraceDetector() && "The origin point of the top_volume lies inside the top volume" );
-
   // Get the separation between top volume origin and start point
   const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+
+  // We make a potentially strong assumption here, that the top_volume is simply connected.
+  // The calculation will be garbage if not, and we'll crash out rather than give garbage.
+  fMomentum = seed_vector.Unit();
+  assert( VolumeSeeker::RaytraceDetector() && "The origin point of the top_volume lies inside the top volume" );
+  fMomentum = booked_momentum;
 
   // Of course, the angles are defined with respect to the momentum axis...
   // We need to first project seed_vector onto the theta = 0 plane
@@ -612,6 +614,7 @@ std::tuple< AngularRegion, AngularRegion > VolumeSeeker::AngularAcceptance() con
   */
   
   // check that Rasterise() does what you want it to
+  // RETHERE first make the seed vector and define fThetaSeed, fPhiSeed
   VolumeSeeker::Rasterise( alpha, true );
   VolumeSeeker::Rasterise( alpha, false );
 
@@ -627,14 +630,15 @@ std::tuple< AngularRegion, AngularRegion > VolumeSeeker::AngularAcceptance() con
 
   // Now we'd like to construct the actual angles on the unit sphere these deflections
   // correspond to. Let's do it!
-  VolumeSeeker::ConvertToUserAngles( booked_momentum, alpha, beta );
+  //VolumeSeeker::ConvertToUserAngles( booked_momentum, alpha, beta );
 
   // just in case, restore the original member variables
   fOriginPoint = booked_origin_point;
   fOriginPointROOT = booked_origin_point_ROOT;
   fMomentum = booked_momentum;
   
-  return std::make_tuple( alpha, beta );
+  //return std::make_tuple( alpha, beta );
+  return alpha;
 }
 //____________________________________________________________________________
 double VolumeSeeker::AngularSize( AngularRegion alpha ) const
@@ -679,7 +683,8 @@ double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn
     // Get the size of the upper region
     double cand_one = 1.0 - std::cos( previous_point_up.first );
     double cand_two = 1.0 - std::cos( current_point_up.first );
-    small_height, large_height = std::min( cand_one, cand_two ), std::max( cand_one, cand_two );
+    small_height = std::min( cand_one, cand_two );
+    large_height = std::max( cand_one, cand_two );
     // trapezoid area is w * (h + H)/2
     total_up += width * ( small_height + large_height ) / 2.0;
 

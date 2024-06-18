@@ -78,8 +78,8 @@ namespace genie {
       bool RaytraceDetector( bool grace = false ) const;
       
       //! Define a region in (theta, phi) space that an HNL can be accepted in...
-      //! First element is the deflections from momentum, second is the absolute angles on unit sphere
-      std::tuple< AngularRegion, AngularRegion > AngularAcceptance() const;
+      //! Note that (theta, phi) are angles with respect to the parent momentum
+      AngularRegion AngularAcceptance() const;
       //! And calculate its size
       double AngularSize( AngularRegion alpha ) const;
       double Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn_vec ) const;
@@ -109,7 +109,7 @@ namespace genie {
       //! Given an origin point and a momentum, find the entry and exit points to the detector
       //bool RaytraceDetector() const;
 
-      //! Some controls
+      //! Some controls -- RETHERE make configurable
       const double m_coarse_theta_deflection = 50.0; // modifier
       const double m_fine_theta_deflection = 250.0; // modifier
       const double m_coarse_phi_deflection = 50.0; // modifier
@@ -162,6 +162,7 @@ namespace genie {
 	PhiAxis completes the coordinate system (== Axis.Cross(ThetaAxis))
        */
       mutable TVector3 fAxis, fThetaAxis, fPhiAxis;    //! A right handed coordinate system in USER space.
+      mutable double fThetaSeed, fPhiSeed;      //! The (theta, phi) deflection needed to get from fMomentum to fTopVolumeOrigin from fOriginPoint
 
       mutable std::string fGeomFile;            //! Path to the geometry file
       mutable std::string fTopVolume;           //! Name of the top volume to be used

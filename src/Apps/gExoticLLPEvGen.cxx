@@ -19,6 +19,9 @@
 #include <sstream>
 
 #include <TSystem.h>
+#include "TChain.h" // RETHERE remove
+#include "TFile.h"
+#include "TTree.h"
 
 #include "Framework/Algorithm/AlgFactory.h"
 #include "Framework/Conventions/Controls.h"
@@ -107,7 +110,13 @@ double           gOptMassLLP      = -1;                  // LLP mass [ MeV ]
 string           gOptFluxFilePath = kDefOptFluxFilePath; // where flux files live
 map<string,string> gOptFluxShortNames;
 bool             gOptIsUsingTrees = false;               // using flat-tree flux files?
-int              gOptFirstEvent   = 0;                  // skip to this entry in flux tree
+int              gOptFirstEvent   = 0;                   // skip to this entry in flux tree
+
+bool             gOptWriteAngularAcceptance = false;     // write an angular acceptance branch to tree
+TFile *          gOutputFluxFile = 0;                    // output flux file (clone of input)
+TTree *          gOutputFluxTree = 0;                    // output flux tree
+AngularRegion    gAngularRegion;                         // Event-by-event angular region, for event generation purposes
+double           gAngularRegionSize = 0;                 // Size of this region / 4\pi
 #endif // #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
 
 bool             gOptUsingRootGeom = false;              // using root geom or target mix?
@@ -180,44 +189,19 @@ int main(int argc, char ** argv)
   // initialise the elements of VolumeSeeker
   vsek->ClearEvent();
 
+  /*
   // Basic sanity check: Can we find the entrance to a box, from like 10 meters upstream? [NEAR]
-  TVector3 origin_point( 0.0, -60.0, 990.0 );
+  // Ohohoh. Now let's do an Earth diameter. YIKES.
+  double earth_diameter = 13000.0 * 1000.0;
+  TVector3 origin_point( 0.0, -60.0, -earth_diameter );
   TVector3 momentum( 0.0, 0.0, 1.0 );
 
   vsek->PopulateEvent( origin_point, momentum );
   bool result = vsek->RaytraceDetector();
 
   // Now we will try to see if the angles make sense.
-  AngularRegion accepted_region_deflections, accepted_region_absolutes;
-  tie( accepted_region_deflections, accepted_region_absolutes ) = vsek->AngularAcceptance();
-
-  std::ostringstream angsts, bngsts;
-  angsts << "Showing angular region DEFLECTIONS!!! Values are (theta, phi) [deg] at theta_{min, max} for each raster.";
-  bngsts << "Showing angular region ABSOLUTES!!! Values are (theta, phi) [deg] at theta_{min, max} for each raster.";
-  for( AngularRegion::iterator ait = accepted_region_deflections.begin();
-       ait != accepted_region_deflections.end(); ++ait ) {
-    angsts << "\nRaster points: ( " << ((*ait).first).first * 180.0 / constants::kPi 
-	   << ", " << ((*ait).first).second * 180.0 / constants::kPi 
-	   << " ) , "
-	   << "( " << ((*ait).second).first * 180.0 / constants::kPi 
-	   << ", " << ((*ait).second).second * 180.0 / constants::kPi << " )";
-  }
-  for( AngularRegion::iterator bit = accepted_region_absolutes.begin();
-       bit != accepted_region_absolutes.end(); ++bit ) {
-    bngsts << "\nRaster points: ( " << ((*bit).first).first * 180.0 / constants::kPi 
-	   << ", " << ((*bit).first).second * 180.0 / constants::kPi 
-	   << " ) , "
-	   << "( " << ((*bit).second).first * 180.0 / constants::kPi 
-	   << ", " << ((*bit).second).second * 180.0 / constants::kPi << " )";
-  }
-  LOG( "gevgen_exotic_llp", pDEBUG ) << angsts.str();
-  LOG( "gevgen_exotic_llp", pDEBUG ) << bngsts.str();
-
-  // Get the size of this raster
-  //double size_def = vsek->AngularSize( accepted_region_deflections );
-  double size_abs = vsek->AngularSize( accepted_region_absolutes );
-  //LOG( "gevgen_exotic_llp", pDEBUG ) << "Size of the deflected region is " << size_def;
-  LOG( "gevgen_exotic_llp", pDEBUG ) << "Size of the absolute  region is " << size_abs;
+  AngularRegion accepted_region = vsek->AngularAcceptance();
+  */
 
   // Initialize an Ntuple Writer to save GHEP records into a TTree
   NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
@@ -278,6 +262,25 @@ int main(int argc, char ** argv)
   //fluxCreator->SetGeomFile( gOptRootGeom, gOptTopVolName );
   //fluxCreator->SetFirstFluxEntry( iflux );
   vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
+  vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
+
+  // TEST: Checking to see how long it would take to open up the flux file and calculate angular regions
+  // for all the entries
+  TChain * flux_tree = 0; double vz;
+  if( ! gSystem->AccessPathName( gOptFluxFilePath.c_str() ) ) {
+    flux_tree = new TChain("flux"); flux_tree->Add( gOptFluxFilePath.c_str() );
+
+    if( gOptWriteAngularAcceptance ){
+
+      gOutputFluxFile = TFile::Open( "./exotic_llp_output_flux.root", "RECREATE" );
+      //gOutputFluxTree = new TTree( "flux", "LLP flux tree" );
+      gOutputFluxTree = dynamic_cast<TTree *>( flux_tree->CloneTree(0) );
+
+      gOutputFluxTree->Branch( "acceptance", &gAngularRegionSize, "acceptance/D" );
+
+      flux_tree->SetBranchAddress("vz", &vz);
+    } // if write angular acceptance
+  } // if input flux file
 
   bool tooManyEntries = false;
   while (1) {
@@ -317,37 +320,62 @@ int main(int argc, char ** argv)
     if( ievent < gOptFirstEvent ){ ievent++; continue; }
     
     assert( ievent >= gOptFirstEvent && gOptFirstEvent >= 0 && "First event >= 0" );
-    
-    LOG("gevgen_exotic_llp", pNOTICE)
-      << " *** Generating event............ " << (ievent-gOptFirstEvent);
 
-    EventRecord * event = new EventRecord;
-    //FluxContainer retGnmf;
-    event->SetWeight(1.0);
-    event->SetProbability( 1.0 ); // CoMLifetime
-    //event->SetXSec( iflux ); // will be overridden, use as handy container
+    flux_tree->GetEntry(ievent);
 
-    int decay = 0;
-    gOptEnergyLLP = 1.0; // RETHERE remove, obviously
-    int typeMod = 1; // RETHERE restore to bar if so required
-    Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
+    if( gOptWriteAngularAcceptance ){
+      LOG("gevgen_exotic_llp", pNOTICE)
+	<< " *** Filling flux for event............ " << (ievent-gOptFirstEvent);
 
-    event->AttachSummary(interaction);
+      TVector3 origin_point( 0.0, -60.0, vz );
+      TVector3 momentum( 0.0, 0.0, 1.0 );
+      vsek->PopulateEvent( origin_point, momentum );
+      [[maybe_unused]] bool result = vsek->RaytraceDetector();
+      LOG("gevgen_exotic_llp", pDEBUG) << "Calculating angular acceptance for event " << ievent
+				       << " at vz = " << vz; 
+      gAngularRegion = vsek->AngularAcceptance();
+      gAngularRegionSize = vsek->AngularSize( gAngularRegion );
 
-    LOG("gevgen_exotic_llp", pINFO)
-         << "Generated event: " << *event;
-    
-    // Add event at the output ntuple, refresh the mc job monitor & clean-up
-    ntpw.AddEventRecord(ievent, event);
-    mcjmonitor.Update(ievent,event);
-    
-    delete event;
+      LOG( "gevgen_exotic_llp", pDEBUG ) << "About to fill tree object";
+      gOutputFluxTree->Fill();
+      LOG( "gevgen_exotic_llp", pDEBUG ) << "Filled tree object.";
+
+      vsek->ClearEvent();
+    } else {
+      LOG("gevgen_exotic_llp", pNOTICE)
+	<< " *** Generating event............ " << (ievent-gOptFirstEvent);
+      
+      EventRecord * event = new EventRecord;
+      //FluxContainer retGnmf;
+      event->SetWeight(1.0);
+      event->SetProbability( 1.0 ); // CoMLifetime
+      //event->SetXSec( iflux ); // will be overridden, use as handy container
+      
+      int decay = 0;
+      gOptEnergyLLP = 1.0; // RETHERE remove, obviously
+      int typeMod = 1; // RETHERE restore to bar if so required
+      Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
+      
+      event->AttachSummary(interaction);
+      
+      LOG("gevgen_exotic_llp", pINFO)
+	<< "Generated event: " << *event;
+      
+      // Add event at the output ntuple, refresh the mc job monitor & clean-up
+      ntpw.AddEventRecord(ievent, event);
+      mcjmonitor.Update(ievent,event);
+      
+      delete event;
+    } // main event generation
     
     ievent++;
     
   } // end event loop
 
-  ntpw.Save();
+  if( gOptWriteAngularAcceptance ){ 
+    gOutputFluxTree->Write(); 
+    gOutputFluxFile->Close(); 
+  } else { ntpw.Save(); }
 
   LOG( "gevgen_exotic_llp", pFATAL )
     << "This is a TEST. Goodbye world!";
@@ -431,32 +459,40 @@ void GetCommandLineArgs(int argc, char ** argv)
   const LLPConfigurator * llp_conf = dynamic_cast< const LLPConfigurator * >( algLLPConf );
   gOptMassLLP = llp_conf->RetrieveLLP().GetMass();
 
-  /*
-  bool isMonoEnergeticFlux = true;
 #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
+  // Flag for incoming flux files
   if( parser.OptionExists('f') ) {
     LOG("gevgen_exotic_llp", pDEBUG)
       << "A flux has been offered. Searching this path: " << parser.ArgAsString('f');
-    isMonoEnergeticFlux = false;
     gOptFluxFilePath = parser.ArgAsString('f');
     
     // check if this is valid path (assume these are dk2nu files)
-    if( gSystem->OpenDirectory( gOptFluxFilePath.c_str() ) != NULL ){
-      gOptIsUsingDk2nu = true;
+    if( 
+       ( gSystem->OpenDirectory( gOptFluxFilePath.c_str() ) != NULL ) ||
+       ( ! gSystem->AccessPathName( gOptFluxFilePath.c_str() ) ) 
+	){
       LOG("gevgen_exotic_llp", pDEBUG)
-	<< "dk2nu flux files detected. Will create flux spectrum dynamically.";
+	<< "Flux files detected. Good!";
     } else {
       LOG("gevgen_exotic_llp", pFATAL)
 	<< "Invalid flux file path " << gOptFluxFilePath;
       exit(1);
     }
-  } else {
-    // we need the 'E' option! Log it and pass below
-    LOG("gevgen_exotic_llp", pINFO)
-      << "No flux file offered. Assuming monoenergetic flux.";
   } //-f
+
+#ifdef __CAN_USE_ROOT_GEOM__
+  // Flag to perform and save angular acceptance calculations
+  if( parser.OptionExists("calculate_angular_acceptance") ){
+    LOG("gevgen_exotic_llp", pNOTICE)
+      << "\nWill calculate angular acceptance for each event in the flux."
+      << "\nWill NOT generate events. Use the output of this stage to generate events later.";
+
+    gOptWriteAngularAcceptance = true;
+  } // --calculate_angular_acceptance
+#endif // #ifdef __CAN_USE_ROOT_GEOM__
 #endif // #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
 
+  /*
   // LLP energy (only relevant if we do not have an input flux)
   gOptEnergyLLP = -1;
   if( isMonoEnergeticFlux ){
@@ -625,6 +661,7 @@ void PrintSyntax(void)
    << "\n             -n n_of_events"
    << "\n             -f path/to/flux/files"
    << "\n            [--firstEvent first_event_for_flux_readin]"  
+   << "\n            [--calculate_angular_acceptance]"  
    << "\n            [-g geometry (ROOT file)]"
    << "\n            [-L length_units_at_geom]"
    << "\n            [-o output_event_file_prefix]"
