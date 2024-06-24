@@ -73,6 +73,14 @@ namespace genie {
       //! Clear all the current members 
       void ClearEvent() const;
 
+      //! Workhorse methods for NEAR <--> USER transformations
+      TVector3 Translate( TVector3 input, bool direction ) const;
+      TVector3 Rotate( TVector3 input, bool direction ) const;
+      TVector3 TranslateToUser( TVector3 input ) const { return VolumeSeeker::Translate( input, true ); }
+      TVector3 TranslateToNear( TVector3 input ) const { return VolumeSeeker::Translate( input, false ); }
+      TVector3 RotateToUser( TVector3 input ) const { return VolumeSeeker::Rotate( input, true ); }
+      TVector3 RotateToNear( TVector3 input ) const { return VolumeSeeker::Rotate( input, false ); }
+
       //! Given an origin point and a momentum, find the entry and exit points to the detector
       // RETHERE make private
       bool RaytraceDetector( bool grace = false ) const;
@@ -85,6 +93,12 @@ namespace genie {
       double Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn_vec ) const;
       double Simpson( std::vector<Point> pt_vec ) const;
 
+      //! Getter methods to interface with FluxContainer
+      TVector3 GetEntryPoint( bool near = false ) const 
+      { return ( near ) ? fEntryPointNEAR : fEntryPoint; }
+      TVector3 GetExitPoint( bool near = false ) const 
+      { return ( near ) ? fExitPointNEAR : fExitPoint; }
+
     private:
 
       VolumeSeeker();
@@ -94,14 +108,6 @@ namespace genie {
       //! Build the bounding box and find the top volume
       void ImportBoundingBox( TGeoBBox * box ) const;
       TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const;
-
-      //! Workhorse methods for NEAR <--> USER transformations
-      TVector3 Translate( TVector3 input, bool direction ) const;
-      TVector3 Rotate( TVector3 input, bool direction ) const;
-      TVector3 TranslateToUser( TVector3 input ) const { return VolumeSeeker::Translate( input, true ); }
-      TVector3 TranslateToNear( TVector3 input ) const { return VolumeSeeker::Translate( input, false ); }
-      TVector3 RotateToUser( TVector3 input ) const { return VolumeSeeker::Rotate( input, true ); }
-      TVector3 RotateToNear( TVector3 input ) const { return VolumeSeeker::Rotate( input, false ); }
 
       //! Obtain the node (in the ROOT sense) where a point exists
       std::string CheckGeomPoint( TVector3 chkpoint ) const;

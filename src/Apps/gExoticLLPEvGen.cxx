@@ -19,12 +19,13 @@
 #include <sstream>
 
 #include <TSystem.h>
-#include "TChain.h" // RETHERE remove
+#include "TChain.h"
 #include "TFile.h"
 #include "TTree.h"
 
 #include "Framework/Algorithm/AlgFactory.h"
 #include "Framework/Conventions/Controls.h"
+#include "Framework/Conventions/Constants.h"
 #include "Framework/EventGen/EventRecord.h"
 #include "Framework/EventGen/EventGeneratorI.h"
 #include "Framework/EventGen/EventRecordVisitorI.h"
@@ -47,6 +48,7 @@
 #include "Physics/ExoticLLP/ExoticLLP.h"
 #include "Physics/ExoticLLP/LLPConfigurator.h"
 //#include "Physics/ExoticLLP/LLPFluxGenerator.h"
+#include "Physics/ExoticLLP/LLPFluxContainer.h"
 #include "Physics/ExoticLLP/LLPVertexGenerator.h"
 #include "Physics/ExoticLLP/VolumeSeeker.h"
 
@@ -76,13 +78,15 @@ void   GetCommandLineArgs (int argc, char ** argv);
 void   PrintSyntax        (void);
 
 #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
-//void     FillFluxNonsense        (FluxContainer &ggn);
-//void     FillFlux                (FluxContainer &ggn, FluxContainer &tgn);
+void     SetFluxBranchAddresses  (TTree * tree);
+void     CreateFluxBranches      (void);
 #endif // #ifdef __GENIE_FLUX_DRIVERS_ENABLED__
 
 //TLorentzVector GeneratePosition( GHepRecord * event );
 #ifdef __CAN_USE_ROOT_GEOM__
 void  InitBoundingBox    (void);
+TLorentzVector CastX4ToUser( VolumeSeeker * sk, TLorentzVector vc );
+TLorentzVector CastP4ToUser( VolumeSeeker * sk, TLorentzVector vc );
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
 //
@@ -111,6 +115,7 @@ string           gOptFluxFilePath = kDefOptFluxFilePath; // where flux files liv
 map<string,string> gOptFluxShortNames;
 bool             gOptIsUsingTrees = false;               // using flat-tree flux files?
 int              gOptFirstEvent   = 0;                   // skip to this entry in flux tree
+FluxContainer    gOptFluxInfo;                           // custom LLP flux driver
 
 bool             gOptWriteAngularAcceptance = false;     // write an angular acceptance branch to tree
 TFile *          gOutputFluxFile = 0;                    // output flux file (clone of input)
@@ -189,20 +194,6 @@ int main(int argc, char ** argv)
   // initialise the elements of VolumeSeeker
   vsek->ClearEvent();
 
-  /*
-  // Basic sanity check: Can we find the entrance to a box, from like 10 meters upstream? [NEAR]
-  // Ohohoh. Now let's do an Earth diameter. YIKES.
-  double earth_diameter = 13000.0 * 1000.0;
-  TVector3 origin_point( 0.0, -60.0, -earth_diameter );
-  TVector3 momentum( 0.0, 0.0, 1.0 );
-
-  vsek->PopulateEvent( origin_point, momentum );
-  bool result = vsek->RaytraceDetector();
-
-  // Now we will try to see if the angles make sense.
-  AngularRegion accepted_region = vsek->AngularAcceptance();
-  */
-
   // Initialize an Ntuple Writer to save GHEP records into a TTree
   NtpWriter ntpw(kDefOptNtpFormat, gOptRunNu, gOptRanSeed);
   ntpw.CustomizeFilenamePrefix(gOptEvFilePrefix);
@@ -211,32 +202,18 @@ int main(int argc, char ** argv)
   LOG("gevgen_exotic_llp", pNOTICE)
     << "Initialised Ntuple Writer";
 
-  /*
-    RETHERE do this
   // add flux info to the tree
-  FluxContainer gnmf;
-  if( gOptIsUsingDk2nu ) {
+  if( gOptWriteAngularAcceptance ) {
     // fill the flux object with nonsense to start with
     FluxContainer * ptGnmf = new FluxContainer();
-    gnmf = *ptGnmf;
+    gOptFluxInfo = *ptGnmf;
     delete ptGnmf;
-    FillFluxNonsense( gnmf );
-    TBranch * flux = ntpw.EventTree()->Branch( "flux",
-					       "genie::hnl::FluxContainer",
-					       &gnmf, 32000, 1 );
-    flux->SetAutoDelete(kFALSE);
+    //FillFluxNonsense( gnmf );
+    //TBranch * flux = ntpw.EventTree()->Branch( "flux",
+    //					       "genie::hnl::FluxContainer",
+    //					       &gnmf, 32000, 1 );
+    //flux->SetAutoDelete(kFALSE);
   }
-  */
-
-  // add another few branches to tree.
-  /*
-    RETHERE entry / exit branches
-  ntpw.EventTree()->Branch("hnl_mass", &gOptMassHNL, "gOptMassHNL/D");
-  ntpw.EventTree()->Branch("hnl_coup_e", &gOptECoupling, "gOptECoupling/D");
-  ntpw.EventTree()->Branch("hnl_coup_m", &gOptMCoupling, "gOptMCoupling/D");
-  ntpw.EventTree()->Branch("hnl_coup_t", &gOptTCoupling, "gOptTCoupling/D");
-  ntpw.EventTree()->Branch("hnl_ismaj", &gOptIsMajorana, "gOptIsMajorana/I");
-  */
 
   // Create a MC job monitor for a periodically updated status file
   GMCJMonitor mcjmonitor(gOptRunNu);
@@ -264,22 +241,24 @@ int main(int argc, char ** argv)
   vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
   vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
 
-  // TEST: Checking to see how long it would take to open up the flux file and calculate angular regions
-  // for all the entries
+
+
   TChain * flux_tree = 0; double vz;
   if( ! gSystem->AccessPathName( gOptFluxFilePath.c_str() ) ) {
     flux_tree = new TChain("flux"); flux_tree->Add( gOptFluxFilePath.c_str() );
 
     if( gOptWriteAngularAcceptance ){
-
       gOutputFluxFile = TFile::Open( "./exotic_llp_output_flux.root", "RECREATE" );
-      //gOutputFluxTree = new TTree( "flux", "LLP flux tree" );
       gOutputFluxTree = dynamic_cast<TTree *>( flux_tree->CloneTree(0) );
 
-      gOutputFluxTree->Branch( "acceptance", &gAngularRegionSize, "acceptance/D" );
-
+      CreateFluxBranches();
       flux_tree->SetBranchAddress("vz", &vz);
     } // if write angular acceptance
+    
+    else {
+      SetFluxBranchAddresses( flux_tree );
+    } // if use pre-calculated angular acceptance and flux
+
   } // if input flux file
 
   bool tooManyEntries = false;
@@ -336,9 +315,46 @@ int main(int argc, char ** argv)
       gAngularRegion = vsek->AngularAcceptance();
       gAngularRegionSize = vsek->AngularSize( gAngularRegion );
 
-      LOG( "gevgen_exotic_llp", pDEBUG ) << "About to fill tree object";
+      gOptFluxInfo.ResetCopy();
+
+      // Here we set all the branches' values. It is inelegant, but has to be done.
+
+      gOptFluxInfo.evtno = ievent;
+
+      TLorentzVector v4( 0.0, -60.0, vz, 0.0 );
+      TLorentzVector v4_user = CastX4ToUser( vsek, v4 );
+
+      gOptFluxInfo.v4 = v4;
+      gOptFluxInfo.v4_user = v4_user;
+
+      TLorentzVector p4_parent( 0.0, 0.0, 1.0, 1.0 );
+      TLorentzVector p4_parent_user = CastP4ToUser( vsek, p4_parent );
+      
+      gOptFluxInfo.p4_parent = p4_parent;
+      gOptFluxInfo.p4_parent_user = p4_parent_user;
+
+      TVector3 v3_entry = vsek->GetEntryPoint(true);
+      TVector3 v3_exit  = vsek->GetExitPoint(true);
+
+      // RETHERE need to update delay when we've decided momentum of LLP...
+      
+      TLorentzVector v4_entry( v3_entry.X(), v3_entry.Y(), v3_entry.Z(), 0.0 );
+      TLorentzVector v4_entry_user = CastX4ToUser( vsek, v4_entry );
+      
+      TLorentzVector v4_exit( v3_exit.X(), v3_exit.Y(), v3_exit.Z(), 0.0 );
+      TLorentzVector v4_exit_user = CastX4ToUser( vsek, v4_exit );
+
+      gOptFluxInfo.entry = v4_entry;
+      gOptFluxInfo.entry_user = v4_entry_user;
+
+      gOptFluxInfo.exit = v4_exit;
+      gOptFluxInfo.exit_user = v4_exit_user;
+
+      gOptFluxInfo.wgt_xy = gAngularRegionSize / (4.0 * constants::kPi);
+
+      //gOptFluxInfo.Print("");
+
       gOutputFluxTree->Fill();
-      LOG( "gevgen_exotic_llp", pDEBUG ) << "Filled tree object.";
 
       vsek->ClearEvent();
     } else {
@@ -349,7 +365,12 @@ int main(int argc, char ** argv)
       //FluxContainer retGnmf;
       event->SetWeight(1.0);
       event->SetProbability( 1.0 ); // CoMLifetime
-      //event->SetXSec( iflux ); // will be overridden, use as handy container
+      //event->SetXSec( iflux ); // will be overridden, use as handy object
+
+      // Assume that there is a flux and that it contains all the information. 
+      // So read it from the input file.
+
+      
       
       int decay = 0;
       gOptEnergyLLP = 1.0; // RETHERE remove, obviously
@@ -466,7 +487,7 @@ void GetCommandLineArgs(int argc, char ** argv)
       << "A flux has been offered. Searching this path: " << parser.ArgAsString('f');
     gOptFluxFilePath = parser.ArgAsString('f');
     
-    // check if this is valid path (assume these are dk2nu files)
+    // check if this is valid path
     if( 
        ( gSystem->OpenDirectory( gOptFluxFilePath.c_str() ) != NULL ) ||
        ( ! gSystem->AccessPathName( gOptFluxFilePath.c_str() ) ) 
@@ -652,6 +673,53 @@ void GetCommandLineArgs(int argc, char ** argv)
      << "\n @@ Statistics    : " << gOptNev << " events";
 }
 //_________________________________________________________________________________________
+void SetFluxBranchAddresses( TTree * tree )
+{
+  tree->SetBranchAddress( "evtno",          &(gOptFluxInfo.evtno)          );
+  tree->SetBranchAddress( "v4",             &(gOptFluxInfo.v4)             );
+  tree->SetBranchAddress( "v4_user",        &(gOptFluxInfo.v4_user)        );
+  tree->SetBranchAddress( "p4_parent",      &(gOptFluxInfo.p4_parent)      );
+  tree->SetBranchAddress( "p4_parent_user", &(gOptFluxInfo.p4_parent_user) );
+  tree->SetBranchAddress( "entry",          &(gOptFluxInfo.entry)          );
+  tree->SetBranchAddress( "entry_user",     &(gOptFluxInfo.entry_user)     );
+  tree->SetBranchAddress( "exit",           &(gOptFluxInfo.exit)           );
+  tree->SetBranchAddress( "exit_user",      &(gOptFluxInfo.exit_user)      );
+  tree->SetBranchAddress( "p4",             &(gOptFluxInfo.p4)             );
+  tree->SetBranchAddress( "p4_user",        &(gOptFluxInfo.p4_user)        );
+  tree->SetBranchAddress( "wgt_xy",         &(gOptFluxInfo.wgt_xy)         );
+}
+//_________________________________________________________________________________________
+void CreateFluxBranches(void)
+{
+  gOutputFluxTree->Branch( "evtno",          &(gOptFluxInfo.evtno),         "evtno/I"  );
+  gOutputFluxTree->Branch( "v4",             &(gOptFluxInfo.v4)                        );
+  gOutputFluxTree->Branch( "v4_user",        &(gOptFluxInfo.v4_user)                   );
+  gOutputFluxTree->Branch( "p4_parent",      &(gOptFluxInfo.p4_parent)                 );
+  gOutputFluxTree->Branch( "p4_parent_user", &(gOptFluxInfo.p4_parent_user)            );
+  gOutputFluxTree->Branch( "entry",          &(gOptFluxInfo.entry)                     );
+  gOutputFluxTree->Branch( "entry_user",     &(gOptFluxInfo.entry_user)                );
+  gOutputFluxTree->Branch( "exit",           &(gOptFluxInfo.exit)                      );
+  gOutputFluxTree->Branch( "exit_user",      &(gOptFluxInfo.exit_user)                 );
+  gOutputFluxTree->Branch( "p4",             &(gOptFluxInfo.p4)                        );
+  gOutputFluxTree->Branch( "p4_user",        &(gOptFluxInfo.p4_user)                   );
+  gOutputFluxTree->Branch( "wgt_xy",         &(gOptFluxInfo.wgt_xy),        "wgt_xy/D" );
+}
+//_________________________________________________________________________________________
+TLorentzVector CastX4ToUser( VolumeSeeker * sk, TLorentzVector vc )
+{
+  TVector3 vc_space = vc.Vect();
+  TVector3 vc_user_space = sk->TranslateToUser( vc_space );
+  vc_user_space = sk->RotateToUser( vc_user_space );
+  return TLorentzVector( vc_user_space.X(), vc_user_space.Y(), vc_user_space.Z(), vc.T() );
+}
+//_________________________________________________________________________________________
+TLorentzVector CastP4ToUser( VolumeSeeker * sk, TLorentzVector vc )
+{
+  TVector3 vc_space = vc.Vect();
+  TVector3 vc_user_space = sk->RotateToUser( vc_space );
+  return TLorentzVector( vc_user_space.Px(), vc_user_space.Py(), vc_user_space.Pz(), vc.E() );
+}
+//_________________________________________________________________________________________
 void PrintSyntax(void)
 {
   LOG("gevgen_exotic_llp", pFATAL)
@@ -704,7 +772,7 @@ void InitBoundingBox(void)
     TGeoMedium *Vacuum = new TGeoMedium("Vacuum",1, matVacuum);
     TGeoMedium *Al = new TGeoMedium("Root Material",2, matAl);
 
-    //--- make the top container volume
+    //--- make the top object volume
     //const double boxSideX = 2.5, boxSideY = 2.5, boxSideZ = 2.5; // m
     //const double bigBoxSide = 2.0 * std::max( boxSideX, std::max( boxSideY, boxSideZ ) ); // m
     //const double worldLen = 1.01 * bigBoxSide; // m

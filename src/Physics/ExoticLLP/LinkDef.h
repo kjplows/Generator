@@ -19,6 +19,8 @@
 #pragma link C++ class genie::llp::ExoticLLP;
 #pragma link C++ class genie::llp::ModeObject;
 
+//#pragma link C++ class genie::llp::FluxContainer;
+
 #pragma link C++ class genie::DummyLLPInteractionListGenerator;
 #pragma link C++ class genie::DummyLLPPXSec;
 
