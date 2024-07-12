@@ -93,6 +93,10 @@ namespace genie {
       double Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn_vec ) const;
       double Simpson( std::vector<Point> pt_vec ) const;
 
+      //! A method that allows VolumeSeeker to read in configurable controls without needing to
+      //  inherit from Algorithm. This means it can be an instanced class (which is good)
+      void AdoptControls( double ct, double cp, double ft, double fp, double gr ) const;
+
       //! Getter methods to interface with FluxContainer
       TVector3 GetEntryPoint( bool near = false ) const 
       { return ( near ) ? fEntryPointNEAR : fEntryPoint; }
@@ -115,12 +119,12 @@ namespace genie {
       //! Given an origin point and a momentum, find the entry and exit points to the detector
       //bool RaytraceDetector() const;
 
-      //! Some controls -- RETHERE make configurable
-      const double m_coarse_theta_deflection = 50.0; // modifier
-      const double m_fine_theta_deflection = 250.0; // modifier
-      const double m_coarse_phi_deflection = 50.0; // modifier
-      const double m_fine_phi_deflection = 250.0; // modifier
-      const double m_grace_decrement = 0.5e-3; 
+      //! Some controls
+      mutable double m_coarse_theta_deflection = 2.0; // modifier
+      mutable double m_fine_theta_deflection = 2.0; // modifier
+      mutable double m_coarse_phi_deflection = 5.0; // modifier
+      mutable double m_fine_phi_deflection = 5.0; // modifier
+      mutable double m_grace_decrement = 0.5e-2; 
 
       //! And utility functions for calling Raytrace() a lot of times
       void Deflect( double & deflection, bool goUp ) const; // calls Raytrace() with set theta, phi
@@ -144,7 +148,8 @@ namespace genie {
       //! Config options for NEAR <--> USER transformations
       mutable TVector3 fUserOrigin;    //! USER (0, 0, 0) in NEAR coords [m]
       mutable TVector3 fUserRotation;  //! USER Euler angles (a, b, c) in NEAR coords. Extrinsic X-Z-X from NEAR --> USER. I.e. (x, y, z) = R_X(c) * R_Z(b) * R_X(a) * (X, Y, Z)
-      bool fIsConfigLoaded; 
+      mutable bool fIsConfigLoaded; 
+      mutable bool fIsGeomFileSet;
       
       //! All vectors with ROOT in the name use the ROOT default units [cm] and refer to the local coordinate system of the top_volume node
       mutable TVector3 fZeroPoint, fZeroPointROOT;     //! Ray intercept at z = 0 plane. [m]

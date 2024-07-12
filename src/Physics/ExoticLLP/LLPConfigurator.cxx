@@ -88,6 +88,20 @@ void LLPConfigurator::LoadConfig(void)
   ExoticLLP * ptLLP = new ExoticLLP( fMass, fProdChannels, fDecayChannels );
   
   fLLP = *ptLLP;
+
+  // Also pass some configuration information to the VolumeSeeker instance
+
+  double coarse_theta_def, coarse_phi_def, fine_theta_def, fine_phi_def;
+  double grace_mod;
+
+  this->GetParam( "CoarseThetaDeflection", coarse_theta_def );
+  this->GetParam( "CoarsePhiDeflection", coarse_phi_def );
+  this->GetParam( "FineThetaDeflection", fine_theta_def );
+  this->GetParam( "FinePhiDeflection", fine_phi_def );
+  this->GetParam( "GraceModifier", grace_mod );
+
+  VolumeSeeker * vsek = VolumeSeeker::Instance();
+  vsek->AdoptControls( coarse_theta_def, coarse_phi_def, fine_theta_def, fine_phi_def, grace_mod );
 }
 //____________________________________________________________________________
 void LLPConfigurator::ParseInputFile() const 

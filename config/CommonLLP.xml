@@ -29,16 +29,34 @@ April 11th, 2022
   </param_set>
 
   <param_set name="CoordinateXForm">
-    <param type="vec-double" name="Near2Beam_R" delim=";"> 0.0 ; 0.0 ; -0.05830 </param> <!-- rad -->
-    <!-- Euler angles, extrinsic x-z-x = 1-2-3, RM * BEAM = USER, RM = Rx(1) * Rz(2) * Rx(3). -->
-    <!-- Describes rotation of BEAM wrt NEAR frame -->
-    <param type="vec-double" name="Near2User_T" delim=";"> 0.0 ; -60.0 ; 1000.0 </param> <!-- m -->
-    <!-- USER origin in NEAR coordinates -->
-    <param type="vec-double" name="Near2User_R" delim=";"> 0.0 ; 0.0 ; 0.0 </param>
-    <!-- Euler angles, extrinsic x-z-x -->
-    <!-- Describes rotation of USER wrt NEAR frame -->
-    <param type="vec-double" name="DetCentre_User" delim=";"> 0.0 ; 0.0 ; 0.0 </param> <!-- m -->
-    <!-- Position of detector centre in USER frame, in case it is not at USER origin -->
+
+    <!-- Describe where the USER origin is, in NEAR coordinates -->
+    <param type="vec-double" name="UserOrigin" delim=";"> 0.0 ; -60.0 ; 1000.0 </param> <!-- m -->
+
+    <!-- Position of top volume centre in USER frame, in case it is not at USER origin -->
+    <param type="vec-double" name="TopVolumeCentre" delim=";"> 0.0 ; 0.0 ; 0.0 </param> <!-- m -->
+
+    <!-- If the USER frame is rotated with respect to the NEAR frame, identify 3 Euler angles
+	 Using the Euler angles under the extrinsic x-z-x parametrisation:
+	 Pass three angles (a, b, c) as a triplet. Then the rotation matrix is written as 
+
+         R(a, b, c) = R_x(c) * R_z(b) * R_x(a). See PRD 107 (2023) 055003 Appendix 3. -->
+    <param type="vec-double" name="Rotation" delim=";"> 0.0 ; 0.0 ; 0.0 </param> <!-- rad -->
+    
   </param_set>
 
+  <param_set name="Controls">
+    <param type="string" name="FluxTree"> flux </param> <!-- Name of the flux tree -->
+    <param type="string" name="MetaTree"> meta </param> <!-- Name of the meta tree -->
+
+    <!-- The following options change how finely you want to partition your unit sphere to do angular acceptance calculations -->
+    <!-- These are modifiers, as in chop up the angular size of your bounding box into this many segments -->
+    <param type="double" name="CoarseThetaDeflection"> 50.0 </param> <!-- Coarse on polar dir'n -->
+    <param type="double" name="CoarsePhiDeflection"> 25.0 </param> <!-- Coarse on azimuth dir'n -->
+    <param type="double" name="FineThetaDeflection"> 100.0 </param> <!-- Fine on polar dir'n -->
+    <param type="double" name="FinePhiDeflection"> 100.0 </param> <!-- Fine on azimuth dir'n -->
+    <!-- And the next modifier tells you how big your step size should be in terms of your baseline -->
+    <param type="double" name="GraceModifier"> 0.5e-2 </param>
+  </param_set>
+  
 </common_LLP_list>

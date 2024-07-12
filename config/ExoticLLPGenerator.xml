@@ -35,7 +35,7 @@ Near2User_R               vec-double  no    Rotation from NEAR to USER
   
   <param_set name="Default">
     
-    <param type="string" name="CommonLLP"> ParameterSpace,CoordinateXForm </param>
+    <param type="string" name="CommonLLP"> ParameterSpace,CoordinateXForm,Controls </param>
     <param type="string" name="CommonParam"> WeakInt,CKM </param>
 
   </param_set>

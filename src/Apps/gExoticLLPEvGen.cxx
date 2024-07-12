@@ -168,7 +168,8 @@ int main(int argc, char ** argv)
   utils::app_init::MesgThresholds(RunOpt::Instance()->MesgThresholdFiles());
   utils::app_init::RandGen(gOptRanSeed);
 
-  __attribute__((unused)) RandomGen * rnd = RandomGen::Instance();
+  [[maybe_unused]] RandomGen * rnd = RandomGen::Instance();
+  VolumeSeeker * vsek = VolumeSeeker::Instance();
 
   // Load the LLP and sub-algorithms
   const Algorithm * algLLPConfigurator = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
@@ -186,11 +187,10 @@ int main(int argc, char ** argv)
   const VertexGenerator * vtxGen = dynamic_cast< const VertexGenerator * >( algVtxGen );
 
   // check the config is correct
-  VolumeSeeker * vsek = VolumeSeeker::Instance();
   vsek->PrintConfig();
 
   // pass the geometry information
-  vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
+  //vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
   // initialise the elements of VolumeSeeker
   vsek->ClearEvent();
 
@@ -238,12 +238,14 @@ int main(int argc, char ** argv)
   //fluxCreator->SetInputFluxPath( gOptFluxFilePath );
   //fluxCreator->SetGeomFile( gOptRootGeom, gOptTopVolName );
   //fluxCreator->SetFirstFluxEntry( iflux );
-  vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
+  //vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
   vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
 
 
 
-  TChain * flux_tree = 0; double vz;
+  TChain * flux_tree = 0; 
+  TLorentzVector * v4 = new TLorentzVector( 0.0, 0.0, 0.0, 0.0 );
+  TLorentzVector * p4_parent = new TLorentzVector( 0.0, 0.0, 0.0, 0.0 );
   if( ! gSystem->AccessPathName( gOptFluxFilePath.c_str() ) ) {
     flux_tree = new TChain("flux"); flux_tree->Add( gOptFluxFilePath.c_str() );
 
@@ -252,7 +254,9 @@ int main(int argc, char ** argv)
       gOutputFluxTree = dynamic_cast<TTree *>( flux_tree->CloneTree(0) );
 
       CreateFluxBranches();
-      flux_tree->SetBranchAddress("vz", &vz);
+
+      flux_tree->SetBranchAddress("v4", &v4);
+      flux_tree->SetBranchAddress("p4", &p4_parent);
     } // if write angular acceptance
     
     else {
@@ -262,6 +266,7 @@ int main(int argc, char ** argv)
   } // if input flux file
 
   bool tooManyEntries = false;
+  if( gOptNev < 0 ) gOptNev = flux_tree->GetEntries();
   while (1) {
     if( tooManyEntries ){
       if( gOptNev >= 10000 ){
@@ -306,12 +311,12 @@ int main(int argc, char ** argv)
       LOG("gevgen_exotic_llp", pNOTICE)
 	<< " *** Filling flux for event............ " << (ievent-gOptFirstEvent);
 
-      TVector3 origin_point( 0.0, -60.0, vz );
-      TVector3 momentum( 0.0, 0.0, 1.0 );
+      TVector3 origin_point = v4->Vect();
+      TVector3 momentum = p4_parent->Vect();
       vsek->PopulateEvent( origin_point, momentum );
-      [[maybe_unused]] bool result = vsek->RaytraceDetector();
+      //[[maybe_unused]] bool result = vsek->RaytraceDetector();
       LOG("gevgen_exotic_llp", pDEBUG) << "Calculating angular acceptance for event " << ievent
-				       << " at vz = " << vz; 
+				       << " at vz = " << v4->Z(); 
       gAngularRegion = vsek->AngularAcceptance();
       gAngularRegionSize = vsek->AngularSize( gAngularRegion );
 
@@ -321,16 +326,16 @@ int main(int argc, char ** argv)
 
       gOptFluxInfo.evtno = ievent;
 
-      TLorentzVector v4( 0.0, -60.0, vz, 0.0 );
-      TLorentzVector v4_user = CastX4ToUser( vsek, v4 );
+      //TLorentzVector v4( 0.0, -60.0, vz, 0.0 );
+      TLorentzVector v4_user = CastX4ToUser( vsek, *v4 );
 
-      gOptFluxInfo.v4 = v4;
+      gOptFluxInfo.v4 = *v4;
       gOptFluxInfo.v4_user = v4_user;
 
-      TLorentzVector p4_parent( 0.0, 0.0, 1.0, 1.0 );
-      TLorentzVector p4_parent_user = CastP4ToUser( vsek, p4_parent );
+      //TLorentzVector p4_parent( 0.0, 0.0, 1.0, 1.0 );
+      TLorentzVector p4_parent_user = CastP4ToUser( vsek, *p4_parent );
       
-      gOptFluxInfo.p4_parent = p4_parent;
+      gOptFluxInfo.p4_parent = *p4_parent;
       gOptFluxInfo.p4_parent_user = p4_parent_user;
 
       TVector3 v3_entry = vsek->GetEntryPoint(true);
@@ -397,6 +402,8 @@ int main(int argc, char ** argv)
     gOutputFluxTree->Write(); 
     gOutputFluxFile->Close(); 
   } else { ntpw.Save(); }
+
+  delete v4; delete p4_parent;
 
   LOG( "gevgen_exotic_llp", pFATAL )
     << "This is a TEST. Goodbye world!";

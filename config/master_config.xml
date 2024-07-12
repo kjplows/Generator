@@ -76,6 +76,9 @@
    <config alg="genie::hnl::Decayer">                    BeamHNLGenerator.xml                </config>
    <config alg="genie::hnl::VertexGenerator">            BeamHNLGenerator.xml                </config>
    <config alg="genie::llp::LLPConfigurator">            ExoticLLPGenerator.xml              </config>
+   <config alg="genie::llp::FluxCreator">                ExoticLLPGenerator.xml              </config>
+   <config alg="genie::llp::Decayer">                    ExoticLLPGenerator.xml              </config>
+   <config alg="genie::llp::VertexGenerator">            ExoticLLPGenerator.xml              </config>
 
    <!-- ****** CONFIGURATION FOR LIST-GENERATORS ****** -->
    <config alg="genie::QELInteractionListGenerator">           QELInteractionListGenerator.xml       </config>

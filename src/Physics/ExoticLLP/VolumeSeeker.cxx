@@ -40,6 +40,7 @@ VolumeSeeker::~VolumeSeeker()
   fInstance = 0;
   fInitialized = false;
   fIsConfigLoaded = false;
+  fIsGeomFileSet = false;
 
   if( fGeoManager ) delete fGeoManager;
   if( fGeoVolume ) delete fGeoVolume;
@@ -56,8 +57,19 @@ VolumeSeeker * VolumeSeeker::Instance()
   return fInstance;
 }
 //____________________________________________________________________________
+void VolumeSeeker::AdoptControls( double ct, double cp, double ft, double fp, double gr ) const
+{
+  m_coarse_theta_deflection = ct;
+  m_coarse_phi_deflection = cp;
+  m_fine_theta_deflection = ft;
+  m_fine_phi_deflection = fp;
+  m_grace_decrement = gr;
+}
+//____________________________________________________________________________
 void VolumeSeeker::SetGeomFile( std::string geomfile, std::string topVolume ) const
 {
+  if( fIsGeomFileSet ){ LOG("ExoticLLP", pNOTICE) << "Geom file already set, doing nothing..."; return; }
+
   fGeomFile = geomfile;
   fTopVolume = topVolume;
   
@@ -84,6 +96,8 @@ void VolumeSeeker::SetGeomFile( std::string geomfile, std::string topVolume ) co
   TGeoBBox * box = (TGeoBBox *) ts;
     
   VolumeSeeker::ImportBoundingBox( box );
+
+  fIsGeomFileSet = true;
 }
 //____________________________________________________________________________
 void VolumeSeeker::SetConfig( TVector3 user_origin, TVector3 user_rotation )
@@ -159,6 +173,11 @@ void VolumeSeeker::PopulateEvent( TVector3 origin_point, TVector3 momentum ) con
   fOriginPoint = VolumeSeeker::RotateToUser( translated_origin );
 
   fOriginPointROOT = fToROOTUnits * fOriginPoint;
+
+  LOG( "ExoticLLP", pDEBUG ) << "\norigin_point is " << utils::print::Vec3AsString( &origin_point )
+			     << "\nin USER it is   " << utils::print::Vec3AsString( &fOriginPoint )
+			     << "\nin ROOT it is   " << utils::print::Vec3AsString( &fOriginPointROOT );
+
 }
 //____________________________________________________________________________
 void VolumeSeeker::ClearEvent() const
@@ -557,6 +576,25 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   const TVector3 booked_origin_point = fOriginPoint;
   const TVector3 booked_origin_point_ROOT = fOriginPointROOT;
   const TVector3 booked_momentum = fMomentum;
+
+  LOG( "ExoticLLP", pDEBUG ) << "\nbooked_origin_point      = " << utils::print::Vec3AsString( &booked_origin_point )
+			     << "\nbooked_origin_point_ROOT = " << utils::print::Vec3AsString( &booked_origin_point_ROOT );
+
+  // First, check if the point is inside the volume. If yes, every emission angle is good!
+  std::string original_pathString = this->CheckGeomPoint( booked_origin_point_ROOT );
+  LOG( "ExoticLLP", pDEBUG ) << "original_pathString = " << original_pathString;
+  if( original_pathString.find( fTopVolume.c_str() ) != string::npos ) {
+    const double halfpi = constants::kPi / 2.0;
+    Point dl_point = std::pair< double, double >( -halfpi, 0.0 );
+    Point ul_point = std::pair< double, double >( halfpi, 0.0 );
+    Point dr_point = std::pair< double, double >( -halfpi, 4.0 * halfpi );
+    Point ur_point = std::pair< double, double >( halfpi, 4.0 * halfpi );
+    PointRaster l_raster = std::pair< Point, Point >( dl_point, ul_point );
+    PointRaster r_raster = std::pair< Point, Point >( dr_point, ur_point );
+    alpha.emplace_back( l_raster );
+    alpha.emplace_back( r_raster );
+    return alpha;
+  }
 
   // Get the separation between top volume origin and start point
   const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
