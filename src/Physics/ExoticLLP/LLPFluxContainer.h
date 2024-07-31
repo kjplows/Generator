@@ -77,16 +77,20 @@ namespace genie{
       
     public: 
       FluxContainer();
+      FluxContainer(const FluxContainer & flc);
       virtual ~FluxContainer() {};
       
       void ResetCopy() const;
       void Print(const Option_t * /* opt */) const;
+
+      genie::llp::FluxContainer & operator = (const genie::llp::FluxContainer & flc);
       
       friend ostream & operator << (ostream & stream, const FluxContainer & gnmf);
 
       // members
 
       mutable int evtno; ///< Index corresponding to flux ntuple entry
+      mutable int pdg;   ///< PDG code of LLP (positive or negative?)
  
       mutable TLorentzVector v4;      ///< Production vertex in NEAR frame [m, ns]
       mutable TLorentzVector v4_user; ///< Production vertex in USER frame [m, ns]
@@ -103,7 +107,9 @@ namespace genie{
       mutable TLorentzVector p4;      ///< LLP momentum in NEAR frame [GeV]
       mutable TLorentzVector p4_user; ///< LLP momentum in USER frame [GeV]
       
-      mutable double wgt_xy;
+      mutable double wgt_xy;          ///< Geometric weight: the angular size of the detector in the lab frame
+      mutable double boost_factor;    ///< The boost factor, E_LLP (lab) / E_LLP (rest)
+      mutable double wgt_collimation; ///< The collimation effect
       
     }; // class FluxContainer
     

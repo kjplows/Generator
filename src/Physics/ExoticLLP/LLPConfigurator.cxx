@@ -90,6 +90,17 @@ void LLPConfigurator::LoadConfig(void)
   fLLP = *ptLLP;
 
   // Also pass some configuration information to the VolumeSeeker instance
+  VolumeSeeker * vsek = VolumeSeeker::Instance();
+
+  std::vector<double> user_origin; // the USER (0, 0, 0) in NEAR coords
+  this->GetParamVect( "UserOrigin", user_origin );
+
+  vsek->SetOffset( user_origin.at(0), user_origin.at(1), user_origin.at(2) );
+
+  bool use_saa = false; bool use_cmv = false;
+  this->GetParam( "UseSmallAngleApproximation", use_saa );
+  this->GetParam( "UseComputerVision", use_cmv );
+  if( use_saa ) use_cmv = false;
 
   double coarse_theta_def, coarse_phi_def, fine_theta_def, fine_phi_def;
   double grace_mod;
@@ -100,8 +111,8 @@ void LLPConfigurator::LoadConfig(void)
   this->GetParam( "FinePhiDeflection", fine_phi_def );
   this->GetParam( "GraceModifier", grace_mod );
 
-  VolumeSeeker * vsek = VolumeSeeker::Instance();
-  vsek->AdoptControls( coarse_theta_def, coarse_phi_def, fine_theta_def, fine_phi_def, grace_mod );
+  vsek->AdoptControls( use_saa, use_cmv,
+		       coarse_theta_def, coarse_phi_def, fine_theta_def, fine_phi_def, grace_mod );
 }
 //____________________________________________________________________________
 void LLPConfigurator::ParseInputFile() const 

@@ -64,7 +64,7 @@ namespace genie {
       ExoticLLP();
       ExoticLLP( double mass, ModeVector  modes );
       ExoticLLP( double mass, ModeVector productionModes, ModeVector decayModes );
-      ~ExoticLLP();
+      /*virtual*/ ~ExoticLLP();
 
       // Getters
       inline double GetMass() const { return fMass; }

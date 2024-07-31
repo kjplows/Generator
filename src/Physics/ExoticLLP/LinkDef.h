@@ -14,6 +14,7 @@
 #pragma link C++ class genie::llp::FluxRecordVisitorI;
 #pragma link C++ class genie::llp::GeomRecordVisitorI;
 
+#pragma link C++ class genie::llp::FluxCreator;
 #pragma link C++ class genie::llp::VertexGenerator;
 
 #pragma link C++ class genie::llp::ExoticLLP;

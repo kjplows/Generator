@@ -24,7 +24,7 @@
 #ifndef _LLP_FLUX_RECORD_VISITOR_I_H_
 #define _LLP_FLUX_RECORD_VISITOR_I_H_
 
-#include "Physics/ExoticLLP/LLPGeomRecordVisitorI.h"
+#include "Framework/EventGen/EventRecordVisitorI.h"
 //#include "Physics/ExoticLLP/LLPFluxContainer.h"
 
 #include <TStreamerElement.h>
@@ -37,7 +37,7 @@ namespace genie {
 
     //class FluxContainer;
 
-    class FluxRecordVisitorI: public GeomRecordVisitorI {
+    class FluxRecordVisitorI: public EventRecordVisitorI {
 
     public:
 
@@ -48,14 +48,8 @@ namespace genie {
       virtual void ProcessEventRecord(GHepRecord * event_rec) const = 0;
 
       //virtual FluxContainer RetrieveFluxInfo() const = 0;
-
-      virtual std::vector< double > GetB2UTranslation() const = 0;
-      virtual std::vector< double > GetB2URotation() const = 0;
-      virtual std::vector< double > GetDetOffset() const = 0;
-      virtual std::vector< double > GetDetRotation() const = 0;
       
       virtual void SetInputFluxPath( std::string finpath ) const = 0;
-      virtual void SetGeomFile( std::string geomfile, std::string topVolume ) const = 0;
       virtual int GetNFluxEntries() const = 0;
       virtual void SetFirstFluxEntry( int iFirst ) const = 0;
 
@@ -65,11 +59,7 @@ namespace genie {
       FluxRecordVisitorI(string name);
       FluxRecordVisitorI(string name, string config);
 
-#ifdef __GENIE_GEOM_DRIVERS_ENABLED__
-      virtual TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const = 0;
-#endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
-
-      ClassDef(FluxRecordVisitorI, 1)
+      ClassDef(FluxRecordVisitorI, 2)
     };
 
   } // namespace llp

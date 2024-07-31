@@ -49,6 +49,12 @@ April 11th, 2022
     <param type="string" name="FluxTree"> flux </param> <!-- Name of the flux tree -->
     <param type="string" name="MetaTree"> meta </param> <!-- Name of the meta tree -->
 
+    <!-- This option speeds up the acceptance calculation by a lot, but switches off raytracing. Overrides the computer-vision and raytracing algorithms -->
+    <param type="bool" name="UseSmallAngleApproximation"> true </param>
+    <!-- This option uses a computer-vision algorithm (see Rezk Salama and Kolb, Proc. VMV 2005 115-122) to calculate the intesections of the 
+         plane normal to parent momentum with the bounding box. Intermediate in speed and accuracy. Overrides the raytracing algortihm -->
+    <param type="bool" name="UseComputerVision"> false </param>
+    <!-- This option uses raytracing to deduce a detailed angular region for the detector. It is very, very slow, but yields the best results -->
     <!-- The following options change how finely you want to partition your unit sphere to do angular acceptance calculations -->
     <!-- These are modifiers, as in chop up the angular size of your bounding box into this many segments -->
     <param type="double" name="CoarseThetaDeflection"> 50.0 </param> <!-- Coarse on polar dir'n -->

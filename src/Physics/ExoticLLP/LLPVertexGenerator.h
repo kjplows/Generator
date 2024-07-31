@@ -32,11 +32,7 @@
 #include <list>
 #include <tuple>
 
-#include <TVector3.h>
-#include <TGeoManager.h>
-#include <TGeoVolume.h>
-#include <TGeoNode.h>
-#include <TGeoBBox.h>
+//#include <TGeoMatrix.h>
 
 //#include "Framework/Conventions/Constants.h"
 #include "Framework/Conventions/Controls.h"
@@ -50,9 +46,8 @@
 #include "Framework/Utils/PrintUtils.h"
 
 #include "Physics/ExoticLLP/LLPGeomRecordVisitorI.h"
+#include "Physics/ExoticLLP/LLPFluxContainer.h"
 #include "Physics/ExoticLLP/VolumeSeeker.h"
-
-typedef std::tuple< std::vector<double>, std::vector<double>, std::vector<double> > CoordTuple;
 
 namespace genie {
 namespace llp {
@@ -60,7 +55,7 @@ namespace llp {
   class ExoticLLP;
   class VolumeSeeker;
 
-  class VertexGenerator : public GeomRecordVisitorI {
+  class VertexGenerator : public Algorithm {
 
   public:
 
@@ -77,121 +72,49 @@ namespace llp {
     void Configure(const Registry & config);
     void Configure(string config);
 
-    void SetGeomFile( std::string geomfile, std::string topVolume ) const;
+    //void SetGeomFile( std::string geomfile, std::string topVolume ) const;
+
+    void ReadFluxContainer( genie::llp::FluxContainer flc ) const;
 
   private:
 
     void LoadConfig();
-
-#ifdef __GENIE_GEOM_DRIVERS_ENABLED__
-    // use bounding box origin & sides
-    void ImportBoundingBox( TGeoBBox * box ) const;
-    TGeoMatrix * FindFullTransformation( TGeoVolume * top_vol, TGeoVolume * tar_vol ) const;
-#endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
-
-    void SetStartingParameters( GHepRecord * event_rec ) const;
     
     // --------------------------------------------------
     // Utilities
     // --------------------------------------------------
 
-    // Return information about the frame transformations
-    CoordTuple GetFrameInfo() const 
-    { return std::make_tuple( fUserOrigin, fDetTranslation, fDetRotation ); }
-
     // simple getter
-    void GetInterestingPoints( TVector3 & entryPoint, TVector3 & exitPoint, TVector3 & decayPoint ) const;
-
-    // Build a simple 1x1x1 m3 box around (0,0,0).
-    void MakeSDV() const;
-
-    // enforce chosen units
-    void EnforceUnits( std::string length_units, std::string angle_units, std::string time_units ) const;
+    void GetInterestingPoints( TLorentzVector & entryPoint, TLorentzVector & exitPoint, TLorentzVector & decayPoint ) const;
 
     // calculate travel length in detector
     double CalcTravelLength( double betaMag, double CoMLifetime, double maxLength ) const;
 
-    // assign decay point given length
-    TVector3 GetDecayPoint( double travelLength, TVector3 & entryPoint, TVector3 & momentum ) const;
-
     // get max length in detector
-    double GetMaxLength( TVector3 & entryPoint, TVector3 & exitPoint ) const;
+    double GetMaxLength() const;
+
+    // assign decay point given length
+    TLorentzVector GetDecayPoint( double travelLength ) const;
 
     // --------------------------------------------------
-    // Simple Decay Volume - fallback if no geometry
-    // --------------------------------------------------
 
-    // in case of SDV, calculate entry and exit points (if any) of some trajectory
-    // if no entry/exit points return false
-    bool SDVEntryAndExitPoints( TVector3 & startPoint, TVector3 momentum,
-				TVector3 & entryPoint,
-				TVector3 & exitPoint ) const;
-
-    // --------------------------------------------------
-    // ROOT geometry stuff
-    // --------------------------------------------------
-
-#ifdef __GENIE_GEOM_DRIVERS_ENABLED__
-    
-    // get entry & exit points directly from volume
-    bool VolumeEntryAndExitPoints( TVector3 & startPoint, TVector3 & momentum,
-				   TVector3 & entryPoint, TVector3 & exitPoint, 
-				   TGeoManager * gm, TGeoVolume * vol ) const;
-#endif // #ifdef __GENIE_GEOM_DRIVERS_ENABLED__
-
-    TVector3 ApplyUserRotation( TVector3 vec, bool doBackwards ) const;
-    TVector3 ApplyUserRotation( TVector3 vec, TVector3 oriVec, std::vector<double> rotVec, bool doBackwards ) const;
-
-    std::string CheckGeomPoint( Double_t x, Double_t y, Double_t z ) const;
-
-    // --------------------------------------------------
+    //mutable std::string fGeomFile = "";
+    //mutable std::string fTopVolume = "";
 
     mutable bool fIsConfigLoaded = false;
 
-    mutable double lunits = genie::units::mm; mutable std::string lunitString = "mm";
+    mutable double lunits = genie::units::m; mutable std::string lunitString = "m";
     mutable double aunits = genie::units::rad;
     mutable double tunits = genie::units::ns; mutable std::string tunitString = "ns";
 
-    mutable double fSx = 0.0, fSy = 0.0, fSz = 0.0; //start point
-    mutable double fNx = 0.0, fNy = 0.0, fNz = 0.0; //origin point of LLP
-    mutable double fPx = 0.0, fPy = 0.0, fPz = 0.0; //momentum
-    mutable double fEx = 0.0, fEy = 0.0, fEz = 0.0; //entry point
-    mutable double fXx = 0.0, fXy = 0.0, fXz = 0.0; //exit  point
-
-    mutable double fSxROOT = 0.0, fSyROOT = 0.0, fSzROOT = 0.0; // start point in cm
-    mutable double fNxROOT = 0.0, fNyROOT = 0.0, fNzROOT = 0.0; // origin point of LLP in cm
-    mutable double fExROOT = 0.0, fEyROOT = 0.0, fEzROOT = 0.0; // entry point in cm
-    mutable double fXxROOT = 0.0, fXyROOT = 0.0, fXzROOT = 0.0; // exit  point in cm
-
-    mutable double fDx = 0.0, fDy = 0.0, fDz = 0.0; //decay point
-    mutable double fOx = 0.0, fOy = 0.0, fOz = 0.0; //origin
-    mutable double fLx = 0.0, fLy = 0.0, fLz = 0.0; //dimensions
-
-    mutable double fDxROOT = 0.0, fDyROOT = 0.0, fDzROOT = 0.0; // decay point in cm
-    mutable double fOxROOT = 0.0, fOyROOT = 0.0, fOzROOT = 0.0; // origin in cm
-    mutable double fLxROOT = 0.0, fLyROOT = 0.0, fLzROOT = 0.0; // dimensions in cm
-
+    mutable genie::llp::FluxContainer fFluxContainer;
+    mutable TLorentzVector fDecayPoint;
+    
     mutable double fCoMLifetime = 0.0; // LLP lifetime in ns
     
     mutable double kNewSpeedOfLight = genie::units::kSpeedOfLight * ( genie::units::m / lunits ) / ( genie::units::s / tunits );
 
-    mutable string fGeomFile = "";
-    mutable string fTopVolume = "";
-    mutable TGeoManager * fGeoManager = 0;
-    mutable TGeoVolume * fGeoVolume = 0;
-    
-    mutable bool isUsingDk2nu = false;
-    mutable bool isParticleGun = false;
-    mutable bool isUsingRootGeom = false;
-    mutable double uMult = 1.0, xMult = 1.0; // these need to be different.
-
-    mutable double fCx, fCy, fCz;   // translation: from NEAR origin to USER origin [m]
-    mutable double fTx, fTy, fTz;   // If user --top_volume passed, where's its origin in USER frame? [m]
-    mutable double fUx, fUy, fUz;   // translation: from USER origin to detector centre [m]
-    mutable double fAx1, fAz, fAx2; // rotation: from NEAR frame to USER frame
-    mutable std::vector< double > fUserOrigin, fDetTranslation, fDetRotation;
-
-    ClassDef(VertexGenerator, 1)
+    ClassDef(VertexGenerator, 2)
   }; // class VertexGenerator
 
 } // namespace llp

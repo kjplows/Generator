@@ -19,9 +19,62 @@ FluxContainer::FluxContainer() : TObject()
   this->ResetCopy();
 }
 //___________________________________________________________________________
+FluxContainer::FluxContainer(const FluxContainer & flc) : TObject(flc)
+{
+  evtno = flc.evtno;
+  pdg   = flc.pdg;
+  
+  v4 = flc.v4;
+  v4_user = flc.v4_user;
+
+  p4_parent = flc.p4_parent;
+  p4_parent_user = flc.p4_parent_user;
+
+  entry = flc.entry;
+  entry_user = flc.entry_user;
+  
+  exit = flc.exit;
+  exit_user = flc.exit_user;
+
+  p4 = flc.p4;
+  p4_user = flc.p4_user;
+
+  wgt_xy = flc.wgt_xy;
+  boost_factor = flc.boost_factor;
+  wgt_collimation = flc.wgt_collimation;
+}
+//___________________________________________________________________________
+FluxContainer & FluxContainer::operator = (const FluxContainer & flc)
+{
+  this->evtno = flc.evtno;
+  this->pdg   = flc.pdg;
+
+  this->v4 = flc.v4;
+  this->v4_user = flc.v4_user;
+
+  this->p4_parent = flc.p4_parent;
+  this->p4_parent_user = flc.p4_parent_user;
+
+  this->entry = flc.entry;
+  this->entry_user = flc.entry_user;
+  
+  this->exit = flc.exit;
+  this->exit_user = flc.exit_user;
+
+  this->p4 = flc.p4;
+  this->p4_user = flc.p4_user;
+
+  this->wgt_xy = flc.wgt_xy;
+  this->boost_factor = flc.boost_factor;
+  this->wgt_collimation = flc.wgt_collimation;
+
+  return *this;
+}
+//___________________________________________________________________________
 void FluxContainer::ResetCopy() const
 {
   evtno = 0;
+  pdg   = 0;
 
   v4.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
   v4_user.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
@@ -39,6 +92,8 @@ void FluxContainer::ResetCopy() const
   p4_user.SetPxPyPzE( 0.0, 0.0, 0.0, 0.0 );
   
   wgt_xy = 0.0;
+  boost_factor = 0.0;
+  wgt_collimation = 0.0;
 }
 //___________________________________________________________________________
 void FluxContainer::Print(const Option_t* /* opt */ ) const
@@ -53,7 +108,8 @@ namespace llp  {
     ostream & stream, const FluxContainer & info)
     {
       stream << "Printing information on this ExoticLLP...";
-      stream << "\nevtno = " << info.evtno;
+      stream << "\nevtno = " << info.evtno
+	     << "\nParent PDG = " << info.pdg;
       stream << "\nProduction vertex [NEAR, m, ns] = " << utils::print::X4AsString( &(info.v4) )
 	     << "\nProduction vertex [USER, m, ns] = " << utils::print::X4AsString( &(info.v4_user) )
 	     << "\nLLP momentum    [NEAR, GeV] = " << utils::print::P4AsString( &(info.p4) )
@@ -64,7 +120,10 @@ namespace llp  {
 	     << "\nEntry point     [USER, m, ns]   = " << utils::print::X4AsString( &(info.entry_user) )
 	     << "\nExit point      [NEAR, m, ns]   = " << utils::print::X4AsString( &(info.exit) )
 	     << "\nExit point      [USER, m, ns]   = " << utils::print::X4AsString( &(info.exit_user) )
-	     << "\nwgt_xy = " << info.wgt_xy;
+	     << "\nwgt_xy          = " << info.wgt_xy
+	     << "\nboost_factor    = " << info.boost_factor
+	     << "\nwgt_collimation = " << info.wgt_collimation;
+      
       return stream;
     }
 }

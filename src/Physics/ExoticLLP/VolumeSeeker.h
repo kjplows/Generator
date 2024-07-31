@@ -41,6 +41,7 @@
 #include "Framework/Conventions/Constants.h"
 #include "Framework/Conventions/Units.h"
 #include "Framework/Messenger/Messenger.h"
+#include "Framework/Numerical/RandomGen.h"
 
 #include "Framework/Utils/UnitUtils.h"
 #include "Framework/Utils/PrintUtils.h"
@@ -73,6 +74,11 @@ namespace genie {
       //! Clear all the current members 
       void ClearEvent() const;
 
+      //! Get a random point in the top volume and pass its USER coordinates
+      TVector3 GetRandomPointInTopVol() const;
+      //! Get a random point in the top volume and pass its NEAR coordinates
+      TVector3 GetRandomPointInTopVolNEAR() const;
+
       //! Workhorse methods for NEAR <--> USER transformations
       TVector3 Translate( TVector3 input, bool direction ) const;
       TVector3 Rotate( TVector3 input, bool direction ) const;
@@ -95,7 +101,11 @@ namespace genie {
 
       //! A method that allows VolumeSeeker to read in configurable controls without needing to
       //  inherit from Algorithm. This means it can be an instanced class (which is good)
-      void AdoptControls( double ct, double cp, double ft, double fp, double gr ) const;
+      void AdoptControls( bool use_saa, bool use_cmv,
+			  double ct, double cp, double ft, double fp, double gr ) const;
+      //! And a method to allow VolumeSeeker to read the origin point from Algorithm
+      void SetOffset( double x, double y, double z ) const;
+      //! RETHERE also add rotation...
 
       //! Getter methods to interface with FluxContainer
       TVector3 GetEntryPoint( bool near = false ) const 
@@ -120,11 +130,19 @@ namespace genie {
       //bool RaytraceDetector() const;
 
       //! Some controls
+      mutable bool   m_use_saa = false; // small angle approximation?
+      mutable bool   m_use_cmv = false; // computer-vision algo? Overridden by m_use_saa
       mutable double m_coarse_theta_deflection = 2.0; // modifier
       mutable double m_fine_theta_deflection = 2.0; // modifier
       mutable double m_coarse_phi_deflection = 5.0; // modifier
       mutable double m_fine_phi_deflection = 5.0; // modifier
       mutable double m_grace_decrement = 0.5e-2; 
+
+      //! A calculation that is a lot lot simpler than Raytrace(), so much faster. Assumes phi-invariance
+      AngularRegion SmallAngleRegion() const;
+      //! A calculation based on Rezk Salama and Kolb, Proc Vision Modeling and Visualization 2005 115-122. 
+      //! Calculates the intersection of the plane normal to parent 4-momentum with the BBox
+      AngularRegion ComputerVision() const;
 
       //! And utility functions for calling Raytrace() a lot of times
       void Deflect( double & deflection, bool goUp ) const; // calls Raytrace() with set theta, phi
@@ -186,6 +204,7 @@ namespace genie {
       mutable double fOxROOT, fOyROOT, fOzROOT; //! Bounding box origin [cm]
 
       mutable TVector3 fTopVolumeOrigin;        //! Origin of top_volume in USER coords [m]
+      mutable TVector3 fTopVolumeOffset;        //! Position of USER (0, 0, 0) in NEAR coords [m]
       mutable TVector3 fTopVolumeOriginNEAR;    //! Origin of top_volume in NEAR coords [m]
 
       struct Cleaner {

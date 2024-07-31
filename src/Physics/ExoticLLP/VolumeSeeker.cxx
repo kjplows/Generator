@@ -57,8 +57,16 @@ VolumeSeeker * VolumeSeeker::Instance()
   return fInstance;
 }
 //____________________________________________________________________________
-void VolumeSeeker::AdoptControls( double ct, double cp, double ft, double fp, double gr ) const
+void VolumeSeeker::SetOffset( double x, double y, double z ) const
 {
+  fTopVolumeOffset.SetXYZ( x, y, z );
+}
+//____________________________________________________________________________
+void VolumeSeeker::AdoptControls( bool use_saa, bool use_cmv,
+				  double ct, double cp, double ft, double fp, double gr ) const
+{
+  m_use_saa = use_saa;
+  m_use_cmv = use_cmv;
   m_coarse_theta_deflection = ct;
   m_coarse_phi_deflection = cp;
   m_fine_theta_deflection = ft;
@@ -122,7 +130,7 @@ void VolumeSeeker::PrintConfig()
 TVector3 VolumeSeeker::Translate( TVector3 input, bool direction ) const
 {
   // true: NEAR --> USER | false : USER --> NEAR
-  TVector3 tr_vec = ( direction == true ) ? fUserOrigin : -fUserOrigin;
+  TVector3 tr_vec = ( direction == true ) ? fTopVolumeOffset : -fTopVolumeOffset;
   return input - tr_vec;
 }
 //____________________________________________________________________________
@@ -388,6 +396,52 @@ TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVol
   return final_mat;
 }
 //____________________________________________________________________________
+TVector3 VolumeSeeker::GetRandomPointInTopVol() const
+{
+  // This returns in USER coordinates.
+  TVector3 outVec(0.0, 0.0, 0.0);
+  std::string pathString = "";
+  
+  // Just in case... sometimes ROOT's IO is funky with this
+  std::cout.flush(); std::cerr.flush();
+  
+  // sample from the bounding box directly
+  int nTries = 0; int nMaxTries = 100;
+  while( true ) {
+    
+    RandomGen * rnd = RandomGen::Instance();
+    double vxROOT = rnd->RndGen().Uniform( -fLxROOT, fLxROOT );
+    double vyROOT = rnd->RndGen().Uniform( -fLyROOT, fLyROOT );
+    double vzROOT = rnd->RndGen().Uniform( -fLzROOT, fLzROOT );
+    
+    outVec.SetXYZ( vxROOT, vyROOT, vzROOT );
+    pathString = VolumeSeeker::CheckGeomPoint( outVec );
+
+    if( pathString.find( fTopVolume.c_str() ) != string::npos || nTries > nMaxTries )
+      break;
+  }
+  if( nTries > nMaxTries )
+    LOG( "ExoticLLP", pWARN ) << "Could not get a point inside the top volume after "
+			      << nMaxTries << " tries. Continuing with last point.";
+
+  outVec.SetXYZ( outVec.X() * fToLUnits + fTopVolumeOrigin.X(), 
+		 outVec.Y() * fToLUnits + fTopVolumeOrigin.Y(), 
+		 outVec.Z() * fToLUnits + fTopVolumeOrigin.Z() );
+
+  LOG( "ExoticLLP", pDEBUG ) << "Returning point in USER coordinates "
+			     << utils::print::Vec3AsString( &outVec );
+
+  return outVec;
+}
+//____________________________________________________________________________
+TVector3 VolumeSeeker::GetRandomPointInTopVolNEAR() const
+{
+  // This returns in NEAR coordinates
+  TVector3 outVec = VolumeSeeker::GetRandomPointInTopVol();
+  outVec += fTopVolumeOffset; // adds the position of USER origin in NEAR frame
+  return outVec;
+}
+//____________________________________________________________________________
 std::string VolumeSeeker::CheckGeomPoint( TVector3 chkpoint ) const
 {
   Double_t point[3] = { chkpoint.X(), chkpoint.Y(), chkpoint.Z() };
@@ -583,6 +637,10 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   // First, check if the point is inside the volume. If yes, every emission angle is good!
   std::string original_pathString = this->CheckGeomPoint( booked_origin_point_ROOT );
   LOG( "ExoticLLP", pDEBUG ) << "original_pathString = " << original_pathString;
+
+  if( original_pathString.find( fTopVolume.c_str() ) == string::npos )
+    LOG("ExoticLLP", pDEBUG) << "ARGH. NOT IN TOP VOLUME.";
+
   if( original_pathString.find( fTopVolume.c_str() ) != string::npos ) {
     const double halfpi = constants::kPi / 2.0;
     Point dl_point = std::pair< double, double >( -halfpi, 0.0 );
@@ -599,10 +657,12 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   // Get the separation between top volume origin and start point
   const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
 
+  LOG( "ExoticLLP", pDEBUG ) << "seed_vector = " << utils::print::Vec3AsString(&seed_vector);
+
   // We make a potentially strong assumption here, that the top_volume is simply connected.
   // The calculation will be garbage if not, and we'll crash out rather than give garbage.
   fMomentum = seed_vector.Unit();
-  assert( VolumeSeeker::RaytraceDetector() && "The origin point of the top_volume lies inside the top volume" );
+  //assert( VolumeSeeker::RaytraceDetector() && "The origin point of the top_volume lies inside the top volume" );
   fMomentum = booked_momentum;
 
   // Of course, the angles are defined with respect to the momentum axis...
@@ -639,22 +699,16 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
 
   TVector3 projection_theta = seed_vector - sep_from_theta * fPhiAxis;
   TVector3 projection_phi = seed_vector - sep_from_phi * fThetaAxis;
-  
-  // acos runs from [0, pi]
-  /*
-  double seed_theta = std::acos( fAxis.Dot( projection_theta ) /
-				 std::max( projection_theta.Mag(), 1.0e-10 ) );
-  double seed_phi = std::acos( fAxis.Dot( projection_phi ) / 
-			       std::max( projection_phi.Mag(), 1.0e-10 ) );
-  if( fAxis.Dot( projection_phi ) < 0.0 ) seed_phi *= -1.0;
 
-  if( transverse_seed.Mag() == 0.0 ) { seed_theta = 0.0; seed_phi = 0.0; } // no separation!
-  */
-  
-  // check that Rasterise() does what you want it to
-  // RETHERE first make the seed vector and define fThetaSeed, fPhiSeed
-  VolumeSeeker::Rasterise( alpha, true );
-  VolumeSeeker::Rasterise( alpha, false );
+  // If using the small angle approximation, go do a FAST calculation no raytracing.
+  // Assumes the detector is a square face of size ((the bbox transverse size)) at the baseline.
+  // This is an overestimation of the angular acceptance, and it's a configurable option.
+
+  if( m_use_saa ) alpha = VolumeSeeker::SmallAngleRegion();
+  else {
+    VolumeSeeker::Rasterise( alpha, true ); // once moving from centre to the right
+    VolumeSeeker::Rasterise( alpha, false ); // and once from centre to the left
+  }
 
   // sort the angular region in increasing phi
   std::sort( alpha.begin(), alpha.end(), 
@@ -666,16 +720,59 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
 
   LOG( "ExoticLLP", pDEBUG ) << "Angular region has " << alpha.size() << " rasters.";
 
-  // Now we'd like to construct the actual angles on the unit sphere these deflections
-  // correspond to. Let's do it!
-  //VolumeSeeker::ConvertToUserAngles( booked_momentum, alpha, beta );
-
   // just in case, restore the original member variables
   fOriginPoint = booked_origin_point;
   fOriginPointROOT = booked_origin_point_ROOT;
   fMomentum = booked_momentum;
   
   //return std::make_tuple( alpha, beta );
+  return alpha;
+}
+//____________________________________________________________________________
+AngularRegion VolumeSeeker::SmallAngleRegion() const
+{
+  // This AngularRegion will be a square of (-zeta, -zeta) --> (zeta, zeta)
+  // Zeta is the diagonal of the BBox over the baseline (or accurately half that: from centre to diag)
+
+  AngularRegion alpha;
+
+  //const double transverse_size = std::sqrt( fLx*fLx + fLy*fLy + fLz*fLz );
+  // This syntax is so stupid! I need to write a library that extends __comp to multiple args...
+  const double transverse_size = 
+    std::max( fLx * std::sqrt( 1.0 - fAxis.X() * fAxis.X() ), 
+	      std::max ( fLy * std::sqrt( 1.0 - fAxis.Y() * fAxis.Y() ), 
+			 fLz * std::sqrt( 1.0 - fAxis.Z() * fAxis.Z() ) ) );
+  TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+  // modify seed_vector by the projection of the BBox on the fAxis direction
+  seed_vector.SetXYZ( seed_vector.X() - fLx * fAxis.X(),
+		      seed_vector.Y() - fLy * fAxis.Y(),
+		      seed_vector.Z() - fLz * fAxis.Z() );
+  const double baseline = seed_vector.Mag();
+  const double zeta = std::atan( transverse_size / baseline );
+
+  LOG( "ExoticLLP", pDEBUG ) << "zeta = " << zeta;
+
+  Point pt_dl = std::pair<double, double>( 0.0, -zeta );
+  Point pt_ul = std::pair<double, double>(  zeta, -zeta );
+  Point pt_dr = std::pair<double, double>( 0.0,  zeta );
+  Point pt_ur = std::pair<double, double>(  zeta,  zeta );
+
+  PointRaster ras_left  = std::pair<Point, Point>( pt_dl, pt_ul );
+  PointRaster ras_right = std::pair<Point, Point>( pt_dr, pt_ur );
+  
+  alpha.emplace_back( ras_left ); alpha.emplace_back( ras_right );
+
+  return alpha;
+}
+//____________________________________________________________________________
+AngularRegion VolumeSeeker::ComputerVision() const
+{
+  // This is a more sophisticated algorithm to get an intersection of the bounding box with 
+  // the plane normal to fAxis. 
+  // This implements the vertex algorithm from Rezk Salama and Kolb, Proc Vision Modeling and Visualization 2005 115-122.
+
+  AngularRegion alpha;
+  
   return alpha;
 }
 //____________________________________________________________________________

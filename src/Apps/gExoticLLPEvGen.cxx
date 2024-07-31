@@ -47,8 +47,8 @@
 
 #include "Physics/ExoticLLP/ExoticLLP.h"
 #include "Physics/ExoticLLP/LLPConfigurator.h"
-//#include "Physics/ExoticLLP/LLPFluxGenerator.h"
 #include "Physics/ExoticLLP/LLPFluxContainer.h"
+#include "Physics/ExoticLLP/LLPFluxCreator.h"
 #include "Physics/ExoticLLP/LLPVertexGenerator.h"
 #include "Physics/ExoticLLP/VolumeSeeker.h"
 
@@ -80,13 +80,14 @@ void   PrintSyntax        (void);
 #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
 void     SetFluxBranchAddresses  (TTree * tree);
 void     CreateFluxBranches      (void);
+void     CopyFromPointerFlux     (void);
 #endif // #ifdef __GENIE_FLUX_DRIVERS_ENABLED__
 
 //TLorentzVector GeneratePosition( GHepRecord * event );
 #ifdef __CAN_USE_ROOT_GEOM__
 void  InitBoundingBox    (void);
-TLorentzVector CastX4ToUser( VolumeSeeker * sk, TLorentzVector vc );
-TLorentzVector CastP4ToUser( VolumeSeeker * sk, TLorentzVector vc );
+TLorentzVector * CastX4ToUser( VolumeSeeker * sk, TLorentzVector vc );
+TLorentzVector * CastP4ToUser( VolumeSeeker * sk, TLorentzVector vc );
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 
 //
@@ -116,6 +117,53 @@ map<string,string> gOptFluxShortNames;
 bool             gOptIsUsingTrees = false;               // using flat-tree flux files?
 int              gOptFirstEvent   = 0;                   // skip to this entry in flux tree
 FluxContainer    gOptFluxInfo;                           // custom LLP flux driver
+
+// a FluxContainer-like struct to hold addresses to pointers
+struct FluxPointerContainer {
+  int evtno;
+  int pdg;
+  TLorentzVector * v4;
+  TLorentzVector * v4_user;
+  TLorentzVector * p4_parent; 
+  TLorentzVector * p4_parent_user;
+  TLorentzVector * entry;
+  TLorentzVector * entry_user;
+  TLorentzVector * exit;
+  TLorentzVector * exit_user;
+  TLorentzVector * p4;
+  TLorentzVector * p4_user;
+  double wgt_xy;
+  double boost_factor;
+  double wgt_collimation;
+
+  FluxPointerContainer() {
+    evtno = 0;
+    pdg = 0;
+    v4 = new TLorentzVector(); v4_user = new TLorentzVector();
+    p4_parent = new TLorentzVector(); p4_parent_user = new TLorentzVector();
+    entry = new TLorentzVector(); entry_user = new TLorentzVector();
+    exit = new TLorentzVector(); exit_user = new TLorentzVector();
+    p4 = new TLorentzVector(); p4_user = new TLorentzVector();
+    wgt_xy = 0.0;
+    boost_factor = 0.0;
+    wgt_collimation = 0.0;
+  }
+
+  ~FluxPointerContainer() {
+    evtno = 0;
+    pdg = 0;
+    delete v4; delete v4_user;
+    delete p4_parent; delete p4_parent_user;
+    delete entry; delete entry_user;
+    delete exit; delete exit_user;
+    delete p4; delete p4_user;
+    wgt_xy = 0.0;
+    boost_factor = 0.0;
+    wgt_collimation = 0.0;
+  }
+};
+
+FluxPointerContainer gOptFluxPtInfo;
 
 bool             gOptWriteAngularAcceptance = false;     // write an angular acceptance branch to tree
 TFile *          gOutputFluxFile = 0;                    // output flux file (clone of input)
@@ -180,10 +228,10 @@ int main(int argc, char ** argv)
   // inspect the LLP
   LOG( "gevgen_exotic_llp", pFATAL ) << llp;
 
-  //const Algorithm * algFluxCreator = AlgFactory::Instance()->GetAlgorithm("genie::llp::FluxCreator", "Default");
+  const Algorithm * algFluxCreator = AlgFactory::Instance()->GetAlgorithm("genie::llp::FluxCreator", "Default");
   const Algorithm * algVtxGen = AlgFactory::Instance()->GetAlgorithm("genie::llp::VertexGenerator", "Default");
 
-  //const FluxCreator * fluxCreator = dynamic_cast< const FluxCreator * >( algFluxCreator );
+  const FluxCreator * fluxCreator = dynamic_cast< const FluxCreator * >( algFluxCreator );
   const VertexGenerator * vtxGen = dynamic_cast< const VertexGenerator * >( algVtxGen );
 
   // check the config is correct
@@ -208,11 +256,6 @@ int main(int argc, char ** argv)
     FluxContainer * ptGnmf = new FluxContainer();
     gOptFluxInfo = *ptGnmf;
     delete ptGnmf;
-    //FillFluxNonsense( gnmf );
-    //TBranch * flux = ntpw.EventTree()->Branch( "flux",
-    //					       "genie::hnl::FluxContainer",
-    //					       &gnmf, 32000, 1 );
-    //flux->SetAutoDelete(kFALSE);
   }
 
   // Create a MC job monitor for a periodically updated status file
@@ -235,35 +278,41 @@ int main(int argc, char ** argv)
   // Event loop
   int iflux = (gOptFirstEvent < 0) ? 0 : gOptFirstEvent; int ievent = iflux;
   int maxFluxEntries = -1;
-  //fluxCreator->SetInputFluxPath( gOptFluxFilePath );
-  //fluxCreator->SetGeomFile( gOptRootGeom, gOptTopVolName );
-  //fluxCreator->SetFirstFluxEntry( iflux );
   //vtxGen->SetGeomFile( gOptRootGeom, gOptTopVolName );
   vsek->SetGeomFile( gOptRootGeom, gOptTopVolName );
 
-
+  // An extremely, extremely weird bug. What.
+  std::cout.flush(); // why? ROOT? what do you do?
+  std::cerr.flush(); // why? ROOT? what do you do?
+  LOG("gevgen_exotic_llp", pDEBUG) << "FLUSHED COUT AND FLUSHING AGAIN.";
+  std::cerr << "FLUSHED COUT AND FLUSHING AGAIN." << std::endl;
+  std::cout.flush(); // why? ROOT? what do you do?
+  std::cerr.flush(); // why? ROOT? what do you do?
 
   TChain * flux_tree = 0; 
-  TLorentzVector * v4 = new TLorentzVector( 0.0, 0.0, 0.0, 0.0 );
-  TLorentzVector * p4_parent = new TLorentzVector( 0.0, 0.0, 0.0, 0.0 );
   if( ! gSystem->AccessPathName( gOptFluxFilePath.c_str() ) ) {
     flux_tree = new TChain("flux"); flux_tree->Add( gOptFluxFilePath.c_str() );
 
     if( gOptWriteAngularAcceptance ){
       gOutputFluxFile = TFile::Open( "./exotic_llp_output_flux.root", "RECREATE" );
-      gOutputFluxTree = dynamic_cast<TTree *>( flux_tree->CloneTree(0) );
+      //gOutputFluxTree = dynamic_cast<TTree *>( flux_tree->CloneTree(0) );
+      gOutputFluxTree = new TTree( flux_tree->GetName(), flux_tree->GetName() );
 
       CreateFluxBranches();
 
-      flux_tree->SetBranchAddress("v4", &v4);
-      flux_tree->SetBranchAddress("p4", &p4_parent);
+      // Also set a couple of addresses...
+      flux_tree->SetBranchAddress( "v4", &(gOptFluxPtInfo.v4) );
+      flux_tree->SetBranchAddress( "p4_parent", &(gOptFluxPtInfo.p4_parent) );
     } // if write angular acceptance
     
     else {
       SetFluxBranchAddresses( flux_tree );
     } // if use pre-calculated angular acceptance and flux
 
-  } // if input flux file
+  } else {
+    LOG( "gevgen_exotic_llp", pFATAL ) << "Could not find input flux file. Exiting.";
+    exit(1);
+  }
 
   bool tooManyEntries = false;
   if( gOptNev < 0 ) gOptNev = flux_tree->GetEntries();
@@ -275,7 +324,7 @@ int main(int argc, char ** argv)
 	  std::cerr << 0.1 * irat << " % " << " ( " << (iflux-gOptFirstEvent)
 		    << " seen ), ( " << (ievent-gOptFirstEvent) << " / " << gOptNev  << " processed ) \r" << std::flush;
 	}
-      } else if( gOptNev >= 100 ) {
+      } else if( gOptNev >= 10 ) {
 	if( (ievent-gOptFirstEvent) % (gOptNev / 10) == 0 ){
 	  int irat = (iflux-gOptFirstEvent) / ( gOptNev / 10 );
 	  std::cerr << 10.0 * irat << " % " << " ( " << (iflux-gOptFirstEvent)
@@ -289,7 +338,7 @@ int main(int argc, char ** argv)
 	  std::cerr << 0.1 * irat << " % " << " ( " << (iflux-gOptFirstEvent)
 		    << " seen ), ( " << (ievent-gOptFirstEvent) << " / " << gOptNev <<  " processed ) \r" << std::flush;
 	}
-      } else if( gOptNev >= 100 ) {
+      } else if( gOptNev >= 10 ) {
 	if( (ievent-gOptFirstEvent) % (gOptNev / 10) == 0 ){
 	  int irat = (ievent-gOptFirstEvent) / ( gOptNev / 10 );
 	  std::cerr << 10.0 * irat << " % " << " ( " << (iflux-gOptFirstEvent)
@@ -297,6 +346,10 @@ int main(int argc, char ** argv)
 	}
       }
     }
+
+    LOG( "gevgen_exotic_llp", pDEBUG ) << "ievent = " << ievent
+				       << ", gOptFirstEvent = " << gOptFirstEvent
+				       << ", gOptNev = " << gOptNev;
     
     if( tooManyEntries && ((iflux-gOptFirstEvent) == gOptNev) ) break;
     else if( (ievent-gOptFirstEvent) == gOptNev ) break;
@@ -305,59 +358,49 @@ int main(int argc, char ** argv)
     
     assert( ievent >= gOptFirstEvent && gOptFirstEvent >= 0 && "First event >= 0" );
 
+    //LOG("gevgen_exotic_llp", pNOTICE)
+    //  << " *** Getting entry for event............ " << (ievent-gOptFirstEvent);
+
     flux_tree->GetEntry(ievent);
+
+    //LOG("gevgen_exotic_llp", pNOTICE)
+    //  << " *** GOT ENTRY for event............ " << (ievent-gOptFirstEvent);
+
+    // If we want to calculate angular acceptance, don't actually process events but just populate branches.
 
     if( gOptWriteAngularAcceptance ){
       LOG("gevgen_exotic_llp", pNOTICE)
 	<< " *** Filling flux for event............ " << (ievent-gOptFirstEvent);
+      
+      TLorentzVector * v4 = gOptFluxPtInfo.v4;
+      TLorentzVector * p4_parent = gOptFluxPtInfo.p4_parent;
+
+      LOG("gevgen_exotic_llp", pNOTICE)
+	<< " *** Origin v4 (to populate event) is " << utils::print::X4AsString( v4 );
 
       TVector3 origin_point = v4->Vect();
       TVector3 momentum = p4_parent->Vect();
       vsek->PopulateEvent( origin_point, momentum );
       //[[maybe_unused]] bool result = vsek->RaytraceDetector();
-      LOG("gevgen_exotic_llp", pDEBUG) << "Calculating angular acceptance for event " << ievent
-				       << " at vz = " << v4->Z(); 
       gAngularRegion = vsek->AngularAcceptance();
       gAngularRegionSize = vsek->AngularSize( gAngularRegion );
 
-      gOptFluxInfo.ResetCopy();
+      LOG("gevgen_exotic_llp", pDEBUG) << "Calculating angular acceptance for event " << ievent
+				       << " at vz = " << v4->Z()
+				       << " as wgt_xy = " << gAngularRegionSize / (4.0 * constants::kPi); 
+
+      //gOptFluxPtInfo = *(new FluxPointerContainer()); NONONONO
 
       // Here we set all the branches' values. It is inelegant, but has to be done.
 
-      gOptFluxInfo.evtno = ievent;
+      gOptFluxPtInfo.evtno = ievent;
 
       //TLorentzVector v4( 0.0, -60.0, vz, 0.0 );
-      TLorentzVector v4_user = CastX4ToUser( vsek, *v4 );
-
-      gOptFluxInfo.v4 = *v4;
-      gOptFluxInfo.v4_user = v4_user;
-
-      //TLorentzVector p4_parent( 0.0, 0.0, 1.0, 1.0 );
-      TLorentzVector p4_parent_user = CastP4ToUser( vsek, *p4_parent );
+      gOptFluxPtInfo.v4_user = CastX4ToUser( vsek, *(gOptFluxPtInfo.v4) );
       
-      gOptFluxInfo.p4_parent = *p4_parent;
-      gOptFluxInfo.p4_parent_user = p4_parent_user;
+      gOptFluxPtInfo.p4_parent_user = CastP4ToUser( vsek, *p4_parent );
 
-      TVector3 v3_entry = vsek->GetEntryPoint(true);
-      TVector3 v3_exit  = vsek->GetExitPoint(true);
-
-      // RETHERE need to update delay when we've decided momentum of LLP...
-      
-      TLorentzVector v4_entry( v3_entry.X(), v3_entry.Y(), v3_entry.Z(), 0.0 );
-      TLorentzVector v4_entry_user = CastX4ToUser( vsek, v4_entry );
-      
-      TLorentzVector v4_exit( v3_exit.X(), v3_exit.Y(), v3_exit.Z(), 0.0 );
-      TLorentzVector v4_exit_user = CastX4ToUser( vsek, v4_exit );
-
-      gOptFluxInfo.entry = v4_entry;
-      gOptFluxInfo.entry_user = v4_entry_user;
-
-      gOptFluxInfo.exit = v4_exit;
-      gOptFluxInfo.exit_user = v4_exit_user;
-
-      gOptFluxInfo.wgt_xy = gAngularRegionSize / (4.0 * constants::kPi);
-
-      //gOptFluxInfo.Print("");
+      gOptFluxPtInfo.wgt_xy = gAngularRegionSize / (4.0 * constants::kPi);
 
       gOutputFluxTree->Fill();
 
@@ -367,19 +410,30 @@ int main(int argc, char ** argv)
 	<< " *** Generating event............ " << (ievent-gOptFirstEvent);
       
       EventRecord * event = new EventRecord;
-      //FluxContainer retGnmf;
+      FluxContainer retGnmf;
       event->SetWeight(1.0);
-      event->SetProbability( 1.0 ); // CoMLifetime
-      //event->SetXSec( iflux ); // will be overridden, use as handy object
+      event->SetProbability( 1.0 );
 
       // Assume that there is a flux and that it contains all the information. 
       // So read it from the input file.
 
-      
-      
+      CopyFromPointerFlux(); // because ROOT wants addresses to pointers, which is annoying...
+
+      LOG( "gevgen_exotic_llp", pDEBUG )
+	<< "\nTesting: read v4 " << utils::print::X4AsString( &gOptFluxInfo.v4 )
+	<< "\nAnd momentum = " << utils::print::P4AsString( &gOptFluxInfo.p4_parent )
+	<< "\nwith wgt_xy = " << gOptFluxInfo.wgt_xy
+	<< "\nPointers: read v4 " << utils::print::X4AsString( gOptFluxPtInfo.v4 )
+	<< "\nAnd momentum = " << utils::print::P4AsString( gOptFluxPtInfo.p4_parent )
+	<< "\nwith wgt_xy = " << gOptFluxPtInfo.wgt_xy;
+
+      // First, we need to construct the input LLP. Based on the parent kinematics
+      fluxCreator->ProcessEventRecord(event);
+
+      gOptEnergyLLP = (gOptFluxInfo.p4).E();
+
       int decay = 0;
-      gOptEnergyLLP = 1.0; // RETHERE remove, obviously
-      int typeMod = 1; // RETHERE restore to bar if so required
+      int typeMod = ( gOptFluxInfo.pdg >= 0 ) ? 1 : -1; 
       Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
       
       event->AttachSummary(interaction);
@@ -403,7 +457,7 @@ int main(int argc, char ** argv)
     gOutputFluxFile->Close(); 
   } else { ntpw.Save(); }
 
-  delete v4; delete p4_parent;
+  //delete v4; delete p4_parent;
 
   LOG( "gevgen_exotic_llp", pFATAL )
     << "This is a TEST. Goodbye world!";
@@ -682,49 +736,72 @@ void GetCommandLineArgs(int argc, char ** argv)
 //_________________________________________________________________________________________
 void SetFluxBranchAddresses( TTree * tree )
 {
-  tree->SetBranchAddress( "evtno",          &(gOptFluxInfo.evtno)          );
-  tree->SetBranchAddress( "v4",             &(gOptFluxInfo.v4)             );
-  tree->SetBranchAddress( "v4_user",        &(gOptFluxInfo.v4_user)        );
-  tree->SetBranchAddress( "p4_parent",      &(gOptFluxInfo.p4_parent)      );
-  tree->SetBranchAddress( "p4_parent_user", &(gOptFluxInfo.p4_parent_user) );
-  tree->SetBranchAddress( "entry",          &(gOptFluxInfo.entry)          );
-  tree->SetBranchAddress( "entry_user",     &(gOptFluxInfo.entry_user)     );
-  tree->SetBranchAddress( "exit",           &(gOptFluxInfo.exit)           );
-  tree->SetBranchAddress( "exit_user",      &(gOptFluxInfo.exit_user)      );
-  tree->SetBranchAddress( "p4",             &(gOptFluxInfo.p4)             );
-  tree->SetBranchAddress( "p4_user",        &(gOptFluxInfo.p4_user)        );
-  tree->SetBranchAddress( "wgt_xy",         &(gOptFluxInfo.wgt_xy)         );
+  tree->SetBranchAddress( "evtno",            &(gOptFluxPtInfo.evtno)            );
+  tree->SetBranchAddress( "parent_pdg",       &(gOptFluxPtInfo.pdg)              );
+  tree->SetBranchAddress( "v4",               &(gOptFluxPtInfo.v4)               );
+  tree->SetBranchAddress( "v4_user",          &(gOptFluxPtInfo.v4_user)          );
+  tree->SetBranchAddress( "p4_parent",        &(gOptFluxPtInfo.p4_parent)        );
+  tree->SetBranchAddress( "p4_parent_user",   &(gOptFluxPtInfo.p4_parent_user)   );
+  tree->SetBranchAddress( "entry",            &(gOptFluxPtInfo.entry)            );
+  tree->SetBranchAddress( "entry_user",       &(gOptFluxPtInfo.entry_user)       );
+  tree->SetBranchAddress( "exit",             &(gOptFluxPtInfo.exit)             );
+  tree->SetBranchAddress( "exit_user",        &(gOptFluxPtInfo.exit_user)        );
+  tree->SetBranchAddress( "p4",               &(gOptFluxPtInfo.p4)               );
+  tree->SetBranchAddress( "p4_user",          &(gOptFluxPtInfo.p4_user)          );
+  tree->SetBranchAddress( "wgt_xy",           &(gOptFluxPtInfo.wgt_xy)           );
+  tree->SetBranchAddress( "boost_factor",     &(gOptFluxPtInfo.boost_factor)     );
+  tree->SetBranchAddress( "wgt_collimaution", &(gOptFluxPtInfo.wgt_collimation)  );
 }
 //_________________________________________________________________________________________
 void CreateFluxBranches(void)
 {
-  gOutputFluxTree->Branch( "evtno",          &(gOptFluxInfo.evtno),         "evtno/I"  );
-  gOutputFluxTree->Branch( "v4",             &(gOptFluxInfo.v4)                        );
-  gOutputFluxTree->Branch( "v4_user",        &(gOptFluxInfo.v4_user)                   );
-  gOutputFluxTree->Branch( "p4_parent",      &(gOptFluxInfo.p4_parent)                 );
-  gOutputFluxTree->Branch( "p4_parent_user", &(gOptFluxInfo.p4_parent_user)            );
-  gOutputFluxTree->Branch( "entry",          &(gOptFluxInfo.entry)                     );
-  gOutputFluxTree->Branch( "entry_user",     &(gOptFluxInfo.entry_user)                );
-  gOutputFluxTree->Branch( "exit",           &(gOptFluxInfo.exit)                      );
-  gOutputFluxTree->Branch( "exit_user",      &(gOptFluxInfo.exit_user)                 );
-  gOutputFluxTree->Branch( "p4",             &(gOptFluxInfo.p4)                        );
-  gOutputFluxTree->Branch( "p4_user",        &(gOptFluxInfo.p4_user)                   );
-  gOutputFluxTree->Branch( "wgt_xy",         &(gOptFluxInfo.wgt_xy),        "wgt_xy/D" );
+  gOutputFluxTree->Branch( "evtno",          &(gOptFluxPtInfo.evtno),         "evtno/I"  );
+  gOutputFluxTree->Branch( "parent_pdg",     &(gOptFluxPtInfo.pdg),           "parent_pdg/I"  );
+  gOutputFluxTree->Branch( "v4",             &(gOptFluxPtInfo.v4)                        );
+  gOutputFluxTree->Branch( "v4_user",        &(gOptFluxPtInfo.v4_user)                   );
+  gOutputFluxTree->Branch( "p4_parent",      &(gOptFluxPtInfo.p4_parent)                 );
+  gOutputFluxTree->Branch( "p4_parent_user", &(gOptFluxPtInfo.p4_parent_user)            );
+  gOutputFluxTree->Branch( "entry",          &(gOptFluxPtInfo.entry)                     );
+  gOutputFluxTree->Branch( "entry_user",     &(gOptFluxPtInfo.entry_user)                );
+  gOutputFluxTree->Branch( "exit",           &(gOptFluxPtInfo.exit)                      );
+  gOutputFluxTree->Branch( "exit_user",      &(gOptFluxPtInfo.exit_user)                 );
+  gOutputFluxTree->Branch( "p4",             &(gOptFluxPtInfo.p4)                        );
+  gOutputFluxTree->Branch( "p4_user",        &(gOptFluxPtInfo.p4_user)                   );
+  gOutputFluxTree->Branch( "wgt_xy",         &(gOptFluxPtInfo.wgt_xy),        "wgt_xy/D" );
+  gOutputFluxTree->Branch( "boost_factor",   &(gOptFluxPtInfo.boost_factor),  "boost_factor/D" );
+  gOutputFluxTree->Branch( "wgt_collimation", &(gOptFluxPtInfo.wgt_collimation), "wgt_collimation/D" );
 }
 //_________________________________________________________________________________________
-TLorentzVector CastX4ToUser( VolumeSeeker * sk, TLorentzVector vc )
+void CopyFromPointerFlux(void)
+{
+  gOptFluxInfo.evtno            = gOptFluxPtInfo.evtno;
+  gOptFluxInfo.pdg              = gOptFluxPtInfo.pdg;
+  gOptFluxInfo.v4               = *(gOptFluxPtInfo.v4);
+  gOptFluxInfo.v4_user          = *(gOptFluxPtInfo.v4_user);
+  gOptFluxInfo.p4_parent        = *(gOptFluxPtInfo.p4_parent);
+  gOptFluxInfo.p4_parent_user   = *(gOptFluxPtInfo.p4_parent_user);
+  gOptFluxInfo.entry            = *(gOptFluxPtInfo.entry);
+  gOptFluxInfo.entry_user       = *(gOptFluxPtInfo.entry_user);
+  gOptFluxInfo.exit             = *(gOptFluxPtInfo.exit);
+  gOptFluxInfo.exit_user        = *(gOptFluxPtInfo.exit_user);
+  gOptFluxInfo.wgt_xy           = gOptFluxPtInfo.wgt_xy;
+  gOptFluxInfo.boost_factor     = gOptFluxPtInfo.boost_factor;
+  gOptFluxInfo.wgt_collimation  = gOptFluxPtInfo.wgt_collimation;
+}
+//_________________________________________________________________________________________
+TLorentzVector * CastX4ToUser( VolumeSeeker * sk, TLorentzVector vc )
 {
   TVector3 vc_space = vc.Vect();
   TVector3 vc_user_space = sk->TranslateToUser( vc_space );
   vc_user_space = sk->RotateToUser( vc_user_space );
-  return TLorentzVector( vc_user_space.X(), vc_user_space.Y(), vc_user_space.Z(), vc.T() );
+  return new TLorentzVector( vc_user_space.X(), vc_user_space.Y(), vc_user_space.Z(), vc.T() );
 }
 //_________________________________________________________________________________________
-TLorentzVector CastP4ToUser( VolumeSeeker * sk, TLorentzVector vc )
+TLorentzVector * CastP4ToUser( VolumeSeeker * sk, TLorentzVector vc )
 {
   TVector3 vc_space = vc.Vect();
   TVector3 vc_user_space = sk->RotateToUser( vc_space );
-  return TLorentzVector( vc_user_space.Px(), vc_user_space.Py(), vc_user_space.Pz(), vc.E() );
+  return new TLorentzVector( vc_user_space.Px(), vc_user_space.Py(), vc_user_space.Pz(), vc.E() );
 }
 //_________________________________________________________________________________________
 void PrintSyntax(void)

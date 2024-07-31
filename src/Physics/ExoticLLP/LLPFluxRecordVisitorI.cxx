@@ -18,19 +18,19 @@ using namespace genie::llp;
 
 //____________________________________________________________________________
 FluxRecordVisitorI::FluxRecordVisitorI() :
-  GeomRecordVisitorI()
+  EventRecordVisitorI()
 {
 
 }
 //____________________________________________________________________________
 FluxRecordVisitorI::FluxRecordVisitorI(string name) :
-  GeomRecordVisitorI(name)
+  EventRecordVisitorI(name)
 {
 
 }
 //____________________________________________________________________________
 FluxRecordVisitorI::FluxRecordVisitorI(string name, string config) :
-  GeomRecordVisitorI(name, config)
+  EventRecordVisitorI(name, config)
 {
 
 }

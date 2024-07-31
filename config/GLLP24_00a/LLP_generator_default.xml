@@ -55,6 +55,7 @@
 	</param>
       </modeObject>
 
+      <!-- RETHERE implement pi0 -> X + X + gamma (millicharged particle, see convo w/ Weijun T2K) -->
     </productionModes>
 
     <!-- Specify a vector of ModeObject data for decays  -->
