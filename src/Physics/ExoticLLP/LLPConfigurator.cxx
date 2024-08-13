@@ -272,7 +272,9 @@ ModeVector LLPConfigurator::ParseModes( xmlDocPtr & doc, xmlNodePtr node ) const
     std::vector< double > tmpScores = (*kmit).first;
 	
     int i1 = std::max( static_cast<int>( (kit-1) - knot_masses.begin() ), 0 );
-    int i2 = std::min( 1, static_cast<int>( kit - knot_masses.begin() ) );
+    //int i2 = std::min( 1, static_cast<int>( kit - knot_masses.begin() ) );
+    int i2 = i1+1;
+    if( i2 >= knot_modes.size() ){ i1--; i2--; }
     double s1 = tmpScores.at(i1), s2 = tmpScores.at(i2);
 
     double win_score = s1 + ( s2 - s1 ) * interp;
