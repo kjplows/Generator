@@ -9,6 +9,7 @@
 
 #pragma link C++ class genie::llp::LLPConfigurator;
 #pragma link C++ class genie::llp::VolumeSeeker;
+#pragma link C++ class genie::llp::Decayer;
 
 #pragma link C++ class genie::llp::ChannelCalculatorI;
 #pragma link C++ class genie::llp::FluxRecordVisitorI;

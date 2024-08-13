@@ -46,6 +46,7 @@
 #include "Framework/Utils/CmdLnArgParser.h"
 
 #include "Physics/ExoticLLP/ExoticLLP.h"
+#include "Physics/ExoticLLP/Decayer.h"
 #include "Physics/ExoticLLP/LLPConfigurator.h"
 #include "Physics/ExoticLLP/LLPFluxContainer.h"
 #include "Physics/ExoticLLP/LLPFluxCreator.h"
@@ -410,7 +411,6 @@ int main(int argc, char ** argv)
 	<< " *** Generating event............ " << (ievent-gOptFirstEvent);
       
       EventRecord * event = new EventRecord;
-      FluxContainer retGnmf;
       event->SetWeight(1.0);
       event->SetProbability( 1.0 );
 
@@ -428,6 +428,9 @@ int main(int argc, char ** argv)
 	<< "\nwith wgt_xy = " << gOptFluxPtInfo.wgt_xy;
 
       // First, we need to construct the input LLP. Based on the parent kinematics
+      Decayer * decayer = Decayer::Instance();
+      decayer->ClearEvent();
+      fluxCreator->UpdateFluxInfo( gOptFluxInfo );
       fluxCreator->ProcessEventRecord(event);
 
       gOptEnergyLLP = (gOptFluxInfo.p4).E();
