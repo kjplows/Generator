@@ -434,20 +434,30 @@ int main(int argc, char ** argv)
       fluxCreator->UpdateFluxInfo( gOptFluxInfo );
       fluxCreator->ProcessEventRecord(event);
 
-      gOptEnergyLLP = (gOptFluxInfo.p4).E();
+      // check if we should move on -- might be the flux was unable to produce an entry.
+      if( event->Probability() < 0 ){
 
-      int decay = 0;
-      int typeMod = ( gOptFluxInfo.pdg >= 0 ) ? 1 : -1; 
-      Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
-      
-      event->AttachSummary(interaction);
-      
-      LOG("gevgen_exotic_llp", pINFO)
-	<< "Generated event: " << *event;
-      
-      // Add event at the output ntuple, refresh the mc job monitor & clean-up
-      ntpw.AddEventRecord(ievent, event);
-      mcjmonitor.Update(ievent,event);
+	LOG( "gevgen_exotic_llp", pWARN )
+	  << "Unable to produce event " << (ievent-gOptFirstEvent);
+
+      } else { // Could produce event from flux, continue on
+
+	gOptEnergyLLP = (gOptFluxInfo.p4).E();
+
+	int decay = 0;
+	int typeMod = ( gOptFluxInfo.pdg >= 0 ) ? 1 : -1; 
+	Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
+	
+	event->AttachSummary(interaction);
+	
+	LOG("gevgen_exotic_llp", pINFO)
+	  << "Generated event: " << *event;
+	
+	// Add event at the output ntuple, refresh the mc job monitor & clean-up
+	ntpw.AddEventRecord(ievent, event);
+	mcjmonitor.Update(ievent,event);
+
+      }
       
       delete event;
     } // main event generation

@@ -79,6 +79,9 @@ namespace genie {
       //! Get a random point in the top volume and pass its NEAR coordinates [m]
       TVector3 GetRandomPointInTopVolNEAR() const;
 
+      //! Ask if a point is in the top volume
+      bool IsInTop( TVector3 point, bool near = true ) const;
+
       //! Workhorse methods for NEAR <--> USER transformations
       TVector3 Translate( TVector3 input, bool direction ) const;
       TVector3 Rotate( TVector3 input, bool direction ) const;

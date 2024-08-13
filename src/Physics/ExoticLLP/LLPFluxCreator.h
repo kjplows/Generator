@@ -162,11 +162,14 @@ namespace genie{
 			       bool isPos ) const;
       double AccCorr_Solution( double thetalab, double mass, double EPar, double MPar, double ENu,
 			       bool isPos ) const;
-      double Forwards_Fcn( double Theta, TLorentzVector p4par, TLorentzVector p4LLP ) const;
-      double Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVector p4LLP, bool backwards ) const;
+      double Forwards_Fcn( double Theta, TLorentzVector p4par, TLorentzVector p4LLP ) const; // deg, deg
+      double Inverted_Fcn( double theta, TLorentzVector p4par, TLorentzVector p4LLP, bool backwards ) const; // deg, deg
       double Derivative( double theta, TLorentzVector p4par, TLorentzVector p4LLP ) const;
       // helper method
-      static double labangle( double * x, double * par ); // function formula for correction. x is IN DEGREES
+      static double labangle( double * x, double * par ); // function formula for correction. x is IN DEGREES. par is [E_parent, p(x,y,z)_parent, p_llp_rest, E_llp_rest (GeV)]
+      
+      // And a function that just returns the energy in lab frame from rest frame emission angle
+      double CalculateLabFrameEnergy( double Theta, TLorentzVector p4par, TLorentzVector p4LLP ) const;
 
       // some utilities for C++ strings, grabbed from https://www.stackoverflow.com/questions/874134/
       bool ends_with(const std::string & str, const std::string & suffix) const {

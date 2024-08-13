@@ -58,21 +58,6 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 
   int parent_pdg = fFluxInfo.pdg;
 
-  // The information that goes into the EventRecord will always be in USER coordinates 
-
-  // Get a random point in the top volume to evaluate the flux at
-  VolumeSeeker * vsek = VolumeSeeker::Instance();
-  TVector3 rand_point = vsek->GetRandomPointInTopVolNEAR();
-  LOG( "ExoticLLP", pWARN ) << "Evaluating flux at NEAR point " 
-			    << utils::print::Vec3AsString( &rand_point );
-
-  // First, apply the constraint of kinematics.
-  TVector3 separation = rand_point - parent_v4.Vect(); // m
-  
-  // Calculate the opening angle between this ray and the parent momentum
-  double cos_zeta = separation.Dot( rand_point ) / ( separation.Mag() * rand_point.Mag() );
-  double zeta = std::acos( cos_zeta ) * 180.0 / constants::kPi;
-
   // Find a decay channel for the LLP.
 
   // First, make a decay mode. Read in the scores from each decay mode, and get the winning decay mode
@@ -144,13 +129,156 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   
   // Read in the results, these will be REST FRAME
   std::vector< GHepParticle > decayed_results = decayer->GetRestFrameResults();
-  GHepParticle parent_particle = *(decayed_results.begin());
-  TLorentzVector parent_p4_rest = *(parent_particle.GetP4());
-  LOG( "ExoticLLP", pDEBUG ) << "The 4-momentum of the 0th entry is "
-			     << utils::print::P4AsString( &parent_p4_rest );
+  GHepParticle probe_particle = *(decayed_results.begin());
+  TLorentzVector probe_p4_rest = *(probe_particle.GetP4());
+  LOG( "ExoticLLP", pDEBUG ) << "The 4-momentum of the probe in the rest frame is "
+			     << utils::print::P4AsString( &probe_p4_rest );
 
+  /* 
+   * Now we need the acceptance calculations. 
+   * First, choose a point inside the top volume
+   * Then compare the requested deviation angle with the max deviation
+   * If not, reroll the decay and a point and try again
+   * If good, get the boost factor and acceptance correction and write it out
+   */
+
+  // The information that goes into the EventRecord will always be in USER coordinates 
+
+  // Get a random point in the top volume to evaluate the flux at
+  VolumeSeeker * vsek = VolumeSeeker::Instance();
+  TVector3 rand_point = vsek->GetRandomPointInTopVolNEAR();
+  TVector3 origin     = parent_v4.Vect();
+  LOG( "ExoticLLP", pWARN ) << "Evaluating flux at NEAR point " 
+			    << utils::print::Vec3AsString( &rand_point );
+
+  // First, apply the constraint of kinematics.
+  TVector3 separation = rand_point - origin; // m
+
+  TVector3 parent_p3 = parent_p4.Vect();
+  TVector3 parent_p3_unit = parent_p3.Unit();
+  
+  // Calculate the opening angle between this ray and the parent momentum
+  double cos_zeta = separation.Dot( parent_p3_unit ) / ( separation.Mag() * parent_p3_unit.Mag() );
+  double zeta = std::acos( cos_zeta ) * 180.0 / constants::kPi; // std::acos has support on [0, \pi]
+
+  LOG( "ExoticLLP", pDEBUG ) << "\nSeparation between:\n"
+			     << utils::print::Vec3AsString( &rand_point )
+			     << " and\n"
+			     << utils::print::Vec3AsString( &origin )
+			     << " is:\n"
+			     << utils::print::Vec3AsString( &separation );
+  LOG( "ExoticLLP", pDEBUG ) << "\nThe opening angle between that separation and the unit vector,\n"
+			     << utils::print::Vec3AsString( &parent_p3_unit )
+			     << " is zeta = " << zeta << " [deg]";
+  LOG( "ExoticLLP", pDEBUG ) << "\nThe parent 4-momentum is " 
+			     << utils::print::P4AsString( &parent_p4 );
+
+  // Just note that if we've started in the decay volume, there is no correction from collimation.
+  double boost_factor = 1.0; double acc_corr = 1.0;
   TLorentzVector probe_p4(0.0, 0.0, 1.0, 1.0);
-  TLorentzVector probe_v4(0.0, 0.0, 0.0, 0.0);
+  if( vsek->IsInTop( origin ) ) {
+    LOG( "ExoticLLP", pWARN ) << "Decay of parent particle in the top volume!";
+    // Just boost probe_p4_rest to the lab frame
+    probe_p4 = probe_p4_rest;
+    probe_p4.Boost( parent_p4.BoostVector() );
+  } else {
+    // First, condition for monotonicity loss
+    double beta_LLP_rest   = probe_p4_rest.Beta();
+    double beta_parent_lab = parent_p4.Beta();
+    bool monotonicity_lost = ( beta_LLP_rest < beta_parent_lab );
+    double gamma_parent_lab = parent_p4.Gamma();
+
+    [[maybe_unused]] bool is_ok = true;
+    if( ! monotonicity_lost ) { // this can always be accepted
+      is_ok = true;
+    } else { // we must compare to the maximum achievable angle
+      
+      double velocity_ratio = beta_LLP_rest / beta_parent_lab; // also the cos of the rest-frame emission polar angle at which the maximum deviation from the parent in the lab frame occurs
+      double max_tangent = velocity_ratio / ( gamma_parent_lab * std::sqrt( 1.0 - velocity_ratio ) );
+      double max_angle = std::atan( max_tangent ) * 180.0 / constants::kPi; // std::atan has support on [-pi/2, pi/2]
+      if( max_angle < 0.0 ) max_angle += 180.0;
+
+      is_ok = ( max_angle >= zeta );
+      if( is_ok )
+	LOG( "ExoticLLP", pDEBUG ) << "This event, at max angle = " << max_angle << " and zeta = " << zeta << ", will be accepted. Moving on.";
+      else
+	LOG( "ExoticLLP", pDEBUG ) << "This event, at max angle = " << max_angle << " and zeta = " << zeta << ", will NOT be accepted. Rerolling.";
+
+      // RETHERE reroll a few times until we move on...
+
+      int itry = 0;
+      while( ! is_ok && itry < 10 ) {
+	itry++;
+
+	rand_point = vsek->GetRandomPointInTopVolNEAR();
+	LOG( "ExoticLLP", pWARN ) << "Evaluating flux at NEAR point " 
+				  << utils::print::Vec3AsString( &rand_point );
+	separation = rand_point - origin; // m
+	cos_zeta = separation.Dot( parent_p3_unit ) / ( separation.Mag() * parent_p3_unit.Mag() );
+	zeta = std::acos( cos_zeta ) * 180.0 / constants::kPi; // std::acos has support on [0, \pi]
+
+	is_ok = ( max_angle >= zeta );
+      }
+
+      if( !is_ok ) { // bail and continue
+	evrec->SetProbability(0);
+	return;
+      }
+      
+    }
+    // RETHERE if ! is_ok bail
+
+    // Since we are accepted, the LLP will always have a region of forwards emission where it will be accepted, and potentially a backwards region too.
+    // So calculate these, and if monotonicity was lost, do a throw to decide which region it was
+
+    double pos_soln = this->AccCorr_Solution( zeta, fMass,
+					      parent_p4.E(), parent_p4.M(), 
+					      probe_p4_rest.E(), true );
+    double neg_soln = this->AccCorr_Solution( zeta, fMass,
+					      parent_p4.E(), parent_p4.M(), 
+					      probe_p4_rest.E(), false );
+    
+    double image_score = rnd->RndGen().Rndm();
+    bool forwards = true;
+    // RETHERE need to calculate the inverse derivatives...
+    //if( image_score > pos_soln / ( pos_soln + neg_soln ) ) forwards = false;
+
+    double rest_frame_angle = this->Inverted_Fcn( zeta, parent_p4, probe_p4_rest, !forwards );
+
+    // Fantastic. From the rest-frame emission angle, one can calculate the energy.
+    double lab_frame_energy = this->CalculateLabFrameEnergy( rest_frame_angle, parent_p4, probe_p4_rest );
+    double lab_frame_momentum = std::sqrt( lab_frame_energy * lab_frame_energy - fMass * fMass );
+
+    LOG( "ExoticLLP", pDEBUG ) << "Dumping stats:"
+			       << "\nzeta = " << zeta
+			       << "\nfMass = " << fMass
+			       << "\nparent_p4 = " << utils::print::P4AsString( &parent_p4 )
+			       << "\nprobe_p4_rest = " << utils::print::P4AsString( &probe_p4_rest )
+			       << "\nimage_score = " << image_score
+			       << "\npos_soln = " << pos_soln
+			       << "\nneg_soln = " << neg_soln
+			       << "\nrest_frame_angle = " << rest_frame_angle
+			       << "\nlab_frame_energy = " << lab_frame_energy
+			       << "\nlab_frame_momentum = " << lab_frame_momentum;
+
+    // and force the momentum to point along the separation unit vector
+    TVector3 sep_unit = separation.Unit();
+    probe_p4.SetPxPyPzE( lab_frame_momentum * sep_unit.X(),
+			 lab_frame_momentum * sep_unit.Y(),
+			 lab_frame_momentum * sep_unit.Z(),
+			 lab_frame_energy );
+    
+  } // LLP not produced in top volume
+
+  // Update the boost factor and collimation weights in the FluxContainer
+  boost_factor = probe_p4.E() / probe_p4_rest.E();
+  fFluxInfo.boost_factor = boost_factor;
+  fFluxInfo.wgt_collimation = acc_corr;
+
+  LOG( "ExoticLLP", pDEBUG ) << "\nBoost factor = " << fFluxInfo.boost_factor
+			     << "\nWgt_collimation = " << fFluxInfo.wgt_collimation;
+
+  TLorentzVector probe_v4(0.0, 0.0, 0.0, 0.0); // probe v4 will be updated to event vertex
 
   GHepParticle ptLLP( llp_pdg, kIStInitialState, -1, -1, -1, -1, probe_p4, probe_v4 );
   evrec->AddParticle( ptLLP );
@@ -275,6 +403,7 @@ void FluxCreator::LoadConfig(void)
   const LLPConfigurator * LLP_configurator = dynamic_cast< const LLPConfigurator * >( algLLPConfigurator );
 
   fExoticLLP = LLP_configurator->RetrieveLLP();
+  fMass = fExoticLLP.GetMass();
 
   // Now get the production modes from the LLP, and group them by parent
   std::vector< ModeObject > llp_production_modes = fExoticLLP.GetProductionModes();
@@ -546,6 +675,25 @@ double FluxCreator::AccCorr_Solution( double thetalab, double mass,
   }
 
   return -1.0; // you should never see this.
+}
+//----------------------------------------------------------------------------
+double FluxCreator::CalculateLabFrameEnergy( double Theta, 
+					     TLorentzVector p4par, TLorentzVector p4LLP ) const
+{
+  /*
+   * Given a rest-frame emission angle, the rest-frame 4-momentum of the LLP, and the lab-frame 
+   * 4-momentum of the parent, one can calculate the lab-frame energy of the LLP.
+   */
+
+  double beta  = p4par.Beta();
+  double gamma = p4par.Gamma();
+  
+  double E = p4LLP.E();
+  double p = p4LLP.P();
+
+  double ctheta = std::cos( Theta * TMath::DegToRad() );
+  
+  return gamma * ( E + beta * p * ctheta );
 }
 //----------------------------------------------------------------------------
 double FluxCreator::Forwards_Fcn( double Theta, TLorentzVector p4par, TLorentzVector p4LLP ) const

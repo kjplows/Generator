@@ -439,6 +439,22 @@ TVector3 VolumeSeeker::GetRandomPointInTopVolNEAR() const
   return outVec;
 }
 //____________________________________________________________________________
+bool VolumeSeeker::IsInTop( TVector3 point, bool near ) const
+{
+  TVector3 chkpoint = point;
+  if( near ) { // translate it to USER first
+    chkpoint = VolumeSeeker::TranslateToUser( chkpoint );
+    chkpoint = VolumeSeeker::RotateToUser( chkpoint );
+  }
+
+  // and make into ROOT units...
+  chkpoint.SetXYZ( chkpoint.X() * fToROOTUnits, 
+		   chkpoint.Y() * fToROOTUnits,
+		   chkpoint.Z() * fToROOTUnits );
+
+  return ( VolumeSeeker::CheckGeomPoint(chkpoint) ).find( fTopVolume.c_str() ) != string::npos;
+}
+//____________________________________________________________________________
 std::string VolumeSeeker::CheckGeomPoint( TVector3 chkpoint ) const
 {
   Double_t point[3] = { chkpoint.X(), chkpoint.Y(), chkpoint.Z() };
