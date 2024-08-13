@@ -433,7 +433,6 @@ int main(int argc, char ** argv)
       decayer->ClearEvent();
       fluxCreator->UpdateFluxInfo( gOptFluxInfo );
       fluxCreator->ProcessEventRecord(event);
-
       // check if we should move on -- might be the flux was unable to produce an entry.
       if( event->Probability() < 0 ){
 
@@ -442,7 +441,10 @@ int main(int argc, char ** argv)
 
       } else { // Could produce event from flux, continue on
 
+	gOptFluxInfo  = fluxCreator->RetrieveFluxInfo();
 	gOptEnergyLLP = (gOptFluxInfo.p4).E();
+
+	LOG( "gevgen_exotic_llp", pDEBUG ) << "Sanity: boost factor is " << gOptFluxInfo.boost_factor;
 
 	int decay = 0;
 	int typeMod = ( gOptFluxInfo.pdg >= 0 ) ? 1 : -1; 

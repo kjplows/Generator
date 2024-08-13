@@ -17,6 +17,7 @@ using namespace genie::llp;
 //____________________________________________________________________________
 Decayer * Decayer::fInstance = 0;
 double fLLPMass = 0;
+double fMasslessEnergy = 0;
 PDGCodeList fPDGCodeList;
 LorentzMap fParticles;
 LorentzMap fParticles_rest;
@@ -28,6 +29,7 @@ Decayer::Decayer()
   fInitialized = false;
   fInstance = 0;
   fLLPMass = 0.0;
+  fMasslessEnergy = 0.0;
 
   if(fParticles.size() > 0) fParticles.clear(); 
   if(fParticles_rest.size() > 0) fParticles_rest.clear();
@@ -39,6 +41,7 @@ Decayer::~Decayer()
   fInstance = 0;
   fInitialized = false;
   fLLPMass = 0.0;
+  fMasslessEnergy = 0.0;
 
   if(fParticles.size() > 0) fParticles.clear(); 
   if(fParticles_rest.size() > 0) fParticles_rest.clear();
@@ -63,7 +66,7 @@ Decayer * Decayer::Instance()
   return fInstance;
 }
 //____________________________________________________________________________
-bool Decayer::UnpolarisedDecay() const
+bool Decayer::UnpolarisedDecay( bool fudge ) const
 {
   // first, get the decay product masses
   std::vector<int>::const_iterator pdg_iter;
@@ -74,6 +77,8 @@ bool Decayer::UnpolarisedDecay() const
   
   for( pdg_iter = fPDGCodeList.begin()+1; pdg_iter != fPDGCodeList.end(); ++pdg_iter ) {
     double m = PDGLibrary::Instance()->Find( *(pdg_iter) )->Mass();
+    if( fudge && 
+	std::abs(PDGLibrary::Instance()->Find( *(pdg_iter) )->PdgCode()) == kPdgLLP ) m = 0.0;
     mass[idec++] = m;
     sum += m;
   }
@@ -144,7 +149,12 @@ bool Decayer::UnpolarisedDecay() const
     TLorentzVector v4(0.0, 0.0, 0.0, 0.0); // we don't really care about the v4 info at this stage
     GHepStatus_t ist = kIStStableFinalState;
     GHepParticle particle_in_stack( fPDGCodeList.at(idp+1), ist, 0, -1, -1, -1, p4, v4 );
-    fParticles_rest.emplace_back( particle_in_stack );
+    if( fudge && std::abs(particle_in_stack.Pdg() == kPdgLLP) ) {
+      particle_in_stack.SetPdgCode( 0 ); // this is a special particle only meant for acceptance calcs
+      fMasslessEnergy = particle_in_stack.E();
+    }
+    if( ! fudge )
+      fParticles_rest.emplace_back( particle_in_stack );
   }
 
   LOG( "ExoticLLP", pDEBUG ) << "After a successful decay there are " << fParticles_rest.size()
@@ -162,6 +172,11 @@ LorentzMap Decayer::GetResults() const
 LorentzMap Decayer::GetRestFrameResults() const
 {
   return fParticles_rest;
+}
+//____________________________________________________________________________
+double Decayer::GetMasslessEnergy() const
+{
+  return fMasslessEnergy;
 }
 //____________________________________________________________________________
 bool Decayer::PrepareDecay() const

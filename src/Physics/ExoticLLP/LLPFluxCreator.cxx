@@ -238,10 +238,42 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 					      parent_p4.E(), parent_p4.M(), 
 					      probe_p4_rest.E(), false );
     
-    double image_score = rnd->RndGen().Rndm();
     bool forwards = true;
-    // RETHERE need to calculate the inverse derivatives...
-    //if( image_score > pos_soln / ( pos_soln + neg_soln ) ) forwards = false;
+
+    double image_score = rnd->RndGen().Rndm();    
+    if( neg_soln > 0.0 ) {
+      double inv_der_pos = std::abs( 1.0 / this->Derivative( pos_soln, parent_p4, probe_p4_rest ) );
+      double inv_der_neg = std::abs( 1.0 / this->Derivative( neg_soln, parent_p4, probe_p4_rest ) );
+
+      if( image_score > inv_der_pos / ( inv_der_pos + inv_der_neg ) ) forwards = false;
+
+      /*
+       * We need to compare to the acceptance of a massless LLP.
+       * If the production mode is 2-body this can be done immediately analytically.
+       * If not, then we have to perform a phase-space decay (again RETHERE: including angular correlations?)
+       * such that we get a proxy for the rest-frame energy of the massless LLP.
+       */
+
+      double energy_massless = 0.0;
+      double m_parent = parent_p4.M();
+      if( decayed_results.size() == 2 )
+	energy_massless = probe_p4_rest.E() - fMass * fMass / (2.0 * m_parent);
+      else {
+	decay_ok = decayer->UnpolarisedDecay(true); // fudge a decay with massless LLP and same other products
+	energy_massless = decayer->GetMasslessEnergy();
+      }
+      LOG( "ExoticLLP", pDEBUG ) << "A massless LLP would have energy " << energy_massless << " GeV";
+
+      double massless_soln = this->AccCorr_Solution( zeta, 0.0,
+						     parent_p4.E(), parent_p4.M(),
+						     energy_massless, true ); // always forward emitted
+      TLorentzVector massless_p4( energy_massless * probe_p4_rest.Px() / probe_p4_rest.P(),
+				  energy_massless * probe_p4_rest.Py() / probe_p4_rest.P(),
+				  energy_massless * probe_p4_rest.Pz() / probe_p4_rest.P(),
+				  energy_massless );
+      double inv_der_massless = std::abs( 1.0 / this->Derivative( massless_soln, parent_p4, massless_p4 ) );
+      acc_corr = ( forwards ) ? inv_der_pos / inv_der_massless : inv_der_neg / inv_der_massless;
+    }
 
     double rest_frame_angle = this->Inverted_Fcn( zeta, parent_p4, probe_p4_rest, !forwards );
 
@@ -254,9 +286,11 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 			       << "\nfMass = " << fMass
 			       << "\nparent_p4 = " << utils::print::P4AsString( &parent_p4 )
 			       << "\nprobe_p4_rest = " << utils::print::P4AsString( &probe_p4_rest )
-			       << "\nimage_score = " << image_score
 			       << "\npos_soln = " << pos_soln
 			       << "\nneg_soln = " << neg_soln
+			       << "\nder_pos = " << this->Derivative( pos_soln, parent_p4, probe_p4_rest )
+			       << "\nder_neg = " << -1.0 * this->Derivative( neg_soln, parent_p4, probe_p4_rest )
+      			       << "\nimage_score = " << image_score
 			       << "\nrest_frame_angle = " << rest_frame_angle
 			       << "\nlab_frame_energy = " << lab_frame_energy
 			       << "\nlab_frame_momentum = " << lab_frame_momentum;

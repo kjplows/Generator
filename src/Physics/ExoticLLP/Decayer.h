@@ -63,11 +63,13 @@ namespace genie {
       void SetProducts( genie::PDGCodeList pdgv ) const;
 
       //! Perform an unpolarised decay
-      bool UnpolarisedDecay() const;
+      bool UnpolarisedDecay( bool fudge = false ) const;
 
       //! Get the results back
       LorentzMap GetResults() const;
       LorentzMap GetRestFrameResults() const;
+
+      double GetMasslessEnergy() const;
 
       void ClearEvent() const;
 
@@ -82,8 +84,10 @@ namespace genie {
 
       mutable double fLLPMass; //! This is very important so we will keep it.
       mutable genie::PDGCodeList fPDGCodeList;
-      mutable LorentzMap fParticles; //! 0-entry is the parent, and the daughters are later. Lab frame
+      mutable LorentzMap fParticles; //! Lab frame
       mutable LorentzMap fParticles_rest;
+
+      mutable double fMasslessEnergy; //! needed for acceptance calculations. See LLPFluxCreator
 
       static Decayer * fInstance;
       bool fInitialized; //! Done initialising singleton?
