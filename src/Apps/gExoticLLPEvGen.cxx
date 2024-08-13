@@ -304,6 +304,7 @@ int main(int argc, char ** argv)
       // Also set a couple of addresses...
       flux_tree->SetBranchAddress( "v4", &(gOptFluxPtInfo.v4) );
       flux_tree->SetBranchAddress( "p4_parent", &(gOptFluxPtInfo.p4_parent) );
+      flux_tree->SetBranchAddress( "parent_pdg", &gOptFluxPtInfo.pdg );
     } // if write angular acceptance
     
     else {

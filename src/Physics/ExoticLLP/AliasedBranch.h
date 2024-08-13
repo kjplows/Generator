@@ -31,10 +31,11 @@ namespace genie {
     public:
       AliasedBranch( T vl = T(), std::string al = "" );
 
+      T Value; // Probably ok to expose this...
+      std::string Alias;
+
     private:
       
-      T Value;
-      std::string Alias;
     }; // class AliasedBranch
   } // namespace llp
 } // namespace genie

@@ -53,6 +53,8 @@ namespace genie {
 
       std::string GetName() { return fName; }
       double GetScore() { return fScore; }
+      
+      std::vector<int> GetPDGList() { return fPDGList; }
 
     }; // struct ModeObject
 

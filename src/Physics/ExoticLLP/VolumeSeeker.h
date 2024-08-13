@@ -74,9 +74,9 @@ namespace genie {
       //! Clear all the current members 
       void ClearEvent() const;
 
-      //! Get a random point in the top volume and pass its USER coordinates
+      //! Get a random point in the top volume and pass its USER coordinates [m]
       TVector3 GetRandomPointInTopVol() const;
-      //! Get a random point in the top volume and pass its NEAR coordinates
+      //! Get a random point in the top volume and pass its NEAR coordinates [m]
       TVector3 GetRandomPointInTopVolNEAR() const;
 
       //! Workhorse methods for NEAR <--> USER transformations

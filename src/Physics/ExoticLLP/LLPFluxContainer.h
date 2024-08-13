@@ -90,7 +90,7 @@ namespace genie{
       // members
 
       mutable int evtno; ///< Index corresponding to flux ntuple entry
-      mutable int pdg;   ///< PDG code of LLP (positive or negative?)
+      mutable int pdg;   ///< PDG code of parent
  
       mutable TLorentzVector v4;      ///< Production vertex in NEAR frame [m, ns]
       mutable TLorentzVector v4_user; ///< Production vertex in USER frame [m, ns]

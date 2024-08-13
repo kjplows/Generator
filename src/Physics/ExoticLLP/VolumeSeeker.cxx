@@ -428,9 +428,6 @@ TVector3 VolumeSeeker::GetRandomPointInTopVol() const
 		 outVec.Y() * fToLUnits + fTopVolumeOrigin.Y(), 
 		 outVec.Z() * fToLUnits + fTopVolumeOrigin.Z() );
 
-  LOG( "ExoticLLP", pDEBUG ) << "Returning point in USER coordinates "
-			     << utils::print::Vec3AsString( &outVec );
-
   return outVec;
 }
 //____________________________________________________________________________
