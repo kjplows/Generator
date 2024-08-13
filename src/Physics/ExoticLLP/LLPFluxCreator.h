@@ -38,6 +38,7 @@
 #include <map>
 #include <list>
 #include <sstream>
+#include <unordered_map>
 
 // -- ROOT includes
 #include "TChain.h"
@@ -65,6 +66,7 @@
 #include "Framework/GHEP/GHepRecord.h"
 #include "Framework/Messenger/Messenger.h"
 #include "Framework/Numerical/RandomGen.h"
+#include "Framework/ParticleData/PDGCodeList.h"
 #include "Framework/ParticleData/PDGCodes.h"
 #include "Framework/ParticleData/PDGLibrary.h"
 #include "Framework/Utils/PrintUtils.h"
@@ -74,8 +76,13 @@
 #include "Physics/ExoticLLP/ExoticLLP.h"
 #include "Physics/ExoticLLP/LLPConfigurator.h"
 #include "Physics/ExoticLLP/AliasedBranch.h"
+#include "Physics/ExoticLLP/VolumeSeeker.h"
+#include "Physics/ExoticLLP/Decayer.h"
 
 namespace genie{
+
+  class PDGCodeList;
+  class GHepParticle;
 
   namespace llp{
     
@@ -109,6 +116,8 @@ namespace genie{
       // set first entry for read-in from chain
       void SetFirstFluxEntry( int iFirst ) const;
 
+      // update flux info
+      void UpdateFluxInfo( FluxContainer info ) const;
       // get flux info
       FluxContainer RetrieveFluxInfo() const;
 
@@ -187,6 +196,7 @@ namespace genie{
 
       // ctree
       mutable AliasedBranch<int>            m_ct_parent_pdg;    ///< PDG code of parent
+      mutable std::string                   m_ct_parent_pdg_alias;
       mutable AliasedBranch<TLorentzVector> m_ct_parent_p4;     ///< Parent 4-momentum, NEAR [GeV]
       mutable AliasedBranch<TLorentzVector> m_ct_production_v4; ///< Production vertex, NEAR [m, ns]
       // cmeta
@@ -198,6 +208,9 @@ namespace genie{
 
       // The underlying ExoticLLP instance... It's a particle type, basically.
       mutable ExoticLLP fExoticLLP;
+
+      // A convenient unordered map to keep track of which production modes are from which parent
+      mutable std::unordered_map< int, std::vector< ModeObject > > fGroupedModes;
 
     }; // class FluxCreator
       

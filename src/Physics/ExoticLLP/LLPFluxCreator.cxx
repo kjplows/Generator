@@ -16,22 +16,27 @@ using namespace genie::llp;
 //____________________________________________________________________________
 FluxCreator::FluxCreator() : FluxRecordVisitorI("genie::llp::FluxCreator")
 {
-  this->InitialiseTree(); this->InitialiseMeta();
+
 }
 //____________________________________________________________________________
 FluxCreator::FluxCreator(string name) : FluxRecordVisitorI(name)
 {
-  this->InitialiseTree(); this->InitialiseMeta();
+
 }
 //____________________________________________________________________________
 FluxCreator::FluxCreator(string name, string config) : FluxRecordVisitorI(name, config)
 {
-  this->InitialiseTree(); this->InitialiseMeta();
+
 }
 //____________________________________________________________________________
 FluxCreator::~FluxCreator()
 {
   
+}
+//____________________________________________________________________________
+void FluxCreator::UpdateFluxInfo( FluxContainer info ) const
+{
+  fFluxInfo = info;
 }
 //____________________________________________________________________________
 FluxContainer FluxCreator::RetrieveFluxInfo() const
@@ -42,15 +47,18 @@ FluxContainer FluxCreator::RetrieveFluxInfo() const
 void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 {
   // Adds in the initial state LLP, and nothing else. 
+  LOG( "ExoticLLP", pDEBUG ) << "Processing flux info with parent PDG = " << fFluxInfo.pdg;
   
   // First, run some quick calculations on the flux container.
-  this->AddInfoToFlux();
+  //this->AddInfoToFlux();
   
-  TLorentzVector probe_p4 = fFluxInfo.p4_user; // always in USER coordinates for the EventRecord
-  TLorentzVector probe_v4 = fFluxInfo.v4_user; 
+  // The calculation in this module will always be in NEAR coordinates
+  TLorentzVector parent_p4 = fFluxInfo.p4_parent; // GeV/c
+  TLorentzVector parent_v4 = fFluxInfo.v4; // m
 
-  int llp_pdg = kPdgLLP;
-  if( fFluxInfo.pdg < 0 ) llp_pdg = kPdgAntiLLP;
+  int parent_pdg = fFluxInfo.pdg;
+
+  // The information that goes into the EventRecord will always be in USER coordinates 
 
   // Get a random point in the top volume to evaluate the flux at
   VolumeSeeker * vsek = VolumeSeeker::Instance();
@@ -58,7 +66,92 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   LOG( "ExoticLLP", pWARN ) << "Evaluating flux at NEAR point " 
 			    << utils::print::Vec3AsString( &rand_point );
 
-  // RETHERE work on this
+  // First, apply the constraint of kinematics.
+  TVector3 separation = rand_point - parent_v4.Vect(); // m
+  
+  // Calculate the opening angle between this ray and the parent momentum
+  double cos_zeta = separation.Dot( rand_point ) / ( separation.Mag() * rand_point.Mag() );
+  double zeta = std::acos( cos_zeta ) * 180.0 / constants::kPi;
+
+  // Find a decay channel for the LLP.
+
+  // First, make a decay mode. Read in the scores from each decay mode, and get the winning decay mode
+
+  // Poll only from the object of modes that corresponds to the parent!
+  std::unordered_map< int, std::vector<ModeObject> >::iterator active_modes =
+    fGroupedModes.find( std::abs( parent_pdg ) );
+  if( active_modes == fGroupedModes.end() ){
+    LOG( "ExoticLLP", pFATAL )
+      << "\nNo production modes found for parent with PDG code " << parent_pdg << " !!!"
+      << "\nUpdate the config file in $GENIE/config/GLLP* and retry running...";
+    genie::exceptions::EVGThreadException exception;
+    exception.SetReason("No production mode associated with parent particle");
+    exception.SwitchOnFastForward();
+    throw exception;
+  }
+
+  std::vector< ModeObject > llp_production_modes = (*active_modes).second;
+
+  LOG( "ExoticLLP", pDEBUG ) << "For the parent with PDG code "
+			     << parent_pdg << ", there are " << llp_production_modes.size()
+			     << " production modes";
+
+  std::vector< ModeObject >::iterator it_modes = llp_production_modes.begin();
+
+  RandomGen * rnd = RandomGen::Instance();
+  double production_score = rnd->RndGen().Rndm();
+
+  double score_seen = (*it_modes).GetScore();
+  
+  while( it_modes != llp_production_modes.end() && score_seen < production_score ) {
+    ++it_modes; score_seen += (*it_modes).GetScore(); 
+  }
+  if( it_modes == llp_production_modes.end() ) --it_modes;
+  ModeObject chosen_production = *(it_modes);
+  LOG( "ExoticLLP", pDEBUG ) 
+    << "With thrown score " << production_score << " we picked the channel with name " 
+    << chosen_production.GetName();
+
+  int llp_pdg = kPdgLLP;
+  if( fFluxInfo.pdg < 0 ) llp_pdg = kPdgAntiLLP;
+  int type_mod = (llp_pdg > 0) ? 1 : -1;
+
+  // Get the PDG product list from the decay mode
+  std::vector<int> chosen_PDGVector = chosen_production.GetPDGList();
+  // turn this into a PDGCodeList
+  // RETHERE: how do we deal with two LLP?
+  bool allow_duplicate = true;
+  PDGCodeList chosen_PDGList(allow_duplicate);
+  for( std::vector<int>::iterator it_vec = chosen_PDGVector.begin();
+       it_vec != chosen_PDGVector.end(); ++it_vec ) {
+    // first check that typeMod * pdg code exists. If not, it's something like -1 * pi0
+    // (which is its own antiparticle), and we drop the typeMod
+    if( chosen_PDGList.ExistsInPDGLibrary( type_mod * (*it_vec) ) )
+      chosen_PDGList.push_back( type_mod * (*it_vec) );
+    else
+      chosen_PDGList.push_back( *it_vec );
+  }
+
+  LOG( "ExoticLLP", pDEBUG ) << "\nPDGList is " << chosen_PDGList;
+  
+  // Tell the Decayer instance about this PDGList
+  Decayer * decayer = Decayer::Instance();
+  decayer->SetProducts( chosen_PDGList );
+
+  // Perform a phase space decay
+  // RETHERE: Add in angular correlations of final state products?
+  [[maybe_unused]] bool decay_ok = decayer->UnpolarisedDecay();
+  
+  // Read in the results, these will be REST FRAME
+  std::vector< GHepParticle > decayed_results = decayer->GetRestFrameResults();
+  GHepParticle parent_particle = *(decayed_results.begin());
+  TLorentzVector parent_p4_rest = *(parent_particle.GetP4());
+  LOG( "ExoticLLP", pDEBUG ) << "The 4-momentum of the 0th entry is "
+			     << utils::print::P4AsString( &parent_p4_rest );
+
+  TLorentzVector probe_p4(0.0, 0.0, 1.0, 1.0);
+  TLorentzVector probe_v4(0.0, 0.0, 0.0, 0.0);
+
   GHepParticle ptLLP( llp_pdg, kIStInitialState, -1, -1, -1, -1, probe_p4, probe_v4 );
   evrec->AddParticle( ptLLP );
 }
@@ -173,12 +266,44 @@ void FluxCreator::LoadConfig(void)
   this->GetParam( "MetaTree", cmeta_name );
 
   // RETHERE add tree names so that we can read into the AliasedBranch objects
+  this->GetParam( "FluxBranch_parent_pdg", m_ct_parent_pdg_alias );
+  
+  this->InitialiseTree(); this->InitialiseMeta();
 
   // Get the LLP configurator and from that the ExoticLLP
   const Algorithm * algLLPConfigurator = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
   const LLPConfigurator * LLP_configurator = dynamic_cast< const LLPConfigurator * >( algLLPConfigurator );
 
   fExoticLLP = LLP_configurator->RetrieveLLP();
+
+  // Now get the production modes from the LLP, and group them by parent
+  std::vector< ModeObject > llp_production_modes = fExoticLLP.GetProductionModes();
+  std::vector< ModeObject >::iterator it_modes = llp_production_modes.begin();
+  while( it_modes != llp_production_modes.end() ) {
+    ModeObject mobj = *it_modes; 
+    int parent_pdg = std::abs( (mobj.GetPDGList()).at(0) ); // treat pi- as pi+ etc
+    std::unordered_map< int, 
+			std::vector< ModeObject > >::iterator mmap = fGroupedModes.find( parent_pdg );
+    if( mmap == fGroupedModes.end() ) {
+      std::vector< ModeObject > tmp_mobj = { mobj };
+      std::pair< int, std::vector< ModeObject > > tmp_pair = { parent_pdg, tmp_mobj };
+      fGroupedModes.insert( tmp_pair );
+      LOG( "ExoticLLP", pDEBUG ) << "Inserted new parent with PDG " << parent_pdg;
+    } else {
+      std::vector< ModeObject > mobj_vec = (*mmap).second;
+      mobj_vec.emplace_back( mobj );
+      fGroupedModes[ parent_pdg ] = mobj_vec; // update the vector
+      LOG( "ExoticLLP", pDEBUG ) << "Added mode to parent with PDG " << parent_pdg;
+    }
+
+    //LOG( "ExoticLLP", pDEBUG ) << "Parent with PDG " << parent_pdg << " now has "
+    //			       << (*mmap).second.size() << " production modes";
+    
+    ++it_modes;
+  }
+
+  LOG( "ExoticLLP", pDEBUG ) << "For all parents together, there are " << llp_production_modes.size()
+			     << " production modes";
 
   //delete LLP_configurator; LLP_configurator = 0;
   //delete algLLPConfigurator; algLLPConfigurator = 0;
@@ -241,6 +366,10 @@ void FluxCreator::OpenFluxInput( std::string finpath ) const
   assert( ctree && cmeta && "Could open flux and meta trees" );
 
   fNEntries = ctree->GetEntries();
+
+  // Now set branch addresses!
+  //ctree->SetBranchAddress( m_ct_parent_pdg.Alias, &(m_ct_parent_pdg.Value) );
+
   fPathLoaded = true;
 }
 //----------------------------------------------------------------------------
@@ -307,7 +436,7 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
 //----------------------------------------------------------------------------
 void FluxCreator::InitialiseTree() const
 {
-  m_ct_parent_pdg     = AliasedBranch<int>( 0 );
+  m_ct_parent_pdg     = AliasedBranch<int>( 0, m_ct_parent_pdg_alias );
   m_ct_parent_p4      = AliasedBranch<TLorentzVector>( TLorentzVector( 0.0, 0.0, 0.0, 0.0 ) );
   m_ct_production_v4  = AliasedBranch<TLorentzVector>( TLorentzVector( 0.0, 0.0, 0.0, 0.0 ) );
 }
