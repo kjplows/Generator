@@ -101,8 +101,6 @@ namespace genie{
 
       //-- implement the FluxRecordVisitorI interface
       void ProcessEventRecord(GHepRecord * event_rec) const;
-      // workhorse method to add info to FluxContainer
-      void AddInfoToFlux() const;
 
       // overload the Algorithm::Configure() methods to load private data
       // members from configuration options

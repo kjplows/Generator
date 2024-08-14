@@ -81,17 +81,50 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 			     << parent_pdg << ", there are " << llp_production_modes.size()
 			     << " production modes";
 
-  std::vector< ModeObject >::iterator it_modes = llp_production_modes.begin();
+  // RETHERE: Need to reduce the scores to only those that are kinematically allowed.
+  std::vector< ModeObject > llp_vetted_modes;
+  std::vector< ModeObject >::iterator it_vetmd = llp_production_modes.begin();
+  double total_vetted_score = 0.0;
+
+  while( it_vetmd != llp_production_modes.end() ) {
+    // Check if the mode can actually make LLP
+    std::vector<int> mode_pdg_list = (*it_vetmd).GetPDGList();
+    double mass_sum = 0.0;
+    double mass_parent = PDGLibrary::Instance()->Find( mode_pdg_list.at(0) )->Mass();
+    for( std::vector<int>::iterator it_pdg = mode_pdg_list.begin()+1; 
+	 it_pdg != mode_pdg_list.end(); ++it_pdg ) 
+      mass_sum += PDGLibrary::Instance()->Find( *it_pdg )->Mass();
+
+    if( mass_sum <= mass_parent ) {
+      llp_vetted_modes.emplace_back( *it_vetmd );
+      total_vetted_score += (*it_vetmd).GetScore();
+    }
+    ++it_vetmd;
+  }
+
+  std::vector< ModeObject >::iterator it_modes = llp_vetted_modes.begin();
+  // Note that if we have no vetted modes, or if the total score is zero, we must bail.
+  if( total_vetted_score == 0.0 || it_modes == llp_vetted_modes.end() ){
+    std::vector<int> mode_pdg_list = (*(llp_production_modes).begin()).GetPDGList();
+    LOG( "ExoticLLP", pWARN ) << "Cannot make an LLP of mass " 
+			      << PDGLibrary::Instance()->Find( kPdgLLP )->Mass() << " GeV from parent "
+			      << "with mass = " 
+			      << PDGLibrary::Instance()->Find( *(mode_pdg_list.begin()) )->Mass() 
+			      << " GeV, so bailing.";
+    evrec->SetProbability(0);
+    return;
+  }
 
   RandomGen * rnd = RandomGen::Instance();
   double production_score = rnd->RndGen().Rndm();
 
-  double score_seen = (*it_modes).GetScore();
+  double score_seen = (*it_modes).GetScore() / total_vetted_score;
   
-  while( it_modes != llp_production_modes.end() && score_seen < production_score ) {
+  
+  while( it_modes != llp_vetted_modes.end() && score_seen < production_score ) {
     ++it_modes; score_seen += (*it_modes).GetScore(); 
   }
-  if( it_modes == llp_production_modes.end() ) --it_modes;
+  if( it_modes == llp_vetted_modes.end() ) --it_modes;
   ModeObject chosen_production = *(it_modes);
   LOG( "ExoticLLP", pDEBUG ) 
     << "With thrown score " << production_score << " we picked the channel with name " 
@@ -316,55 +349,6 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 
   GHepParticle ptLLP( llp_pdg, kIStInitialState, -1, -1, -1, -1, probe_p4, probe_v4 );
   evrec->AddParticle( ptLLP );
-}
-//____________________________________________________________________________
-void FluxCreator::AddInfoToFlux() const
-{
-  // At this point the flux container already has some information, and needs more.
-  // We will populate with the LLP 4-momentum, the boost correction, and the acceptance correction.
-  // Throughout this section, we will work in NEAR coordinates.
-
-  this->SetCurrentEntry( fFluxInfo.evtno );
-
-  // The LLP energy is the same along the ray along the detector. Only the angles matter.
-  
-  TLorentzVector p4par  = fFluxInfo.p4_parent;
-  TLorentzVector delta4 = fFluxInfo.entry - fFluxInfo.v4;
-
-  TVector3 p3par = p4par.Vect();
-  TVector3 delta = delta4.Vect();
-
-  // Get the opening angle by projecting out the longitudinal delta component
-  TVector3 deltaT = delta - (p3par.Unit()).Dot(delta) * p3par.Unit();
-  
-  double cos_zeta = (p3par.Unit()).Dot((deltaT.Unit()));
-  double zeta_rad = std::acos(cos_zeta);
-  double zeta     = zeta_rad * 180.0 / constants::kPi;
-
-  LOG( "ExoticLLP", pDEBUG )
-    << "\np3par  = " << utils::print::Vec3AsString(&p3par)
-    << "\ndelta  = " << utils::print::Vec3AsString(&delta)
-    << "\ndeltaT = " << utils::print::Vec3AsString(&deltaT)
-    << "\nzeta   = " << zeta << " [deg]";
-
-  // First, make a decay mode. Read in the scores from each decay mode, and get the PDG product list
-  std::vector< ModeObject > llp_production_modes = fExoticLLP.GetProductionModes();
-  [[maybe_unused]] RandomGen * rnd = RandomGen::Instance();
-  double production_score = rnd->RndGen().Rndm();
-
-  double score_seen = 0.0;
-  std::vector< ModeObject >::iterator it_modes = llp_production_modes.begin();
-  while( it_modes != llp_production_modes.end() && score_seen < production_score ) {
-    score_seen += (*it_modes).GetScore(); ++it_modes;
-  }
-  if( it_modes == llp_production_modes.end() ) --it_modes;
-  ModeObject chosen_production = *(it_modes);
-  LOG( "ExoticLLP", pDEBUG ) 
-    << "With thrown score " << production_score << " we picked the channel with name " 
-    << chosen_production.GetName();
-
-  // RETHERE implement
-  return;
 }
 //____________________________________________________________________________
 TLorentzVector FluxCreator::LLPEnergy() const
