@@ -149,7 +149,7 @@ bool Decayer::UnpolarisedDecay( bool fudge ) const
     TLorentzVector v4(0.0, 0.0, 0.0, 0.0); // we don't really care about the v4 info at this stage
     GHepStatus_t ist = kIStStableFinalState;
     GHepParticle particle_in_stack( fPDGCodeList.at(idp+1), ist, 0, -1, -1, -1, p4, v4 );
-    if( fudge && std::abs(particle_in_stack.Pdg() == kPdgLLP) ) {
+    if( fudge && std::abs(particle_in_stack.Pdg()) == kPdgLLP ) {
       particle_in_stack.SetPdgCode( 0 ); // this is a special particle only meant for acceptance calcs
       fMasslessEnergy = particle_in_stack.E();
     }
