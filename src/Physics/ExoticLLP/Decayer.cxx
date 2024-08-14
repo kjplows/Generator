@@ -21,6 +21,7 @@ double fMasslessEnergy = 0;
 PDGCodeList fPDGCodeList;
 LorentzMap fParticles;
 LorentzMap fParticles_rest;
+TVector3 fBoostVec;
 //____________________________________________________________________________
 Decayer::Decayer()
 {
@@ -34,6 +35,8 @@ Decayer::Decayer()
   if(fParticles.size() > 0) fParticles.clear(); 
   if(fParticles_rest.size() > 0) fParticles_rest.clear();
   if(fPDGCodeList.size() > 0) fPDGCodeList.clear();
+
+  if(fBoostVec.Mag() > 0.0) fBoostVec.SetXYZ(0.0, 0.0, 0.0);
 }
 //____________________________________________________________________________
 Decayer::~Decayer()
@@ -46,6 +49,8 @@ Decayer::~Decayer()
   if(fParticles.size() > 0) fParticles.clear(); 
   if(fParticles_rest.size() > 0) fParticles_rest.clear();
   if(fPDGCodeList.size() > 0) fPDGCodeList.clear();
+
+  if(fBoostVec.Mag() > 0.0) fBoostVec.SetXYZ(0.0, 0.0, 0.0);
 }
 //____________________________________________________________________________
 void Decayer::ClearEvent() const
@@ -53,6 +58,8 @@ void Decayer::ClearEvent() const
   if(fParticles.size() > 0) fParticles.clear(); 
   if(fParticles_rest.size() > 0) fParticles_rest.clear();
   if(fPDGCodeList.size() > 0) fPDGCodeList.clear();
+
+  if(fBoostVec.Mag() > 0.0) fBoostVec.SetXYZ(0.0, 0.0, 0.0);
 }
 //____________________________________________________________________________
 Decayer * Decayer::Instance()
@@ -145,6 +152,7 @@ bool Decayer::UnpolarisedDecay( bool fudge ) const
   // Note the parent does NOT make it to this stage
 
   for( int idp = 0; idp < fPDGCodeList.size()-1; idp++ ) {
+
     TLorentzVector p4 = *(PSGen.GetDecay(idp));
     TLorentzVector v4(0.0, 0.0, 0.0, 0.0); // we don't really care about the v4 info at this stage
     GHepStatus_t ist = kIStStableFinalState;
@@ -153,12 +161,16 @@ bool Decayer::UnpolarisedDecay( bool fudge ) const
       particle_in_stack.SetPdgCode( 0 ); // this is a special particle only meant for acceptance calcs
       fMasslessEnergy = particle_in_stack.E();
     }
-    if( ! fudge )
+    if( ! fudge ) {
       fParticles_rest.emplace_back( particle_in_stack );
+      // if the boost vector is not zero, boost to lab frame and fill fParticles
+      if( fBoostVec.Mag() > 0.0 ) {
+	TLorentzVector p4Lab = p4; p4Lab.Boost( fBoostVec );
+	GHepParticle particle_in_lab_stack( fPDGCodeList.at(idp+1), ist, 0, -1, -1, -1, p4Lab, v4 );
+	fParticles.emplace_back( particle_in_lab_stack );
+      }
+    }
   }
-
-  LOG( "ExoticLLP", pDEBUG ) << "After a successful decay there are " << fParticles_rest.size()
-			     << " particles in the stack";
 
   permitted = true;
   return permitted;
@@ -179,19 +191,13 @@ double Decayer::GetMasslessEnergy() const
   return fMasslessEnergy;
 }
 //____________________________________________________________________________
-bool Decayer::PrepareDecay() const
+void Decayer::SetBoost( TVector3 boost_vec ) const
 {
-  LOG("ExoticLLP", pFATAL) << "RETHERE.";
-  return true;
+  fBoostVec = boost_vec;
 }
 //____________________________________________________________________________
 void Decayer::SetProducts( PDGCodeList pdgv ) const
 { 
-  LOG( "ExoticLLP", pDEBUG ) << "Input PDGCodeList has " << pdgv.size() << " elements";
   for( PDGCodeList::iterator itp = pdgv.begin(); itp != pdgv.end(); ++itp )
-    {
-      LOG("ExoticLLP", pDEBUG) << "Adding element " << *itp;
       fPDGCodeList.push_back( *itp );
-    }
-  LOG( "ExoticLLP", pDEBUG ) << "Decayer PDGCodeList now has " << fPDGCodeList.size() << " elements";
 }

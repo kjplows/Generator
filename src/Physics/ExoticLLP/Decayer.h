@@ -61,6 +61,8 @@ namespace genie {
 
       //! Pass the Decayer a PDGCodeList to use
       void SetProducts( genie::PDGCodeList pdgv ) const;
+      //! And pass it a boost vector to use
+      void SetBoost( TVector3 boost_vec ) const;
 
       //! Perform an unpolarised decay
       bool UnpolarisedDecay( bool fudge = false ) const;
@@ -79,15 +81,14 @@ namespace genie {
       Decayer( const Decayer & dec );
       virtual ~Decayer();
 
-      //! Prepare the decay. Returns false if decay is not allowed
-      bool PrepareDecay() const;
-
       mutable double fLLPMass; //! This is very important so we will keep it.
       mutable genie::PDGCodeList fPDGCodeList;
       mutable LorentzMap fParticles; //! Lab frame
       mutable LorentzMap fParticles_rest;
 
       mutable double fMasslessEnergy; //! needed for acceptance calculations. See LLPFluxCreator
+
+      mutable TVector3 fBoostVec; //! Boost vector of the lab frame
 
       static Decayer * fInstance;
       bool fInitialized; //! Done initialising singleton?

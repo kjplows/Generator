@@ -193,16 +193,11 @@ double fdz = 0; // half-length - z
 double fox = 0; // origin - x
 double foy = 0; // origin - y
 double foz = 0; // origin - z
-// vector of the allowed decay modes
-struct LLPDecayMode {
-  int idx; //! index
-  std::vector< int > pdg_code_list; //! list of PDG codes produced
-  double score; //! conditional probability of this mode
-};
-std::vector< LLPDecayMode > allowed_decay_modes;
 
 // LLP lifetime in rest frame
 double CoMLifetime = -1.0; // GeV^{-1}
+
+struct genie::llp::ModeObject;
 
 //_________________________________________________________________________________________
 int main(int argc, char ** argv)
@@ -285,8 +280,8 @@ int main(int argc, char ** argv)
   // An extremely, extremely weird bug. What.
   std::cout.flush(); // why? ROOT? what do you do?
   std::cerr.flush(); // why? ROOT? what do you do?
-  LOG("gevgen_exotic_llp", pDEBUG) << "FLUSHED COUT AND FLUSHING AGAIN.";
-  std::cerr << "FLUSHED COUT AND FLUSHING AGAIN." << std::endl;
+  //LOG("gevgen_exotic_llp", pDEBUG) << "FLUSHED COUT AND FLUSHING AGAIN.";
+  //std::cerr << "FLUSHED COUT AND FLUSHING AGAIN." << std::endl;
   std::cout.flush(); // why? ROOT? what do you do?
   std::cerr.flush(); // why? ROOT? what do you do?
 
@@ -348,10 +343,6 @@ int main(int argc, char ** argv)
 	}
       }
     }
-
-    LOG( "gevgen_exotic_llp", pDEBUG ) << "ievent = " << ievent
-				       << ", gOptFirstEvent = " << gOptFirstEvent
-				       << ", gOptNev = " << gOptNev;
     
     if( tooManyEntries && ((iflux-gOptFirstEvent) == gOptNev) ) break;
     else if( (ievent-gOptFirstEvent) == gOptNev ) break;
@@ -387,10 +378,6 @@ int main(int argc, char ** argv)
       gAngularRegion = vsek->AngularAcceptance();
       gAngularRegionSize = vsek->AngularSize( gAngularRegion );
 
-      LOG("gevgen_exotic_llp", pDEBUG) << "Calculating angular acceptance for event " << ievent
-				       << " at vz = " << v4->Z()
-				       << " as wgt_xy = " << gAngularRegionSize / (4.0 * constants::kPi); 
-
       //gOptFluxPtInfo = *(new FluxPointerContainer()); NONONONO
 
       // Here we set all the branches' values. It is inelegant, but has to be done.
@@ -420,21 +407,14 @@ int main(int argc, char ** argv)
 
       CopyFromPointerFlux(); // because ROOT wants addresses to pointers, which is annoying...
 
-      LOG( "gevgen_exotic_llp", pDEBUG )
-	<< "\nTesting: read v4 " << utils::print::X4AsString( &gOptFluxInfo.v4 )
-	<< "\nAnd momentum = " << utils::print::P4AsString( &gOptFluxInfo.p4_parent )
-	<< "\nwith wgt_xy = " << gOptFluxInfo.wgt_xy
-	<< "\nPointers: read v4 " << utils::print::X4AsString( gOptFluxPtInfo.v4 )
-	<< "\nAnd momentum = " << utils::print::P4AsString( gOptFluxPtInfo.p4_parent )
-	<< "\nwith wgt_xy = " << gOptFluxPtInfo.wgt_xy;
-
       // First, we need to construct the input LLP. Based on the parent kinematics
       Decayer * decayer = Decayer::Instance();
       decayer->ClearEvent();
       fluxCreator->UpdateFluxInfo( gOptFluxInfo );
       fluxCreator->ProcessEventRecord(event);
+      LOG( "gevgen_exotic_llp", pDEBUG ) << "Should we move on?";
       // check if we should move on -- might be the flux was unable to produce an entry.
-      if( event->Probability() < 0 ){
+      if( event->Probability() <= 0 ){
 
 	LOG( "gevgen_exotic_llp", pWARN )
 	  << "Unable to produce event " << (ievent-gOptFirstEvent);
@@ -444,10 +424,57 @@ int main(int argc, char ** argv)
 	gOptFluxInfo  = fluxCreator->RetrieveFluxInfo();
 	gOptEnergyLLP = (gOptFluxInfo.p4).E();
 
-	LOG( "gevgen_exotic_llp", pDEBUG ) << "Sanity: boost factor is " << gOptFluxInfo.boost_factor;
+	//LOG( "gevgen_exotic_llp", pDEBUG ) << "Sanity: boost factor is " << gOptFluxInfo.boost_factor;
+
+	// Choose from one of the available LLP decay channels and ask the Decayer to throw
+	decayer->ClearEvent();
+	std::vector< genie::llp::ModeObject > llp_decay_modes = llp.GetDecayModes();
+	//LOG( "gevgen_exotic_llp", pDEBUG ) << "There are " << llp_decay_modes.size() << " decay modes available to choose from";
+
+	double decay_score = rnd->RndGen().Rndm();
+
+	std::vector< genie::llp::ModeObject >::iterator it_modes = llp_decay_modes.begin();
+	double score_seen = (*it_modes).GetScore();
+	while( it_modes != llp_decay_modes.end() && score_seen < decay_score  ) {
+	  ++it_modes; score_seen += (*it_modes).GetScore();
+	}
+	if( it_modes == llp_decay_modes.end() ) --it_modes;
+	genie::llp::ModeObject chosen_decay = *(it_modes);
+	//LOG( "ExoticLLP", pDEBUG ) 
+	//  << "With thrown score " << decay_score << " we picked the channel with name " 
+	//  << chosen_decay.GetName();
+
+	// make the PDG product list from this
+	std::vector<int> chosen_PDGVector = chosen_decay.GetPDGList();
+	bool allow_duplicate = true;
+	PDGCodeList chosen_PDGList(allow_duplicate);
+	int typeMod = ( gOptFluxInfo.pdg >= 0 ) ? 1 : -1; 
+	for( std::vector<int>::iterator it_vec = chosen_PDGVector.begin();
+	     it_vec != chosen_PDGVector.end(); ++it_vec ) {
+	  // first check that typeMod * pdg code exists. If not, it's something like -1 * pi0
+	  // (which is its own antiparticle), and we drop the typeMod
+	  if( chosen_PDGList.ExistsInPDGLibrary( typeMod * (*it_vec) ) )
+	    chosen_PDGList.push_back( typeMod * (*it_vec) );
+	  else
+	    chosen_PDGList.push_back( *it_vec );
+	}
+
+	decayer->SetProducts( chosen_PDGList );
+	// also let the Decayer know about the boost vector
+	TVector3 bvec = (event->Particle(0)->P4())->BoostVector();
+	TLorentzVector * dvec = event->Particle(0)->P4();
+	decayer->SetBoost( bvec );
+	// Perform a phase space decay
+	// RETHERE: Add in angular correlations of final state products?
+	[[maybe_unused]] bool decay_ok = decayer->UnpolarisedDecay();
+	// Read in the results
+	std::vector< GHepParticle > decayed_results = decayer->GetResults();
+
+	for( std::vector< GHepParticle >::iterator it_res = decayed_results.begin();
+	     it_res != decayed_results.end(); ++it_res )
+	  event->AddParticle( *it_res );
 
 	int decay = 0;
-	int typeMod = ( gOptFluxInfo.pdg >= 0 ) ? 1 : -1; 
 	Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
 	
 	event->AttachSummary(interaction);
