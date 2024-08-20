@@ -182,9 +182,11 @@ void VolumeSeeker::PopulateEvent( TVector3 origin_point, TVector3 momentum ) con
 
   fOriginPointROOT = fToROOTUnits * fOriginPoint;
 
+  /*
   LOG( "ExoticLLP", pDEBUG ) << "\norigin_point is " << utils::print::Vec3AsString( &origin_point )
 			     << "\nin USER it is   " << utils::print::Vec3AsString( &fOriginPoint )
 			     << "\nin ROOT it is   " << utils::print::Vec3AsString( &fOriginPointROOT );
+  */
 
 }
 //____________________________________________________________________________
@@ -267,7 +269,7 @@ TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVol
     assert( mat && "Matrix is not null" );
 
     int nDaughters = node->GetNdaughters();
-    LOG( "ExoticLLP", pDEBUG ) << "Node with name " << path << " has " << nDaughters << " daughters...";
+    //LOG( "ExoticLLP", pDEBUG ) << "Node with name " << path << " has " << nDaughters << " daughters...";
     for( int iDaughter = 0; iDaughter < nDaughters; iDaughter++ ){
       TGeoNode * dNode = node->GetDaughter(iDaughter);
       assert( dNode && "Daughter node not null" );
@@ -275,8 +277,10 @@ TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVol
       dPath.append( "/" ); dPath.append( dNode->GetName() );
       TGeoMatrix * nodeMat = dNode->GetMatrix();
 
+      /*
       LOG( "ExoticLLP", pDEBUG ) << "Got node, path, and matrix for daughter node "
 				 << iDaughter << " / " << nDaughters-1 << "...";
+      */
 
       // construct the full updated matrix from multiplying dMat on the left of mat
       const Double_t * nodeRot = nodeMat->GetRotationMatrix();
@@ -374,6 +378,7 @@ TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVol
   const Double_t * final_tra = final_mat->GetTranslation();
   const Double_t * final_rot = final_mat->GetRotationMatrix();
 
+  /*
   LOG( "ExoticLLP", pINFO )
     << "Found the target volume! Here is its path and full matrix:"
     << "\nPath: " << paths.back()
@@ -383,6 +388,7 @@ TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVol
     << final_rot[0] << ", " << final_rot[1] << ", " << final_rot[2] << " ), ( "
     << final_rot[3] << ", " << final_rot[4] << ", " << final_rot[5] << " ), ( "
     << final_rot[6] << ", " << final_rot[7] << ", " << final_rot[8] << " ) )";
+  */
 
   // Also set the member variables at this stage
   //fTopVolumeOriginROOT.SetXYZ( final_tra[0], final_tra[1], final_tra[2] );
@@ -644,15 +650,17 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   const TVector3 booked_origin_point_ROOT = fOriginPointROOT;
   const TVector3 booked_momentum = fMomentum;
 
+  /*
   LOG( "ExoticLLP", pDEBUG ) << "\nbooked_origin_point      = " << utils::print::Vec3AsString( &booked_origin_point )
 			     << "\nbooked_origin_point_ROOT = " << utils::print::Vec3AsString( &booked_origin_point_ROOT );
+  */
 
   // First, check if the point is inside the volume. If yes, every emission angle is good!
   std::string original_pathString = this->CheckGeomPoint( booked_origin_point_ROOT );
-  LOG( "ExoticLLP", pDEBUG ) << "original_pathString = " << original_pathString;
+  //LOG( "ExoticLLP", pDEBUG ) << "original_pathString = " << original_pathString;
 
   if( original_pathString.find( fTopVolume.c_str() ) == string::npos )
-    LOG("ExoticLLP", pDEBUG) << "ARGH. NOT IN TOP VOLUME.";
+    LOG("ExoticLLP", pWARN) << "ARGH. NOT IN TOP VOLUME.";
 
   if( original_pathString.find( fTopVolume.c_str() ) != string::npos ) {
     const double halfpi = constants::kPi / 2.0;
@@ -670,7 +678,7 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   // Get the separation between top volume origin and start point
   const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
 
-  LOG( "ExoticLLP", pDEBUG ) << "seed_vector = " << utils::print::Vec3AsString(&seed_vector);
+  //LOG( "ExoticLLP", pDEBUG ) << "seed_vector = " << utils::print::Vec3AsString(&seed_vector);
 
   // We make a potentially strong assumption here, that the top_volume is simply connected.
   // The calculation will be garbage if not, and we'll crash out rather than give garbage.
@@ -701,10 +709,12 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   // Now that lets us complete the "momentum" system of coordinates
   fPhiAxis = fAxis.Cross( fThetaAxis );
 
+  /*
   LOG( "ExoticLLP", pDEBUG )
     << "\nfAxis      = " << utils::print::Vec3AsString(&fAxis)
     << "\nfThetaAxis = " << utils::print::Vec3AsString(&fThetaAxis)
     << "\nfPhiAxis   = " << utils::print::Vec3AsString(&fPhiAxis);
+  */
 
   // Get the projection of that vector onto the appropriate coordinate system
   const double sep_from_theta = seed_vector.Dot( fPhiAxis );
@@ -731,7 +741,7 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
 	       return pta.second < ptb.second;
 	     } );
 
-  LOG( "ExoticLLP", pDEBUG ) << "Angular region has " << alpha.size() << " rasters.";
+  //LOG( "ExoticLLP", pDEBUG ) << "Angular region has " << alpha.size() << " rasters.";
 
   // just in case, restore the original member variables
   fOriginPoint = booked_origin_point;
@@ -763,7 +773,7 @@ AngularRegion VolumeSeeker::SmallAngleRegion() const
   const double baseline = seed_vector.Mag();
   const double zeta = std::atan( transverse_size / baseline );
 
-  LOG( "ExoticLLP", pDEBUG ) << "zeta = " << zeta;
+  //LOG( "ExoticLLP", pDEBUG ) << "zeta = " << zeta;
 
   Point pt_dl = std::pair<double, double>( 0.0, -zeta );
   Point pt_ul = std::pair<double, double>(  zeta, -zeta );
@@ -916,7 +926,7 @@ double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn
     previous_point_dn = current_point_dn; // update
   }
 
-  LOG( "ExoticLLP", pDEBUG ) << "total_up, total_dn = " << total_up << ", " << total_dn;
+  //LOG( "ExoticLLP", pDEBUG ) << "total_up, total_dn = " << total_up << ", " << total_dn;
 
   return total_up + total_dn;
 }
@@ -979,10 +989,12 @@ void VolumeSeeker::Rasterise( AngularRegion & alpha, bool goRight ) const
     //thetaMax = std::max( std::abs(deflection_up), std::abs(deflection_down) );
     //thetaMin = zero_okay ? 0.0 : std::min( std::abs(deflection_up), std::abs(deflection_down) );
     
+    /*
     LOG( "ExoticLLP", pDEBUG )
       << "Deflections: phi = " << 0.0
       << ", theta_min, max = " << thetaMin * 180.0 / constants::kPi
       << ", " << thetaMax * 180.0 / constants::kPi << " [deg]";
+    */
     
     // Add this to the angular region
     Point min_point = std::pair< double, double >( thetaMin, sweep );

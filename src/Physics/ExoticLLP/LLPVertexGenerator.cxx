@@ -59,6 +59,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   TVector3 entry_point = vsek->GetEntryPoint(); // USER, m
   TVector3 exit_point  = vsek->GetExitPoint(); // USER, m
 
+  /*
   LOG( "ExoticLLP", pDEBUG ) << "Here are the entry and exit points..."
 			     << "\nUser origin: " << utils::print::X4AsString( &fFluxContainer.v4_user )
 			     << " [m]"
@@ -68,6 +69,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 			     << " [m]"
 			     << "\nExit  point: " << utils::print::Vec3AsString( &exit_point )
 			     << " [m]";
+  */
 
   // Yay! Now we can use a lifetime to get a vertex
   // Practically, it is a Uniform number.
@@ -82,8 +84,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 
   fLifetime = LLP_configurator->RetrieveLLP().GetLifetime() * units::m / lunits; // lunits
   
-  // Map the uniform number to an exponential, 1 - exp( -l / (beta*gamma*fLifetime) ) with l = max_length
-  // The function is f(u) = l * ( 1 - ( 1 - exp(-k*l*u) ) / ( 1 - exp(-k*l) ) ), k = 1 / (b*g*(ctau))
+  // Map the uniform number to an exponential
   
   double beta  = fFluxContainer.p4_user.Beta();
   double gamma = fFluxContainer.p4_user.Gamma();
@@ -91,29 +92,27 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 
   double uniform = RandomGen::Instance()->RndGen().Rndm();
 
-  //double elapsed_length = length_score * max_length;
-  double elapsed_length = max_length * ( 1.0 - 
-					 ( 1.0 - std::exp( -kappa * max_length * uniform ) ) /
-					 ( 1.0 - std::exp( -kappa * max_length ) ) ); // lunits
+  //double elapsed_length = uniform * max_length;
+
+  double elapsed_length = -std::log( 1.0 - uniform * (1.0 - std::exp( -kappa * max_length )) ) / kappa;
   elapsed_length *= lunits / units::m; // m
 
   // now place the decay vertex
   TVector3 vtx = entry_point + elapsed_length * ray_in_detector.Unit(); // m
   
+  /*
   LOG( "ExoticLLP", pDEBUG ) << "\nWith max_length = " << max_length 
 			     << " [ " << lunitString << " ]"
 			     << "\nand uniform number = " << uniform
 			     << "\nand beta, gamma, kappa = " << beta << ", " << gamma 
 			     << ", " << kappa 
 			     << " [ 1 / " << lunitString << " ]"
-			     << "\nwe got a transformed number " 
-			     << "1 - ( 1.0 - " << std::exp( -kappa * max_length * uniform )
-			     << " ) / ( 1.0 - " << std::exp( -kappa * max_length ) << " )"
-			     << "\nand an elapsed length = " << elapsed_length 
+			     << "\nwe got an elapsed length = " << elapsed_length 
 			     << " [ " << lunitString << " ]"
 			     << "\nand therefore put the vertex at "
 			     << utils::print::Vec3AsString( &vtx )
 			     << " [ m ]";
+  */
 
   // We can also calculate the time of arrival of this LLP
   // We'll use the parent decay vertex time as an input, and add the time-of-flight on top
@@ -149,6 +148,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   // now set the final decay point
   fDecayPoint.SetXYZT( vtx.X(), vtx.Y(), vtx.Z(), full_time ); // m, ns
 
+  /*
   LOG( "ExoticLLP", pDEBUG ) << "\nThe velocity v = beta * c = " << velocity 
 			     << " [ " << lunitString << " / " << tunitString << " ]";
   LOG( "ExoticLLP", pDEBUG ) << "\nFrom a full distance of "
@@ -163,6 +163,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 			     << "\nso the full time is " << full_time
 			     << " [ ns ]";
   LOG( "ExoticLLP", pDEBUG ) << "\nThe final decay point is " << utils::print::X4AsString( &fDecayPoint );
+  */
 
   // also get the decay point in NEAR
   TVector3 decay_point_near = vsek->RotateToNear( vtx );
@@ -175,7 +176,7 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   fFluxContainer.wgt_survival = std::exp( -ray_to_detector.Mag() / ( beta * gamma * fLifetime ) );
   fFluxContainer.wgt_detdecay = 1.0 - std::exp( -max_length / ( beta * gamma * fLifetime ) );
 
-  LOG( "ExoticLLP", pDEBUG ) << fFluxContainer;
+  //LOG( "ExoticLLP", pDEBUG ) << fFluxContainer;
 }
 //____________________________________________________________________________
 double VertexGenerator::CalcTravelLength( double betaMag, double CoMLifetime, double maxLength ) const

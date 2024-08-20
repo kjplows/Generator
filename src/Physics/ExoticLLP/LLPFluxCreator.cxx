@@ -164,8 +164,8 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   std::vector< GHepParticle > decayed_results = decayer->GetRestFrameResults();
   GHepParticle probe_particle = *(decayed_results.begin());
   TLorentzVector probe_p4_rest = *(probe_particle.GetP4());
-  LOG( "ExoticLLP", pDEBUG ) << "The 4-momentum of the probe in the rest frame is "
-			     << utils::print::P4AsString( &probe_p4_rest );
+  //LOG( "ExoticLLP", pDEBUG ) << "The 4-momentum of the probe in the rest frame is "
+  //			     << utils::print::P4AsString( &probe_p4_rest );
 
   /* 
    * Now we need the acceptance calculations. 
@@ -194,6 +194,7 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   double cos_zeta = separation.Dot( parent_p3_unit ) / ( separation.Mag() * parent_p3_unit.Mag() );
   double zeta = std::acos( cos_zeta ) * 180.0 / constants::kPi; // std::acos has support on [0, \pi]
 
+  /*
   LOG( "ExoticLLP", pDEBUG ) << "\nSeparation between:\n"
 			     << utils::print::Vec3AsString( &rand_point )
 			     << " and\n"
@@ -205,6 +206,7 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 			     << " is zeta = " << zeta << " [deg]";
   LOG( "ExoticLLP", pDEBUG ) << "\nThe parent 4-momentum is " 
 			     << utils::print::P4AsString( &parent_p4 );
+  */
 
   // Just note that if we've started in the decay volume, there is no correction from collimation.
   double boost_factor = 1.0; double acc_corr = 1.0;
@@ -232,10 +234,12 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
       if( max_angle < 0.0 ) max_angle += 180.0;
 
       is_ok = ( max_angle >= zeta );
+      /*
       if( is_ok )
 	LOG( "ExoticLLP", pDEBUG ) << "This event, at max angle = " << max_angle << " and zeta = " << zeta << ", will be accepted. Moving on.";
       else
 	LOG( "ExoticLLP", pDEBUG ) << "This event, at max angle = " << max_angle << " and zeta = " << zeta << ", will NOT be accepted. Rerolling.";
+      */
 
       // RETHERE reroll a few times until we move on...
 
@@ -295,7 +299,7 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 	decay_ok = decayer->UnpolarisedDecay(true); // fudge a decay with massless LLP and same other products
 	energy_massless = decayer->GetMasslessEnergy();
       }
-      LOG( "ExoticLLP", pDEBUG ) << "A massless LLP would have energy " << energy_massless << " GeV";
+      //LOG( "ExoticLLP", pDEBUG ) << "A massless LLP would have energy " << energy_massless << " GeV";
 
       double massless_soln = this->AccCorr_Solution( zeta, 0.0,
 						     parent_p4.E(), parent_p4.M(),
@@ -314,6 +318,7 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
     double lab_frame_energy = this->CalculateLabFrameEnergy( rest_frame_angle, parent_p4, probe_p4_rest );
     double lab_frame_momentum = std::sqrt( lab_frame_energy * lab_frame_energy - fMass * fMass );
 
+    /*
     LOG( "ExoticLLP", pDEBUG ) << "Dumping stats:"
 			       << "\nzeta = " << zeta
 			       << "\nfMass = " << fMass
@@ -327,6 +332,7 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 			       << "\nrest_frame_angle = " << rest_frame_angle
 			       << "\nlab_frame_energy = " << lab_frame_energy
 			       << "\nlab_frame_momentum = " << lab_frame_momentum;
+    */
 
     // and force the momentum to point along the separation unit vector
     TVector3 sep_unit = separation.Unit();
@@ -342,8 +348,10 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   fFluxInfo.boost_factor = boost_factor;
   fFluxInfo.wgt_collimation = acc_corr;
 
+  /*
   LOG( "ExoticLLP", pDEBUG ) << "\nBoost factor = " << fFluxInfo.boost_factor
 			     << "\nWgt_collimation = " << fFluxInfo.wgt_collimation;
+  */
 
   TLorentzVector probe_v4(0.0, 0.0, 0.0, 0.0); // probe v4 will be updated to event vertex
 
@@ -420,9 +428,9 @@ void FluxCreator::LoadConfig(void)
   const Algorithm * algLLPConfigurator = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
   const LLPConfigurator * LLP_configurator = dynamic_cast< const LLPConfigurator * >( algLLPConfigurator );
 
-  LOG( "ExoticLLP", pDEBUG ) << "About to retrieve LLP from LLPConfigurator";
+  //LOG( "ExoticLLP", pDEBUG ) << "About to retrieve LLP from LLPConfigurator";
   fExoticLLP = LLP_configurator->RetrieveLLP();
-  LOG( "ExoticLLP", pDEBUG ) << "Successfully retrieved LLP from LLPConfigurator";
+  //LOG( "ExoticLLP", pDEBUG ) << "Successfully retrieved LLP from LLPConfigurator";
   fMass = fExoticLLP.GetMass();
 
   // Now get the production modes from the LLP, and group them by parent
@@ -437,12 +445,10 @@ void FluxCreator::LoadConfig(void)
       std::vector< ModeObject > tmp_mobj = { mobj };
       std::pair< int, std::vector< ModeObject > > tmp_pair = { parent_pdg, tmp_mobj };
       fGroupedModes.insert( tmp_pair );
-      LOG( "ExoticLLP", pDEBUG ) << "Inserted new parent with PDG " << parent_pdg;
     } else {
       std::vector< ModeObject > mobj_vec = (*mmap).second;
       mobj_vec.emplace_back( mobj );
       fGroupedModes[ parent_pdg ] = mobj_vec; // update the vector
-      LOG( "ExoticLLP", pDEBUG ) << "Added mode to parent with PDG " << parent_pdg;
     }
 
     //LOG( "ExoticLLP", pDEBUG ) << "Parent with PDG " << parent_pdg << " now has "
@@ -459,7 +465,7 @@ void FluxCreator::LoadConfig(void)
 
   fIsConfigLoaded = true;
 
-  LOG( "ExoticLLP", pDEBUG ) << "FluxCreator configured.";
+  //LOG( "ExoticLLP", pDEBUG ) << "FluxCreator configured.";
 }
 //____________________________________________________________________________
 void FluxCreator::SetInputFluxPath(std::string finpath) const
@@ -533,13 +539,17 @@ std::list<TString> FluxCreator::RecurseOverDir( std::string finpath ) const
   dirs.emplace_front( &topDir );
   dirNames.emplace_front( topDir.GetName() );
 
+  /*
   LOG( "ExoticLLP", pDEBUG )
     << "Starting to add files to input. Current size is " << dirs.size();
+  */
 
   while( dirs.size() > 0 ){ // there is still stuff we haven't looked at.
     int nNow = dirs.size();
+    /*
     LOG( "ExoticLLP", pDEBUG ) 
       << "Scanning directory " << dirNames.front() << " with " << nNow << " elements...";
+    */
 
     // go to first object and get the structure next level down
     TSystemDirectory * currDir = dynamic_cast<TSystemDirectory *>( dirs.front() );
