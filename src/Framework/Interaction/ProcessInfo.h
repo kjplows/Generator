@@ -89,6 +89,7 @@ public:
   bool IsDarkMatter              (void) const;
   bool IsDarkNeutralCurrent      (void) const;
   bool IsHNLDecay                (void) const;
+  bool IsLLPDecay                (void) const;
   bool IsKnown                   (void) const;
 
   // Get scattering and interaction type enumerations

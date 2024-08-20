@@ -225,6 +225,11 @@ bool ProcessInfo::IsHNLDecay(void) const
   return (fInteractionType == kIntHNL);
 }
 //____________________________________________________________________________
+bool ProcessInfo::IsLLPDecay(void) const
+{
+  return (fInteractionType == kIntLLP);
+}
+//____________________________________________________________________________
 InteractionType_t ProcessInfo::InteractionTypeId(void) const
 {
   return fInteractionType;

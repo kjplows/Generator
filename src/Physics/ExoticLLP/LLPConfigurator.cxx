@@ -53,6 +53,7 @@ void LLPConfigurator::LoadConfig(void)
   if( fIsConfigLoaded ) return;
 
   this->GetParam( "Mass", fMass );
+  this->GetParam( "Lifetime", fLifetime );
 
   // RETHERE Majorana vs Dirac?
   // RETHERE spin?
@@ -84,8 +85,8 @@ void LLPConfigurator::LoadConfig(void)
   for( ModeVector::iterator mvit = fDecayChannels.begin() ; 
        mvit != fDecayChannels.end() ; ++mvit ) all_modes.emplace_back( *mvit );
 
-  //ExoticLLP * ptLLP = new ExoticLLP( fMass, all_modes );
-  ExoticLLP * ptLLP = new ExoticLLP( fMass, fProdChannels, fDecayChannels );
+  //ExoticLLP * ptLLP = new ExoticLLP( fMass, fLifetime, all_modes );
+  ExoticLLP * ptLLP = new ExoticLLP( fMass, fLifetime, fProdChannels, fDecayChannels );
   
   fLLP = *ptLLP;
 

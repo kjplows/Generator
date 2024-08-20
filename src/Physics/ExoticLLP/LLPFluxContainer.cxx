@@ -21,6 +21,9 @@ FluxContainer::FluxContainer() : TObject()
 //___________________________________________________________________________
 FluxContainer::FluxContainer(const FluxContainer & flc) : TObject(flc)
 {
+  mass = flc.mass;
+  lifetime = flc.lifetime;
+
   evtno = flc.evtno;
   pdg   = flc.pdg;
   
@@ -39,13 +42,24 @@ FluxContainer::FluxContainer(const FluxContainer & flc) : TObject(flc)
   p4 = flc.p4;
   p4_user = flc.p4_user;
 
+  decay = flc.decay;
+  decay_user = flc.decay_user;
+
   wgt_xy = flc.wgt_xy;
   boost_factor = flc.boost_factor;
   wgt_collimation = flc.wgt_collimation;
+
+  wgt_survival = flc.wgt_survival;
+  wgt_detdecay = flc.wgt_detdecay;
+
+  vtx_rng = flc.vtx_rng;
 }
 //___________________________________________________________________________
 FluxContainer & FluxContainer::operator = (const FluxContainer & flc)
 {
+  this->mass = flc.mass;
+  this->lifetime = flc.lifetime;
+
   this->evtno = flc.evtno;
   this->pdg   = flc.pdg;
 
@@ -64,15 +78,26 @@ FluxContainer & FluxContainer::operator = (const FluxContainer & flc)
   this->p4 = flc.p4;
   this->p4_user = flc.p4_user;
 
+  this->decay = flc.decay;
+  this->decay_user = flc.decay_user;
+
   this->wgt_xy = flc.wgt_xy;
   this->boost_factor = flc.boost_factor;
   this->wgt_collimation = flc.wgt_collimation;
+
+  this->wgt_survival = flc.wgt_survival;
+  this->wgt_detdecay = flc.wgt_detdecay;
+
+  this->vtx_rng = flc.vtx_rng;
 
   return *this;
 }
 //___________________________________________________________________________
 void FluxContainer::ResetCopy() const
 {
+  mass = 0.0;
+  lifetime = 0.0;
+
   evtno = 0;
   pdg   = 0;
 
@@ -90,10 +115,18 @@ void FluxContainer::ResetCopy() const
 
   p4.SetPxPyPzE( 0.0, 0.0, 0.0, 0.0 );
   p4_user.SetPxPyPzE( 0.0, 0.0, 0.0, 0.0 );
+
+  decay.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
+  decay_user.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
   
   wgt_xy = 0.0;
   boost_factor = 0.0;
   wgt_collimation = 0.0;
+
+  wgt_survival = 0.0;
+  wgt_detdecay = 0.0;
+
+  vtx_rng = 0.0;
 }
 //___________________________________________________________________________
 void FluxContainer::Print(const Option_t* /* opt */ ) const
@@ -108,6 +141,8 @@ namespace llp  {
     ostream & stream, const FluxContainer & info)
     {
       stream << "Printing information on this ExoticLLP...";
+      stream << "\nmass = " << info.mass << " [GeV]"
+	     << "\nlifetime c*tau = " << info.lifetime << " [m]";
       stream << "\nevtno = " << info.evtno
 	     << "\nParent PDG = " << info.pdg;
       stream << "\nProduction vertex [NEAR, m, ns] = " << utils::print::X4AsString( &(info.v4) )
@@ -120,9 +155,14 @@ namespace llp  {
 	     << "\nEntry point     [USER, m, ns]   = " << utils::print::X4AsString( &(info.entry_user) )
 	     << "\nExit point      [NEAR, m, ns]   = " << utils::print::X4AsString( &(info.exit) )
 	     << "\nExit point      [USER, m, ns]   = " << utils::print::X4AsString( &(info.exit_user) )
+	     << "\nDecay point     [NEAR, m, ns]   = " << utils::print::X4AsString( &(info.decay) )
+	     << "\nDecay point     [USER, m, ns]   = " << utils::print::X4AsString( &(info.decay_user) )
 	     << "\nwgt_xy          = " << info.wgt_xy
 	     << "\nboost_factor    = " << info.boost_factor
-	     << "\nwgt_collimation = " << info.wgt_collimation;
+	     << "\nwgt_collimation = " << info.wgt_collimation
+	     << "\nwgt_survival    = " << info.wgt_survival
+	     << "\nwgt_detdecay    = " << info.wgt_detdecay
+	     << "\nRandom uniform number used for vertex generation = " << info.vtx_rng;
       
       return stream;
     }

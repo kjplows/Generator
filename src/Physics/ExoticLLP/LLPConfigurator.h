@@ -93,7 +93,8 @@ namespace genie {
       mutable bool fIsConfigLoaded;
 
       mutable ExoticLLP fLLP; //! The concrete LLP instance.
-      mutable double fMass; //! LLP mass in MeV
+      mutable double fMass; //! LLP mass in GeV
+      mutable double fLifetime; //! LLP lifetime c * tau, in m.
 
       mutable std::string fInputPath; //! Path to the input channels, relative to $GENIE/config/
       mutable ModeVector fProdChannels, fDecayChannels;

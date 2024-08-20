@@ -369,7 +369,8 @@ int main(int argc, char ** argv)
       TLorentzVector * p4_parent = gOptFluxPtInfo.p4_parent;
 
       LOG("gevgen_exotic_llp", pNOTICE)
-	<< " *** Origin v4 (to populate event) is " << utils::print::X4AsString( v4 );
+	<< " *** Origin v4 (to populate event) is " << utils::print::X4AsString( v4 )
+	<< " *** Parent p4 (to populate event) is " << utils::print::P4AsString( p4_parent );
 
       TVector3 origin_point = v4->Vect();
       TVector3 momentum = p4_parent->Vect();
@@ -406,6 +407,13 @@ int main(int argc, char ** argv)
       // So read it from the input file.
 
       CopyFromPointerFlux(); // because ROOT wants addresses to pointers, which is annoying...
+
+      gOptFluxInfo.mass = llp.GetMass();
+      gOptFluxInfo.lifetime = llp.GetLifetime();
+
+      LOG("gevgen_exotic_llp", pDEBUG)
+	<< "mass = " << gOptFluxInfo.mass
+	<< ", lifetime = " << gOptFluxInfo.lifetime;
 
       // First, we need to construct the input LLP. Based on the parent kinematics
       Decayer * decayer = Decayer::Instance();
@@ -470,14 +478,71 @@ int main(int argc, char ** argv)
 	// Read in the results
 	std::vector< GHepParticle > decayed_results = decayer->GetResults();
 
+	gOptFluxInfo.p4_user = *(event->Particle(0)->P4());
+	TVector3 tmp_vec = vsek->RotateToNear( gOptFluxInfo.p4_user.Vect() );
+	gOptFluxInfo.p4 = TLorentzVector( tmp_vec.Px(), tmp_vec.Py(), tmp_vec.Pz(), 
+					  gOptFluxInfo.p4_user.E() );
+
+	int npro = 0, nneu = 0;
+	int npip = 0, npi0 = 0, npim = 0;
+	int ngam = 0;
+	int nrhp = 0, nrh0 = 0, nrhm = 0;
+
+	TLorentzVector p4_FSPrim(0.0, 0.0, 0.0, 0.0);
+
 	for( std::vector< GHepParticle >::iterator it_res = decayed_results.begin();
-	     it_res != decayed_results.end(); ++it_res )
+	     it_res != decayed_results.end(); ++it_res ) {
 	  event->AddParticle( *it_res );
+
+	  switch( (*it_res).Pdg() ) {
+	  case kPdgPiP: npip++; break;
+	  case kPdgPi0: npi0++; break;
+	  case kPdgPiM: npim++; break;
+	  case kPdgProton: npro++; break;
+	  case kPdgNeutron: nneu++; break;
+	  case kPdgRhoP: nrhp++; break;
+	  case kPdgRho0: nrh0++; break;
+	  case kPdgRhoM: nrhm++; break;
+	  case kPdgGamma: ngam++; break;
+	  default: break;
+	  }
+
+	  if( pdg::IsLepton( (*it_res).Pdg() ) && (*it_res).P4()->E() > p4_FSPrim.E() )
+	    p4_FSPrim = *((*it_res).P4());
+	}
 
 	int decay = 0;
 	Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
+
+	// Update the interaction tags
+	interaction->InitStatePtr()->SetProbeP4( *(event->Particle(0)->P4()) );
+	interaction->InitStatePtr()->SetProbePdg( event->Particle(0)->Pdg() );
+
+	// Because this is a decay, there is no four-momentum transfer to the FS system.
+	// HOWEVER, if we pick a FS primary lepton, then q = p(LLP) - p(primary lepton)
+	interaction->KinePtr()->SetFSLeptonP4(p4_FSPrim);
+	TLorentzVector Q2 = *(event->Particle(0)->P4()) - p4_FSPrim;
+	interaction->KinePtr()->Setx(0.0);
+	interaction->KinePtr()->Sety(1.0 - p4_FSPrim.E() / event->Particle(0)->P4()->E() );
+	interaction->KinePtr()->SetQ2(Q2.Mag2());
+	interaction->KinePtr()->Setq2(-Q2.Mag2());
+	interaction->KinePtr()->SetW(0.0);
+	//interaction->KinePtr()->Sett(Q2.Mag2());
+
+	interaction->ExclTagPtr()->SetNPions( npip, npi0, npim );
+	interaction->ExclTagPtr()->SetNNucleons( npro, nneu );
+	interaction->ExclTagPtr()->SetNSingleGammas( ngam );
+	interaction->ExclTagPtr()->SetNRhos( nrhp, nrh0, nrhm );
 	
 	event->AttachSummary(interaction);
+
+	// finally, make the vertex itself and add timing information
+	vtxGen->ReadFluxContainer( gOptFluxInfo );
+	vtxGen->ProcessEventRecord( event );
+	gOptFluxInfo = vtxGen->RetrieveFluxContainer();
+
+	LOG("gevgen_exotic_llp", pDEBUG) << "Event vertex is " 
+					 << utils::print::X4AsString( event->Vertex() );
 	
 	LOG("gevgen_exotic_llp", pINFO)
 	  << "Generated event: " << *event;

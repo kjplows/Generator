@@ -21,14 +21,14 @@ ExoticLLP::ExoticLLP()
 
 }
 //____________________________________________________________________________
-ExoticLLP::ExoticLLP( double mass, ModeVector modes ) :
-  fMass( mass )
+ExoticLLP::ExoticLLP( double mass, double lifetime, ModeVector modes ) :
+  fMass( mass ), fLifetime( lifetime )
 {
   ConstructModes( modes );
 }
 //____________________________________________________________________________
-ExoticLLP::ExoticLLP( double mass, ModeVector productionModes, ModeVector decayModes ):
-  fMass( mass )
+ExoticLLP::ExoticLLP( double mass, double lifetime, ModeVector productionModes, ModeVector decayModes ):
+  fMass( mass ), fLifetime( lifetime )
 {
   ConstructModes( productionModes );
   ConstructModes( decayModes );

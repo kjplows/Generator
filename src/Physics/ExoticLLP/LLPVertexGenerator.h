@@ -45,6 +45,7 @@
 #include "Framework/Utils/UnitUtils.h"
 #include "Framework/Utils/PrintUtils.h"
 
+#include "Physics/ExoticLLP/LLPConfigurator.h"
 #include "Physics/ExoticLLP/LLPGeomRecordVisitorI.h"
 #include "Physics/ExoticLLP/LLPFluxContainer.h"
 #include "Physics/ExoticLLP/VolumeSeeker.h"
@@ -54,6 +55,7 @@ namespace llp {
 
   class ExoticLLP;
   class VolumeSeeker;
+  class LLPConfigurator;
 
   class VertexGenerator : public Algorithm {
 
@@ -74,7 +76,8 @@ namespace llp {
 
     //void SetGeomFile( std::string geomfile, std::string topVolume ) const;
 
-    void ReadFluxContainer( genie::llp::FluxContainer flc ) const;
+    void ReadFluxContainer( const genie::llp::FluxContainer flc ) const;
+    genie::llp::FluxContainer RetrieveFluxContainer() const { return fFluxContainer; }
 
   private:
 
@@ -108,9 +111,9 @@ namespace llp {
     mutable double tunits = genie::units::ns; mutable std::string tunitString = "ns";
 
     mutable genie::llp::FluxContainer fFluxContainer;
-    mutable TLorentzVector fDecayPoint;
+    mutable TLorentzVector fDecayPoint; // m, ns
     
-    mutable double fCoMLifetime = 0.0; // LLP lifetime in ns
+    mutable double fLifetime = 0.0; // LLP lifetime c*tau, in m
     
     mutable double kNewSpeedOfLight = genie::units::kSpeedOfLight * ( genie::units::m / lunits ) / ( genie::units::s / tunits );
 

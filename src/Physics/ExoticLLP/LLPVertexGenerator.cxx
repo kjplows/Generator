@@ -38,178 +38,144 @@ VertexGenerator::~VertexGenerator()
 
 }
 //____________________________________________________________________________
-void VertexGenerator::ReadFluxContainer( FluxContainer flc ) const
+void VertexGenerator::ReadFluxContainer( const FluxContainer flc ) const
 {
-  FluxContainer * pt_flc = new FluxContainer( flc );
-  fFluxContainer = *pt_flc;
-  delete pt_flc;
+  fFluxContainer = flc;
 }
 //____________________________________________________________________________
 void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 {
-  /*
-  // before anything else: find the geometry!
-  if( !fGeoManager ){
-    LOG( "ExoticLLP", pINFO )
-      << "Getting geometry information from " << fGeomFile;
+  LOG( "ExoticLLP", pDEBUG ) << "Processing vertex positioning...";
+  fDecayPoint = TLorentzVector(0.0, 0.0, 0.0, 0.0);
 
-    fGeoManager = TGeoManager::Import(fGeomFile.c_str());
-    
-    TGeoVolume * main_volume = fGeoManager->GetTopVolume();
-    TGeoVolume * top_volume = fGeoManager->GetVolume( fTopVolume.c_str() );
-    assert( top_volume && "Top volume exists" );
-    // now get the translation of the top volume
-    if( main_volume != top_volume ) {
-      //main_volume->FindMatrixOfDaughterVolume(top_volume);
-      //TGeoHMatrix * hmat = fGeoManager->GetHMatrix();
-      TGeoMatrix * hmat = this->FindFullTransformation( main_volume, top_volume );
-      const Double_t * tran = hmat->GetTranslation();
-      fTx = tran[0] * units::cm / units::m;
-      fTy = tran[1] * units::cm / units::m;
-      fTz = tran[2] * units::cm / units::m;
-      LOG( "ExoticLLP", pDEBUG )
-	<< "Got translation of volume with name " << top_volume->GetName() << " which is ( " 
-	<< fTx << ", " << fTy << ", " << fTz << " ) [m]";
-    }
-    fGeoManager->SetTopVolume(top_volume);
-    TGeoShape * ts = top_volume->GetShape();
-    TGeoBBox * box = (TGeoBBox *) ts;
-    
-    this->ImportBoundingBox( box );
-  }
-
-  this->SetStartingParameters( event_rec );
-  LOG( "ExoticLLP", pDEBUG ) << "Starting parameters SET.";
-
-  double weight = 1.0; // pure geom weight
-
-  TVector3 startPoint, momentum, entryPoint, exitPoint; // USER mm, GeV/GeV
-  startPoint.SetXYZ( fSx, fSy, fSz );
-  momentum.SetXYZ( fPx, fPy, fPz );
+  // get the entry and exit points from the volume, for a ray
+  // first, make sure the VolumeSeeker is appropriately populated
+  VolumeSeeker * vsek = VolumeSeeker::Instance();
+  vsek->ClearEvent();
+  vsek->PopulateEvent( fFluxContainer.v4.Vect(), fFluxContainer.p4.Vect() ); // only in NEAR 
   
-  bool didIntersectDet = this->VolumeEntryAndExitPoints( startPoint, momentum, entryPoint, exitPoint, fGeoManager, fGeoVolume );
+  // Raytrace the detector and get out the entry and exit points
+  vsek->RaytraceDetector();
+  TVector3 entry_point = vsek->GetEntryPoint(); // USER, m
+  TVector3 exit_point  = vsek->GetExitPoint(); // USER, m
 
-  if( !isParticleGun && isUsingDk2nu ) assert( didIntersectDet && "Forced to hit detector somewhere" ); // forced to hit detector somewhere!
-  else {
-    std::vector< double > * newProdVtx = new std::vector< double >();
-    newProdVtx->emplace_back( startPoint.X() );
-    newProdVtx->emplace_back( startPoint.Y() );
-    newProdVtx->emplace_back( startPoint.Z() );
+  LOG( "ExoticLLP", pDEBUG ) << "Here are the entry and exit points..."
+			     << "\nUser origin: " << utils::print::X4AsString( &fFluxContainer.v4_user )
+			     << " [m]"
+			     << "\nUser mom:    " << utils::print::P4AsString( &fFluxContainer.p4_user )
+			     << " [GeV]"
+			     << "\nEntry point: " << utils::print::Vec3AsString( &entry_point )
+			     << " [m]"
+			     << "\nExit  point: " << utils::print::Vec3AsString( &exit_point )
+			     << " [m]";
 
-  }
-  if( !didIntersectDet ){ // bail
-    LOG( "ExoticLLP", pERROR )
-      << "Bailing...";
-    TLorentzVector v4dummy( -999.9, -999.9, -999.9, -999.9 );
-    event_rec->SetVertex( v4dummy );
-    return;
-  }
+  // Yay! Now we can use a lifetime to get a vertex
+  // Practically, it is a Uniform number.
+  // RETHERE: Perhaps we should save the random number too, to cast from tau1 |--> tau2...
 
-  this->EnforceUnits( "mm", "rad", "ns" );
+  TVector3 ray_in_detector = exit_point - entry_point; // m
+  double max_length = ray_in_detector.Mag() * units::m / lunits; // lunits
 
-  // move fCoMLifetime to ns from GeV^{-1}
-  fCoMLifetime *= 1.0 / ( units::ns * units::GeV );
+  // Get the LLP configurator and from that the ExoticLLP
+  const Algorithm * algLLPConfigurator = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
+  const LLPConfigurator * LLP_configurator = dynamic_cast< const LLPConfigurator * >( algLLPConfigurator );
 
-  double maxDx = exitPoint.X() - entryPoint.X();
-  double maxDy = exitPoint.Y() - entryPoint.Y();
-  double maxDz = exitPoint.Z() - entryPoint.Z(); // mm
-
-  double maxLength = std::sqrt( std::pow( maxDx , 2.0 ) +
-				std::pow( maxDy , 2.0 ) +
-				std::pow( maxDz , 2.0 ) ); // mm
+  fLifetime = LLP_configurator->RetrieveLLP().GetLifetime() * units::m / lunits; // lunits
   
-  TLorentzVector * p4HNL = event_rec->Particle(0)->GetP4();
-  double betaMag = p4HNL->P() / p4HNL->E();
-  double gamma = std::sqrt( 1.0 / ( 1.0 - betaMag * betaMag ) );
+  // Map the uniform number to an exponential, 1 - exp( -l / (beta*gamma*fLifetime) ) with l = max_length
+  // The function is f(u) = l * ( 1 - ( 1 - exp(-k*l*u) ) / ( 1 - exp(-k*l) ) ), k = 1 / (b*g*(ctau))
   
-  double elapsed_length = this->CalcTravelLength( betaMag, fCoMLifetime, maxLength ); //mm
-  __attribute__((unused)) double ratio_length = elapsed_length / maxLength;
+  double beta  = fFluxContainer.p4_user.Beta();
+  double gamma = fFluxContainer.p4_user.Gamma();
+  double kappa = 1.0 / ( beta * gamma * fLifetime ); // (lunits)^{-1}
 
-  TVector3 HNLOriginPoint( fNx * units::m / units::mm, fNy * units::m / units::mm, fNz * units::m / units::mm ); // USER mm
+  double uniform = RandomGen::Instance()->RndGen().Rndm();
+
+  //double elapsed_length = length_score * max_length;
+  double elapsed_length = max_length * ( 1.0 - 
+					 ( 1.0 - std::exp( -kappa * max_length * uniform ) ) /
+					 ( 1.0 - std::exp( -kappa * max_length ) ) ); // lunits
+  elapsed_length *= lunits / units::m; // m
+
+  // now place the decay vertex
+  TVector3 vtx = entry_point + elapsed_length * ray_in_detector.Unit(); // m
   
-  // from these we can also make the weight. It's P( survival ) * P( decay in detector | survival )
-  double distanceBeforeDet = std::sqrt( std::pow( (HNLOriginPoint.X() - entryPoint.X()), 2.0 ) + 
-					std::pow( (HNLOriginPoint.Y() - entryPoint.Y()), 2.0 ) + 
-					std::pow( (HNLOriginPoint.Z() - entryPoint.Z()), 2.0 ) ); // mm
+  LOG( "ExoticLLP", pDEBUG ) << "\nWith max_length = " << max_length 
+			     << " [ " << lunitString << " ]"
+			     << "\nand uniform number = " << uniform
+			     << "\nand beta, gamma, kappa = " << beta << ", " << gamma 
+			     << ", " << kappa 
+			     << " [ 1 / " << lunitString << " ]"
+			     << "\nwe got a transformed number " 
+			     << "1 - ( 1.0 - " << std::exp( -kappa * max_length * uniform )
+			     << " ) / ( 1.0 - " << std::exp( -kappa * max_length ) << " )"
+			     << "\nand an elapsed length = " << elapsed_length 
+			     << " [ " << lunitString << " ]"
+			     << "\nand therefore put the vertex at "
+			     << utils::print::Vec3AsString( &vtx )
+			     << " [ m ]";
+
+  // We can also calculate the time of arrival of this LLP
+  // We'll use the parent decay vertex time as an input, and add the time-of-flight on top
+
+  TLorentzVector v4_origin = fFluxContainer.v4_user; // m, ns
+  TVector3 ray_to_detector = entry_point - v4_origin.Vect(); // m
+  double t0 = v4_origin.T() * units::ns / tunits; // tunits
+
+  double velocity = beta * kNewSpeedOfLight; // lunits / tunits
+  double full_distance = ray_to_detector.Mag() * units::m / lunits + elapsed_length; // get to detector, and travel in it a bit. lunits
+  double tof = full_distance / velocity; // tunits
+
+  double full_time = (t0 + tof) * tunits / units::ns; // ns
+  // also update the times for the entry and exit points
+  double entry_time = ( t0 + ray_to_detector.Mag() * (units::m / lunits) / 
+			velocity ) * tunits / units::ns;
+  double exit_time  = ( t0 + ( ray_to_detector.Mag() + max_length ) * (units::m / lunits) /
+			velocity ) * tunits / units::ns;
   
-  double timeBeforeDet = distanceBeforeDet / ( betaMag * kNewSpeedOfLight ); // ns lab
-  double timeInsideDet = maxLength / ( betaMag * kNewSpeedOfLight ); // ns lab
-  
-  double LabToRestTime = 1.0 / ( gamma );
-  timeBeforeDet *= LabToRestTime; // ns rest
-  timeInsideDet *= LabToRestTime; // ns rest
-  
-  double survProb = std::exp( - timeBeforeDet / fCoMLifetime );
-  weight *= 1.0 / survProb;
-  double decayProb = 1.0 - std::exp( - timeInsideDet / fCoMLifetime );
-  weight *= 1.0 / decayProb;
+  TLorentzVector entry_v4_user( entry_point.X(), entry_point.Y(), entry_point.Z(), entry_time );
+  TVector3 entry_point_near = vsek->RotateToNear( entry_point );
+  entry_point_near = vsek->TranslateToNear( entry_point_near );
+  TLorentzVector entry_v4( entry_point_near.X(), entry_point_near.Y(), entry_point_near.Z(), entry_time );
 
-  LOG( "ExoticLLP", pDEBUG ) 
-    << "\nOutput of lifetime calc:"
-    << "\nLifetime = " << fCoMLifetime << " [CoM ns]"
-    << "\nDistance to detector = " << distanceBeforeDet * units::mm / units::m
-    << " : inside detector = " << maxLength * units::mm / units::m << " [m]"
-    << "\nTime before detector = " << timeBeforeDet / LabToRestTime
-    << " : inside detector = " << timeInsideDet / LabToRestTime << " [LAB ns]"
-    << "\nTime before detector = " << timeBeforeDet
-    << " : inside detector = " << timeInsideDet << " [CoM ns]"
-    << "\n"
-    << "PSurv = " << survProb
-    << " : PDec = " << decayProb;
+  TLorentzVector exit_v4_user( exit_point.X(), exit_point.Y(), exit_point.Z(), exit_time );
+  TVector3 exit_point_near = vsek->RotateToNear( exit_point );
+  exit_point_near = vsek->TranslateToNear( exit_point_near );
+  TLorentzVector exit_v4( exit_point_near.X(), exit_point_near.Y(), exit_point_near.Z(), exit_time );
 
-  // save the survival and decay probabilities
-  if( event_rec->Particle(1) && event_rec->Particle(2) ){
-    event_rec->Particle(1)->SetPosition( 0.0, 0.0, 0.0, survProb );
-    event_rec->Particle(2)->SetPosition( 0.0, 0.0, 0.0, decayProb );
-  }
+  fFluxContainer.entry = entry_v4; fFluxContainer.entry_user = entry_v4_user;
+  fFluxContainer.exit  = exit_v4;  fFluxContainer.exit_user  = exit_v4_user;
 
-  // update the weight
-  event_rec->SetWeight( event_rec->Weight() * weight );
+  // now set the final decay point
+  fDecayPoint.SetXYZT( vtx.X(), vtx.Y(), vtx.Z(), full_time ); // m, ns
 
-  TVector3 decayPoint = this->GetDecayPoint( elapsed_length, entryPoint, momentum ); // USER, mm
+  LOG( "ExoticLLP", pDEBUG ) << "\nThe velocity v = beta * c = " << velocity 
+			     << " [ " << lunitString << " / " << tunitString << " ]";
+  LOG( "ExoticLLP", pDEBUG ) << "\nFrom a full distance of "
+			     << "\nto detector: " << ray_to_detector.Mag()
+			     << " [ " << lunitString << " ]"
+			     << "\nin detector: " << elapsed_length
+			     << " [ " << lunitString << " ]"
+			     << "\nwe get a tof = " << tof
+			     << " [ " << tunitString << " ]"
+			     << "\nand from an origin time " << t0
+			     << " [ " << tunitString << " ]"
+			     << "\nso the full time is " << full_time
+			     << " [ ns ]";
+  LOG( "ExoticLLP", pDEBUG ) << "\nThe final decay point is " << utils::print::X4AsString( &fDecayPoint );
 
-  // write out vtx in [m, ns]
-  TLorentzVector x4( decayPoint.X() * units::mm / units::m,
-		     decayPoint.Y() * units::mm / units::m,
-		     decayPoint.Z() * units::mm / units::m,
-		     event_rec->Vertex()->T() );
+  // also get the decay point in NEAR
+  TVector3 decay_point_near = vsek->RotateToNear( vtx );
+  decay_point_near = vsek->TranslateToNear( decay_point_near );
+  TLorentzVector decay_v4_near( decay_point_near.X(), decay_point_near.Y(), decay_point_near.Z(), full_time );
+  fFluxContainer.decay = decay_v4_near; fFluxContainer.decay_user = fDecayPoint;
+  fFluxContainer.vtx_rng = uniform;
 
-  event_rec->SetVertex(x4);
+  event_rec->SetVertex( fDecayPoint );
+  fFluxContainer.wgt_survival = std::exp( -ray_to_detector.Mag() / ( beta * gamma * fLifetime ) );
+  fFluxContainer.wgt_detdecay = 1.0 - std::exp( -max_length / ( beta * gamma * fLifetime ) );
 
-  // the validation app doesn't run the Decayer. So we will insert two neutrinos (not a valid
-  // decay mode), to store entry and exit point
-  if( !isUsingDk2nu ){
-    LOG( "ExoticLLP", pDEBUG ) << "About to insert two neutrinos into a NULL event record";
-    assert( !event_rec->Particle(1) && "Event record only has HNL if gevald_hnl -M 3" );
-    
-    TLorentzVector tmpp4( 0.0, 0.0, 0.0, 0.5 );
-    TLorentzVector ex4( 0.0, 0.0, 0.0, 0.0 );
-    ex4.SetXYZT( entryPoint.X(), entryPoint.Y(), entryPoint.Z(), 0.0 );
-    TLorentzVector xx4( 0.0, 0.0, 0.0, 0.0 );
-    xx4.SetXYZT( exitPoint.X(), exitPoint.Y(), exitPoint.Z(), 0.0 );
-
-    GHepParticle nu1( genie::kPdgNuMu, kIStStableFinalState, -1, -1, -1, -1, tmpp4, ex4 );
-    GHepParticle nu2( genie::kPdgAntiNuMu, kIStStableFinalState, -1, -1, -1, -1, tmpp4, xx4 );
-
-    event_rec->AddParticle( nu1 ); event_rec->AddParticle( nu2 );
-
-    // save the survival and decay probabilities
-    // event_rec->Particle(1)->SetPolarization( survProb, decayProb );
-    event_rec->Particle(1)->SetPosition( 0.0, 0.0, 0.0, survProb );
-    event_rec->Particle(2)->SetPosition( 0.0, 0.0, 0.0, decayProb );
-    event_rec->SetWeight(weight);
-  }
-
-  // also set entry and exit points. Do this in x4 of Particles(1,2)
-  if( event_rec->Particle(1) && event_rec->Particle(2) ){
-    //(event_rec->Particle(1))->SetPosition( entryPoint.X(), entryPoint.Y(), entryPoint.Z(), event_rec->Particle(1)->Vt() );
-    //(event_rec->Particle(2))->SetPosition( exitPoint.X(), exitPoint.Y(), exitPoint.Z(), event_rec->Particle(2)->Vt() );
-    (event_rec->Particle(1))->SetPosition( entryPoint.X(), entryPoint.Y(), entryPoint.Z(), survProb );
-    (event_rec->Particle(2))->SetPosition( exitPoint.X(), exitPoint.Y(), exitPoint.Z(), decayProb );
-  }
-
-  delete p4HNL;
-  */
+  LOG( "ExoticLLP", pDEBUG ) << fFluxContainer;
 }
 //____________________________________________________________________________
 double VertexGenerator::CalcTravelLength( double betaMag, double CoMLifetime, double maxLength ) const

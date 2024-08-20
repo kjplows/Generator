@@ -91,7 +91,6 @@ namespace genie {
       TVector3 RotateToNear( TVector3 input ) const { return VolumeSeeker::Rotate( input, false ); }
 
       //! Given an origin point and a momentum, find the entry and exit points to the detector
-      // RETHERE make private
       bool RaytraceDetector( bool grace = false ) const;
       
       //! Define a region in (theta, phi) space that an HNL can be accepted in...

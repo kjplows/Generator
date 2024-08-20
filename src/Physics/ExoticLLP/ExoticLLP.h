@@ -64,12 +64,13 @@ namespace genie {
 
       // C'tors
       ExoticLLP();
-      ExoticLLP( double mass, ModeVector  modes );
-      ExoticLLP( double mass, ModeVector productionModes, ModeVector decayModes );
+      ExoticLLP( double mass, double lifetime, ModeVector  modes );
+      ExoticLLP( double mass, double lifetime, ModeVector productionModes, ModeVector decayModes );
       /*virtual*/ ~ExoticLLP();
 
       // Getters
       inline double GetMass() const { return fMass; }
+      inline double GetLifetime() const { return fLifetime; }
       inline std::vector< ModeObject > GetProductionModes() const { return fProductionModes; }
       inline std::vector< ModeObject > GetDecayModes() const { return fDecayModes; }
 
@@ -79,14 +80,15 @@ namespace genie {
 
     private:
 
-      double fMass;                                       //! Mass in MeV
+      double fMass;      //! Mass in GeV
+      double fLifetime;  //! Lifetime c * \tau in m                                 
       mutable std::vector< genie::llp::ModeObject > fProductionModes; //! The channels that can produce LLP
       mutable std::vector< genie::llp::ModeObject > fDecayModes;      //! The channels that LLP can produce
 
       void ConstructModes( ModeVector modes ) const;
       ModeObject MakeModeObject( std::pair< double, std::vector< int > > mode ) const;
 
-      ClassDef(ExoticLLP, 1)
+      ClassDef(ExoticLLP, 2)
     }; // class ExoticLLP
 
   } // namespace llp

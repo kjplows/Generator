@@ -420,7 +420,9 @@ void FluxCreator::LoadConfig(void)
   const Algorithm * algLLPConfigurator = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
   const LLPConfigurator * LLP_configurator = dynamic_cast< const LLPConfigurator * >( algLLPConfigurator );
 
+  LOG( "ExoticLLP", pDEBUG ) << "About to retrieve LLP from LLPConfigurator";
   fExoticLLP = LLP_configurator->RetrieveLLP();
+  LOG( "ExoticLLP", pDEBUG ) << "Successfully retrieved LLP from LLPConfigurator";
   fMass = fExoticLLP.GetMass();
 
   // Now get the production modes from the LLP, and group them by parent

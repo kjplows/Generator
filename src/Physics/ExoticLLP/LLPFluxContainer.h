@@ -89,6 +89,9 @@ namespace genie{
 
       // members
 
+      mutable double mass; ///< Mass of LLP in GeV
+      mutable double lifetime; ///< c * tau in m
+
       mutable int evtno; ///< Index corresponding to flux ntuple entry
       mutable int pdg;   ///< PDG code of parent
  
@@ -106,11 +109,19 @@ namespace genie{
 
       mutable TLorentzVector p4;      ///< LLP momentum in NEAR frame [GeV]
       mutable TLorentzVector p4_user; ///< LLP momentum in USER frame [GeV]
+
+      mutable TLorentzVector decay;      ///< LLP decay vertex in NEAR frame [m, ns]
+      mutable TLorentzVector decay_user; ///< LLP decay vertex in USER frame [m, ns]
       
       mutable double wgt_xy;          ///< Geometric weight: the angular size of the detector in the lab frame
       mutable double boost_factor;    ///< The boost factor, E_LLP (lab) / E_LLP (rest)
       mutable double wgt_collimation; ///< The collimation effect
-      
+
+      mutable double wgt_survival;    ///< Probability the LLP survives travel to the entry point
+      mutable double wgt_detdecay;    ///< 1 - probability the LLP survives travel between entry, exit
+
+      mutable double vtx_rng; ///< Random number used to generate vertex
+
     }; // class FluxContainer
     
   } // namespace llp
