@@ -379,8 +379,6 @@ int main(int argc, char ** argv)
       gAngularRegion = vsek->AngularAcceptance();
       gAngularRegionSize = vsek->AngularSize( gAngularRegion );
 
-      //gOptFluxPtInfo = *(new FluxPointerContainer()); NONONONO
-
       // Here we set all the branches' values. It is inelegant, but has to be done.
 
       gOptFluxPtInfo.evtno = ievent;
@@ -858,7 +856,7 @@ void SetFluxBranchAddresses( TTree * tree )
   tree->SetBranchAddress( "p4_user",          &(gOptFluxPtInfo.p4_user)          );
   tree->SetBranchAddress( "wgt_xy",           &(gOptFluxPtInfo.wgt_xy)           );
   tree->SetBranchAddress( "boost_factor",     &(gOptFluxPtInfo.boost_factor)     );
-  tree->SetBranchAddress( "wgt_collimaution", &(gOptFluxPtInfo.wgt_collimation)  );
+  tree->SetBranchAddress( "wgt_collimation",  &(gOptFluxPtInfo.wgt_collimation)  );
 }
 //_________________________________________________________________________________________
 void CreateFluxBranches(void)
