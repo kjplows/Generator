@@ -252,6 +252,10 @@ int main(int argc, char ** argv)
     FluxContainer * ptGnmf = new FluxContainer();
     gOptFluxInfo = *ptGnmf;
     delete ptGnmf;
+  } else {
+    TBranch * flux = ntpw.EventTree()->Branch( "flux", "genie::llp::FluxContainer",
+					       &gOptFluxInfo, 32000, 1 );
+    flux->SetAutoDelete(kFALSE);
   }
 
   // Create a MC job monitor for a periodically updated status file
@@ -291,7 +295,6 @@ int main(int argc, char ** argv)
 
     if( gOptWriteAngularAcceptance ){
       gOutputFluxFile = TFile::Open( "./exotic_llp_output_flux.root", "RECREATE" );
-      //gOutputFluxTree = dynamic_cast<TTree *>( flux_tree->CloneTree(0) );
       gOutputFluxTree = new TTree( flux_tree->GetName(), flux_tree->GetName() );
 
       CreateFluxBranches();
@@ -351,10 +354,11 @@ int main(int argc, char ** argv)
     
     assert( ievent >= gOptFirstEvent && gOptFirstEvent >= 0 && "First event >= 0" );
 
-    //LOG("gevgen_exotic_llp", pNOTICE)
-    //  << " *** Getting entry for event............ " << (ievent-gOptFirstEvent);
-
     flux_tree->GetEntry(ievent);
+    
+    //LOG("gevgen_exotic_llp", pNOTICE)
+    //  << " *** Getting entry for event............ " << (ievent-gOptFirstEvent)
+    //  << "\nParent PDG  = " << gOptFluxPtInfo.pdg;
 
     //LOG("gevgen_exotic_llp", pNOTICE)
     //  << " *** GOT ENTRY for event............ " << (ievent-gOptFirstEvent);
