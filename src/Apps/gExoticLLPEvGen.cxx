@@ -528,7 +528,7 @@ int main(int argc, char ** argv)
 	interaction->KinePtr()->Sety(1.0 - p4_FSPrim.E() / event->Particle(0)->P4()->E() );
 	interaction->KinePtr()->SetQ2(Q2.Mag2());
 	interaction->KinePtr()->Setq2(-Q2.Mag2());
-	interaction->KinePtr()->SetW(0.0);
+	interaction->KinePtr()->SetW(gOptFluxInfo.mass);
 	//interaction->KinePtr()->Sett(Q2.Mag2());
 
 	interaction->ExclTagPtr()->SetNPions( npip, npi0, npim );
