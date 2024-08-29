@@ -169,6 +169,12 @@ namespace genie{
       // And a function that just returns the energy in lab frame from rest frame emission angle
       double CalculateLabFrameEnergy( double Theta, TLorentzVector p4par, TLorentzVector p4LLP ) const;
 
+      // A function that calculates the rest-frame kinematics of the entire particle stack, given
+      // the geometrical constraint of flux.
+      std::vector<genie::GHepParticle> 
+	FindStackKinematics( std::vector<genie::GHepParticle> random_system,
+			     TVector3 desired_direction ) const;
+
       // some utilities for C++ strings, grabbed from https://www.stackoverflow.com/questions/874134/
       bool ends_with(const std::string & str, const std::string & suffix) const {
 	return str.size() >= suffix.size() && str.compare( str.size() - suffix.size(), suffix.size(), suffix ) == 0;

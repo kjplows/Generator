@@ -212,7 +212,9 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   double boost_factor = 1.0; double acc_corr = 1.0;
   TLorentzVector probe_p4(0.0, 0.0, 1.0, 1.0);
   if( vsek->IsInTop( origin ) ) {
+
     LOG( "ExoticLLP", pWARN ) << "Decay of parent particle in the top volume!";
+
     // Just boost probe_p4_rest to the lab frame
     probe_p4 = probe_p4_rest;
     probe_p4.Boost( parent_p4.BoostVector() );
@@ -232,8 +234,6 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
       double max_tangent = velocity_ratio / ( gamma_parent_lab * std::sqrt( 1.0 - velocity_ratio ) );
       double max_angle = std::atan( max_tangent ) * 180.0 / constants::kPi; // std::atan has support on [-pi/2, pi/2]
       if( max_angle < 0.0 ) max_angle += 180.0;
-
-      LOG( "ExoticLLP", pDEBUG ) << "\nmax_angle = " << max_angle << ", zeta = " << zeta;
 
       is_ok = ( max_angle >= zeta );
       /*
@@ -384,10 +384,96 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
 			     << "\nWgt_collimation = " << fFluxInfo.wgt_collimation;
   */
 
+  // Finally, keep track of all the rest-frame kinematics consistent with the flux we just calculated
+
+  TLorentzVector llp_rest_frame_p4_final = probe_p4;
+  llp_rest_frame_p4_final.Boost( -parent_p4.BoostVector() ); // Back into parent rest frame
+  TVector3 desired_direction = llp_rest_frame_p4_final.Vect().Unit();
+
+  // Feed the randomly generated particles into the system and spit them out
+  std::vector< GHepParticle > constrained_rest_stack = 
+    this->FindStackKinematics( decayed_results, desired_direction );
+
+  // Sanity check: the zeroth element of this stack should boost back to the p4 of the LLP!
+  //TLorentzVector * constrained_llp_p4 = (*constrained_rest_stack.begin()).P4();
+  //TLorentzVector * lab_llp_p4 = constrained_llp_p4; lab_llp_p4->Boost( parent_p4.BoostVector() );
+
+  // update the coproduced stuff
+  fFluxInfo.cop_pdgs.emplace_back( llp_pdg );
+  fFluxInfo.cop_p4xs.emplace_back( llp_rest_frame_p4_final.Px() );
+  fFluxInfo.cop_p4ys.emplace_back( llp_rest_frame_p4_final.Py() );
+  fFluxInfo.cop_p4zs.emplace_back( llp_rest_frame_p4_final.Pz() );
+  fFluxInfo.cop_p4Es.emplace_back( llp_rest_frame_p4_final.E()  );
+  for( std::vector<GHepParticle>::iterator it_fss = constrained_rest_stack.begin();
+       it_fss != constrained_rest_stack.end(); ++it_fss ) {
+    GHepParticle part = *it_fss;
+    fFluxInfo.cop_pdgs.emplace_back( part.Pdg() );
+    fFluxInfo.cop_p4xs.emplace_back( part.P4()->Px() );
+    fFluxInfo.cop_p4ys.emplace_back( part.P4()->Py() );
+    fFluxInfo.cop_p4zs.emplace_back( part.P4()->Pz() );
+    fFluxInfo.cop_p4Es.emplace_back( part.P4()->E()  );
+  }
+  
   TLorentzVector probe_v4(0.0, 0.0, 0.0, 0.0); // probe v4 will be updated to event vertex
 
   GHepParticle ptLLP( llp_pdg, kIStInitialState, -1, -1, -1, -1, probe_p4, probe_v4 );
   evrec->AddParticle( ptLLP );
+}
+//____________________________________________________________________________
+std::vector<GHepParticle> FluxCreator::FindStackKinematics( std::vector<GHepParticle> random_system,
+							    TVector3 desired_direction ) const
+{
+  // The 0th element of the vector is the LLP
+  GHepParticle llp_particle = *random_system.begin();
+  TVector3 llp_start_momentum = llp_particle.P4()->Vect();
+  TVector3 uvec = llp_start_momentum.Unit();
+  
+  // Assume desired_direction is in the rest frame; the boost should be handled before this method
+  TVector3 vvec = desired_direction.Unit();
+
+  // And construct the "half-vector" to do a quaternion rotation;
+  // see https://stackoverflow.com/questions/1171849/
+  /*
+   * In the axis-angle representation, the quaternion is (C, XS, YS, ZS) where C, S = cos(sin)(th/2);
+   * and (X, Y, Z) define the axis of the rotation by which one rotates.
+   */
+  TVector3 wvec = (uvec + vvec).Unit();
+
+  double   dot   = uvec.Dot(wvec);
+  TVector3 cross = uvec.Cross(wvec);
+  double   crx   = cross.X();
+  double   cry   = cross.Y();
+  double   crz   = cross.Z();
+
+  // and from that we can construct the rotation matrix!
+  double mat_xx = dot*dot + crx*crx - cry*cry - crz*crz;
+  double mat_xy = 2.0 * (crx*cry - dot*crz);
+  double mat_xz = 2.0 * (crx*crz + dot*cry);
+  double mat_yx = 2.0 * (crx*cry + dot*crz);
+  double mat_yy = dot*dot - crx*crx + cry*cry - crz*crz;
+  double mat_yz = 2.0 * (cry*crz - dot*crx);
+  double mat_zx = 2.0 * (crx*crz - dot*cry);
+  double mat_zy = 2.0 * (cry*crz + dot*crx);
+  double mat_zz = dot*dot - crx*crx - cry*cry + crz*crz;
+  
+  // now, for every particle in the input stack, apply the rotation and get the output.
+  std::vector<GHepParticle> final_system = random_system;
+  for( std::vector<GHepParticle>::iterator it_fss = final_system.begin();
+       it_fss != final_system.end(); ++it_fss ) {
+    TLorentzVector * this_p4 = (*it_fss).P4();
+    TVector3 this_direction = (this_p4->Vect()).Unit(); double mom = this_p4->P();
+    
+    double ox = this_direction.X(), oy = this_direction.Y(), oz = this_direction.Z();
+    double tx = mat_xx * ox + mat_xy * oy + mat_xz * oz;
+    double ty = mat_yx * ox + mat_yy * oy + mat_yz * oz;
+    double tz = mat_zx * ox + mat_zy * oy + mat_zz * oz;
+
+    tx *= mom; ty *= mom; tz *= mom;
+    
+    (*it_fss).SetMomentum( tx, ty, tz, this_p4->E() ); // Note this is a REST FRAME momentum.
+  }
+
+  return final_system;
 }
 //____________________________________________________________________________
 TLorentzVector FluxCreator::LLPEnergy() const

@@ -28,6 +28,12 @@ FluxContainer::FluxContainer(const FluxContainer & flc) : TObject(flc)
 
   evtno = flc.evtno;
   pdg   = flc.pdg;
+
+  cop_pdgs = flc.cop_pdgs;
+  cop_p4xs = flc.cop_p4xs;
+  cop_p4ys = flc.cop_p4ys;
+  cop_p4zs = flc.cop_p4zs;
+  cop_p4Es = flc.cop_p4Es;
   
   v4 = flc.v4;
   v4_user = flc.v4_user;
@@ -64,6 +70,12 @@ FluxContainer & FluxContainer::operator = (const FluxContainer & flc)
 
   this->evtno = flc.evtno;
   this->pdg   = flc.pdg;
+
+  this->cop_pdgs = flc.cop_pdgs;
+  this->cop_p4xs = flc.cop_p4xs;
+  this->cop_p4ys = flc.cop_p4ys;
+  this->cop_p4zs = flc.cop_p4zs;
+  this->cop_p4Es = flc.cop_p4Es;
 
   this->v4 = flc.v4;
   this->v4_user = flc.v4_user;
@@ -102,6 +114,12 @@ void FluxContainer::ResetCopy() const
 
   evtno = 0;
   pdg   = 0;
+
+  if( cop_pdgs.size() > 0 ) cop_pdgs.clear();
+  if( cop_p4xs.size() > 0 ) cop_p4xs.clear();
+  if( cop_p4ys.size() > 0 ) cop_p4ys.clear();
+  if( cop_p4zs.size() > 0 ) cop_p4zs.clear();
+  if( cop_p4Es.size() > 0 ) cop_p4Es.clear();
 
   v4.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
   v4_user.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
@@ -142,11 +160,22 @@ namespace llp  {
   ostream & operator << (
     ostream & stream, const FluxContainer & info)
     {
-      stream << "Printing information on this ExoticLLP...";
+      stream << "\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*";
+      stream << "\nPrinting information on this ExoticLLP...";
       stream << "\nmass = " << info.mass << " [GeV]"
 	     << "\nlifetime c*tau = " << info.lifetime << " [m]";
       stream << "\nevtno = " << info.evtno
 	     << "\nParent PDG = " << info.pdg;
+      stream << "\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*";
+      stream << "\nCoproduced particles: ";
+      for( int i_cop = 1; i_cop < info.cop_pdgs.size(); ++i_cop ) {
+	stream << "\nParticle " << i_cop << ": PDG = " << info.cop_pdgs.at(i_cop)
+	       << ", p4 = ( px = " << info.cop_p4xs.at(i_cop)
+	       << ", py = " << info.cop_p4ys.at(i_cop)
+	       << ", pz = " << info.cop_p4zs.at(i_cop)
+	       << ", E = " << info.cop_p4Es.at(i_cop) << " ) [GeV]";
+      }
+      stream << "\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*";
       stream << "\nProduction vertex [NEAR, m, ns] = " << utils::print::X4AsString( &(info.v4) )
 	     << "\nProduction vertex [USER, m, ns] = " << utils::print::X4AsString( &(info.v4_user) )
 	     << "\nLLP momentum    [NEAR, GeV] = " << utils::print::P4AsString( &(info.p4) )
@@ -165,6 +194,7 @@ namespace llp  {
 	     << "\nwgt_survival    = " << info.wgt_survival
 	     << "\nwgt_detdecay    = " << info.wgt_detdecay
 	     << "\nRandom uniform number used for vertex generation = " << info.vtx_rng;
+      stream << "\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*";
       
       return stream;
     }

@@ -126,6 +126,11 @@ struct FluxPointerContainer {
   double lifetime;
   int evtno;
   int pdg;
+  std::vector<int>    cop_pdgs;
+  std::vector<double> cop_p4xs;
+  std::vector<double> cop_p4ys;
+  std::vector<double> cop_p4zs;
+  std::vector<double> cop_p4Es;
   TLorentzVector * v4;
   TLorentzVector * v4_user;
   TLorentzVector * p4_parent; 
@@ -169,6 +174,11 @@ struct FluxPointerContainer {
     lifetime = 0.0;
     evtno = 0;
     pdg = 0;
+    if( cop_pdgs.size() > 0 ) cop_pdgs.clear();
+    if( cop_p4xs.size() > 0 ) cop_p4xs.clear();
+    if( cop_p4ys.size() > 0 ) cop_p4ys.clear();
+    if( cop_p4zs.size() > 0 ) cop_p4zs.clear();
+    if( cop_p4Es.size() > 0 ) cop_p4Es.clear();
     delete v4; delete v4_user;
     delete p4_parent; delete p4_parent_user;
     delete entry; delete entry_user;
@@ -429,6 +439,7 @@ int main(int argc, char ** argv)
       // Assume that there is a flux and that it contains all the information. 
       // So read it from the input file.
 
+      gOptFluxInfo.ResetCopy();
       CopyFromPointerFlux(); // because ROOT wants addresses to pointers, which is annoying...
 
       gOptFluxInfo.mass = llp.GetMass();
@@ -560,6 +571,8 @@ int main(int argc, char ** argv)
 	event->AttachSummary(interaction);
 
 	// finally, make the vertex itself and add timing information
+	//LOG( "gevgen_exotic_llp", pDEBUG ) << gOptFluxInfo;
+	std::cout.flush(); std::cerr.flush(); // again, weirdness
 	vtxGen->ReadFluxContainer( gOptFluxInfo );
 	vtxGen->ProcessEventRecord( event );
 	gOptFluxInfo = vtxGen->RetrieveFluxContainer();
@@ -572,6 +585,8 @@ int main(int argc, char ** argv)
 
 	// Ensure the flux container pointer points to gOptFluxInfo
 	gOptFluxInfoContainer = &gOptFluxInfo;
+	
+	LOG( "gevgen_exotic_llp", pDEBUG ) << gOptFluxInfo;
 	
 	// Add event at the output ntuple, refresh the mc job monitor & clean-up
 	ntpw.AddEventRecord(ievent, event);

@@ -94,6 +94,12 @@ namespace genie{
 
       mutable int evtno; ///< Index corresponding to flux ntuple entry
       mutable int pdg;   ///< PDG code of parent
+
+      mutable std::vector<int> cop_pdgs;    ///< PDG codes of the particles produced along with the LLP. Entry 0 is always *this* LLP.
+      mutable std::vector<double> cop_p4xs; ///< X-components of the 4-momenta for co-produced particles, in the rest frame of the parent
+      mutable std::vector<double> cop_p4ys; ///< Y-components of the 4-momenta for co-produced particles, in the rest frame of the parent
+      mutable std::vector<double> cop_p4zs; ///< Z-components of the 4-momenta for co-produced particles, in the rest frame of the parent
+      mutable std::vector<double> cop_p4Es; ///< E-components of the 4-momenta for co-produced particles, in the rest frame of the parent
  
       mutable TLorentzVector v4;      ///< Production vertex in NEAR frame [m, ns]
       mutable TLorentzVector v4_user; ///< Production vertex in USER frame [m, ns]
@@ -122,7 +128,7 @@ namespace genie{
 
       mutable double vtx_rng; ///< Random number used to generate vertex
 
-      ClassDef( FluxContainer, 1 );
+      ClassDef( FluxContainer, 2 );
     }; // class FluxContainer
     
   } // namespace llp

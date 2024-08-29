@@ -515,7 +515,8 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
   fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
 
-  //LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
+  LOG( "ExoticLLP", pDEBUG ) << "fMomentum = " << utils::print::Vec3AsString( &fMomentum );
+  LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
 
   // check that this point lies in the geometry.
   std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
@@ -554,8 +555,8 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
     }
   }
 
-  //LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
-  //LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
+  LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
+  LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
 
   if( pathString.find( fTopVolume.c_str() ) == string::npos ) return false; // No luck.
 
