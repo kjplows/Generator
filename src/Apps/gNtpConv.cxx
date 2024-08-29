@@ -120,6 +120,7 @@
 #include <cassert>
 #include <string>
 #include <sstream>
+#include <iostream>
 #include <fstream>
 #include <iomanip>
 #include <vector>
@@ -168,6 +169,10 @@
 #include "Physics/BeamHNL/HNLFluxContainer.h"
 #endif
 
+#ifdef __GENIE_EXOTIC_LLP_ENABLED__
+#include "Physics/ExoticLLP/LLPFluxContainer.h"
+#endif
+
 //define __GHAD_NTP__
 
 using std::string;
@@ -202,6 +207,12 @@ int    HAProbeFSI                (int, int, int, double [], int [], int, int, in
 void   DeclareHNLBranches        (TTree * tree, TTree * intree, 
 				  double * dVars, int * iVars);
 #endif // #ifdef __GENIE_HEAVY_NEUTRAL_LEPTON_ENABLED__
+
+#ifdef __GENIE_EXOTIC_LLP_ENABLED__
+void   DeclareLLPBranches        (TTree * tree, TTree * intree); // only need the `flux' branch
+llp::FluxContainer * gLLPFluxInfo = 0;
+#endif // #ifdef __GENIE_EXOTIC_LLP_ENABLED__
+
 //format enum
 typedef enum EGNtpcFmt {
   kConvFmt_undef = 0,
@@ -2213,6 +2224,12 @@ void ConvertToGRooTracker(void)
   int    iVars[4] = { -9, -9, -9, -9 };
   DeclareHNLBranches( rootracker_tree, gtree, dVars, iVars );
 #endif // #ifdef __GENIE_HEAVY_NEUTRAL_LEPTON_ENABLED__
+
+#ifdef __GENIE_EXOTIC_LLP_ENABLED__
+  gLLPFluxInfo = new llp::FluxContainer();
+  DeclareLLPBranches( rootracker_tree, gtree );
+#endif // #ifdef __GENIE_EXOTIC_LLP_ENABLED__
+
 #else
   LOG("gntpc", pWARN) 
     << "\n Flux drivers are not enabled." 
@@ -3296,6 +3313,39 @@ int HAProbeFSI(int probe_fsi, int probe_pdg, int numh, double E_had[], int pdg_h
   return index;
 }
 
+//____________________________________________________________________________________
+#ifdef __GENIE_EXOTIC_LLP_ENABLED__
+void DeclareLLPBranches( TTree * tree, TTree * intree )
+{
+  // is there a better way to poll from all the branches of llp::FluxContainer?
+  //tree->Branch( "flux", &gLLPFluxInfo, 32000 );
+  tree->Branch( "LLP_Mass",            &(gLLPFluxInfo->mass),            "LLP_Mass/D"            );
+  tree->Branch( "LLP_Lifetime",        &(gLLPFluxInfo->lifetime),        "LLP_Lifetime/D"        );
+  tree->Branch( "LLP_Flux_evtno",      &(gLLPFluxInfo->evtno),           "LLP_Flux_evtno/I"      );
+  tree->Branch( "LLP_Parent_pdg",      &(gLLPFluxInfo->pdg),             "LLP_Parent_pdg/I"      );
+  tree->Branch( "LLP_Parent_v4_NEAR",  &(gLLPFluxInfo->v4)                                       );
+  tree->Branch( "LLP_Parent_v4",       &(gLLPFluxInfo->v4_user)                                  );
+  tree->Branch( "LLP_Parent_p4_NEAR",  &(gLLPFluxInfo->p4_parent)                                );
+  tree->Branch( "LLP_Parent_p4",       &(gLLPFluxInfo->p4_parent_user)                           );
+  tree->Branch( "LLP_p4_NEAR",         &(gLLPFluxInfo->p4)                                       );
+  tree->Branch( "LLP_p4",              &(gLLPFluxInfo->p4_user)                                  );
+  tree->Branch( "LLP_EntryPoint_NEAR", &(gLLPFluxInfo->entry)                                    );
+  tree->Branch( "LLP_EntryPoint",      &(gLLPFluxInfo->entry_user)                               );
+  tree->Branch( "LLP_ExitPoint_NEAR",  &(gLLPFluxInfo->exit)                                     );
+  tree->Branch( "LLP_ExitPoint",       &(gLLPFluxInfo->exit_user)                                );
+  tree->Branch( "LLP_DecayPoint_NEAR", &(gLLPFluxInfo->decay)                                    );
+  tree->Branch( "LLP_DecayPoint",      &(gLLPFluxInfo->decay_user)                               );
+  tree->Branch( "LLP_Wgt_geom",        &(gLLPFluxInfo->wgt_xy),          "LLP_Wgt_geom/D"        );
+  tree->Branch( "LLP_Boost_factor",    &(gLLPFluxInfo->boost_factor),    "LLP_Boost_factor/D"    );
+  tree->Branch( "LLP_Wgt_collimation", &(gLLPFluxInfo->wgt_collimation), "LLP_Wgt_collimation/D" );
+  tree->Branch( "LLP_Wgt_survival",    &(gLLPFluxInfo->wgt_survival),    "LLP_Wgt_survival/D"    );
+  tree->Branch( "LLP_Wgt_detdecay",    &(gLLPFluxInfo->wgt_detdecay),    "LLP_Wgt_detdecay/D"    );
+  tree->Branch( "LLP_Vertex_rng",      &(gLLPFluxInfo->vtx_rng),         "LLP_Vertex_rng/D"      );
+
+  TBranch * b_fluxInfo;
+  intree->SetBranchAddress( "flux", &gLLPFluxInfo, &b_fluxInfo );
+}
+#endif // #ifdef __GENIE_EXOTIC_LLP_ENABLED__
 // Functions to add in branches from BeamHNL module
 //____________________________________________________________________________________
 #ifdef __GENIE_HEAVY_NEUTRAL_LEPTON_ENABLED__

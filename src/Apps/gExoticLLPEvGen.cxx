@@ -118,9 +118,12 @@ map<string,string> gOptFluxShortNames;
 bool             gOptIsUsingTrees = false;               // using flat-tree flux files?
 int              gOptFirstEvent   = 0;                   // skip to this entry in flux tree
 FluxContainer    gOptFluxInfo;                           // custom LLP flux driver
+FluxContainer *  gOptFluxInfoContainer = 0;              // to put into the TTree
 
 // a FluxContainer-like struct to hold addresses to pointers
 struct FluxPointerContainer {
+  double mass;
+  double lifetime;
   int evtno;
   int pdg;
   TLorentzVector * v4;
@@ -131,36 +134,53 @@ struct FluxPointerContainer {
   TLorentzVector * entry_user;
   TLorentzVector * exit;
   TLorentzVector * exit_user;
+  TLorentzVector * decay;
+  TLorentzVector * decay_user;
   TLorentzVector * p4;
   TLorentzVector * p4_user;
   double wgt_xy;
   double boost_factor;
   double wgt_collimation;
+  double wgt_survival;
+  double wgt_detdecay;
+  double vtx_rng;
 
   FluxPointerContainer() {
+    mass = 0.0;
+    lifetime = 0.0;
     evtno = 0;
     pdg = 0;
     v4 = new TLorentzVector(); v4_user = new TLorentzVector();
     p4_parent = new TLorentzVector(); p4_parent_user = new TLorentzVector();
     entry = new TLorentzVector(); entry_user = new TLorentzVector();
     exit = new TLorentzVector(); exit_user = new TLorentzVector();
+    decay = new TLorentzVector(); decay_user = new TLorentzVector();
     p4 = new TLorentzVector(); p4_user = new TLorentzVector();
     wgt_xy = 0.0;
     boost_factor = 0.0;
     wgt_collimation = 0.0;
+    wgt_survival = 0.0;
+    wgt_detdecay = 0.0;
+    vtx_rng = 0.0;
   }
 
   ~FluxPointerContainer() {
+    mass = 0.0;
+    lifetime = 0.0;
     evtno = 0;
     pdg = 0;
     delete v4; delete v4_user;
     delete p4_parent; delete p4_parent_user;
     delete entry; delete entry_user;
     delete exit; delete exit_user;
+    delete decay; delete decay_user;
     delete p4; delete p4_user;
     wgt_xy = 0.0;
     boost_factor = 0.0;
     wgt_collimation = 0.0;
+    wgt_survival = 0.0;
+    wgt_detdecay = 0.0;
+    vtx_rng = 0.0;
   }
 };
 
@@ -253,8 +273,9 @@ int main(int argc, char ** argv)
     gOptFluxInfo = *ptGnmf;
     delete ptGnmf;
   } else {
-    TBranch * flux = ntpw.EventTree()->Branch( "flux", "genie::llp::FluxContainer",
-					       &gOptFluxInfo, 32000, 1 );
+    //TBranch * flux = ntpw.EventTree()->Branch( "flux", "genie::llp::FluxContainer",
+    TBranch * flux = ntpw.EventTree()->Branch( "flux",
+					       &gOptFluxInfoContainer, 32000 );
     flux->SetAutoDelete(kFALSE);
   }
 
@@ -548,6 +569,9 @@ int main(int argc, char ** argv)
 	
 	LOG("gevgen_exotic_llp", pINFO)
 	  << "Generated event: " << *event;
+
+	// Ensure the flux container pointer points to gOptFluxInfo
+	gOptFluxInfoContainer = &gOptFluxInfo;
 	
 	// Add event at the output ntuple, refresh the mc job monitor & clean-up
 	ntpw.AddEventRecord(ievent, event);
@@ -568,6 +592,7 @@ int main(int argc, char ** argv)
   } else { ntpw.Save(); }
 
   //delete v4; delete p4_parent;
+  //delete gOptFluxInfoContainer;
 
   LOG( "gevgen_exotic_llp", pFATAL )
     << "This is a TEST. Goodbye world!";

@@ -13,6 +13,8 @@
 using namespace genie;
 using namespace genie::llp;
 
+ClassImp( FluxContainer )
+
 //___________________________________________________________________________
 FluxContainer::FluxContainer() : TObject()
 {

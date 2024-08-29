@@ -122,6 +122,7 @@ namespace genie{
 
       mutable double vtx_rng; ///< Random number used to generate vertex
 
+      ClassDef( FluxContainer, 1 );
     }; // class FluxContainer
     
   } // namespace llp
