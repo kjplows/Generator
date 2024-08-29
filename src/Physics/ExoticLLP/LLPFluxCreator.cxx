@@ -233,6 +233,8 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
       double max_angle = std::atan( max_tangent ) * 180.0 / constants::kPi; // std::atan has support on [-pi/2, pi/2]
       if( max_angle < 0.0 ) max_angle += 180.0;
 
+      LOG( "ExoticLLP", pDEBUG ) << "\nmax_angle = " << max_angle << ", zeta = " << zeta;
+
       is_ok = ( max_angle >= zeta );
       /*
       if( is_ok )
@@ -274,43 +276,72 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
     double neg_soln = this->AccCorr_Solution( zeta, fMass,
 					      parent_p4.E(), parent_p4.M(), 
 					      probe_p4_rest.E(), false );
+
+    double inv_der_pos = std::abs( 1.0 / this->Derivative( pos_soln, parent_p4, probe_p4_rest ) );
+    double inv_der_neg = 0.0;
     
     bool forwards = true;
 
+    /*
+    std::ostringstream asts;
+    asts << "Dumping stats:"
+	 << "\nzeta = " << zeta
+	 << "\nfMass = " << fMass
+	 << "\nparent_p4 = " << utils::print::P4AsString( &parent_p4 )
+	 << "\nprobe_p4_rest = " << utils::print::P4AsString( &probe_p4_rest )
+	 << "\npos_soln = " << pos_soln
+	 << "\nder_pos = " << this->Derivative( pos_soln, parent_p4, probe_p4_rest );
+    */
+
     double image_score = rnd->RndGen().Rndm();    
     if( neg_soln > 0.0 ) {
-      double inv_der_pos = std::abs( 1.0 / this->Derivative( pos_soln, parent_p4, probe_p4_rest ) );
-      double inv_der_neg = std::abs( 1.0 / this->Derivative( neg_soln, parent_p4, probe_p4_rest ) );
+      inv_der_neg = std::abs( 1.0 / this->Derivative( neg_soln, parent_p4, probe_p4_rest ) );
 
       if( image_score > inv_der_pos / ( inv_der_pos + inv_der_neg ) ) forwards = false;
 
       /*
-       * We need to compare to the acceptance of a massless LLP.
-       * If the production mode is 2-body this can be done immediately analytically.
-       * If not, then we have to perform a phase-space decay (again RETHERE: including angular correlations?)
-       * such that we get a proxy for the rest-frame energy of the massless LLP.
-       */
-
-      double energy_massless = 0.0;
-      double m_parent = parent_p4.M();
-      if( decayed_results.size() == 2 )
-	energy_massless = probe_p4_rest.E() - fMass * fMass / (2.0 * m_parent);
-      else {
-	decay_ok = decayer->UnpolarisedDecay(true); // fudge a decay with massless LLP and same other products
-	energy_massless = decayer->GetMasslessEnergy();
-      }
-      //LOG( "ExoticLLP", pDEBUG ) << "A massless LLP would have energy " << energy_massless << " GeV";
-
-      double massless_soln = this->AccCorr_Solution( zeta, 0.0,
-						     parent_p4.E(), parent_p4.M(),
-						     energy_massless, true ); // always forward emitted
-      TLorentzVector massless_p4( energy_massless * probe_p4_rest.Px() / probe_p4_rest.P(),
-				  energy_massless * probe_p4_rest.Py() / probe_p4_rest.P(),
-				  energy_massless * probe_p4_rest.Pz() / probe_p4_rest.P(),
-				  energy_massless );
-      double inv_der_massless = std::abs( 1.0 / this->Derivative( massless_soln, parent_p4, massless_p4 ) );
-      acc_corr = ( forwards ) ? inv_der_pos / inv_der_massless : inv_der_neg / inv_der_massless;
+      asts << "\nneg_soln = " << neg_soln
+	   << "\nder_neg = " << -1.0 * this->Derivative( neg_soln, parent_p4, probe_p4_rest )
+	   << "\nimage_score = " << image_score;
+      */
+      
+    } // if negative solution allowed
+    
+    /*
+     * We need to compare to the acceptance of a massless LLP.
+     * If the production mode is 2-body this can be done immediately analytically.
+     * If not, then we have to perform a phase-space decay (again RETHERE: including angular correlations?)
+     * such that we get a proxy for the rest-frame energy of the massless LLP.
+     */
+    
+    double energy_massless = 0.0;
+    double m_parent = parent_p4.M();
+    if( decayed_results.size() == 2 )
+      energy_massless = probe_p4_rest.E() - fMass * fMass / (2.0 * m_parent);
+    else {
+      decay_ok = decayer->UnpolarisedDecay(true); // fudge a decay with massless LLP and same other products
+      energy_massless = decayer->GetMasslessEnergy();
     }
+    //LOG( "ExoticLLP", pDEBUG ) << "A massless LLP would have energy " << energy_massless << " GeV";
+
+    double massless_soln = this->AccCorr_Solution( zeta, 0.0,
+						   parent_p4.E(), parent_p4.M(),
+						   energy_massless, true ); // always forward emitted
+    TLorentzVector massless_p4( energy_massless * probe_p4_rest.Px() / probe_p4_rest.P(),
+				energy_massless * probe_p4_rest.Py() / probe_p4_rest.P(),
+				energy_massless * probe_p4_rest.Pz() / probe_p4_rest.P(),
+				energy_massless );
+    double inv_der_massless = std::abs( 1.0 / this->Derivative( massless_soln, parent_p4, massless_p4 ) );
+      
+    acc_corr = ( forwards ) ? inv_der_pos / inv_der_massless : inv_der_neg / inv_der_massless;
+      
+    /*
+    asts << "\nmassless_soln = " << massless_soln
+	 << "\nder_massless = " << this->Derivative( massless_soln, parent_p4, massless_p4 )
+	 << "\n==> acc_corr = " << acc_corr;
+    */
+
+    //LOG( "ExoticLLP", pDEBUG ) << asts.str();
 
     double rest_frame_angle = this->Inverted_Fcn( zeta, parent_p4, probe_p4_rest, !forwards );
 
@@ -672,9 +703,26 @@ double FluxCreator::AccCorr_Solution( double thetalab, double mass,
   double bNu = qNu / ENu;
   //double gNu = (bNu < 1.0) ? ENu / mass : -1.0;
 
-  double tanMaxTheta = ( bNu >= bPar ) ? 180.0 : 1.0 / ( gPar * std::sqrt( ( bPar / bNu ) * ( bPar / bNu ) - 1.0 ) );
-  double maxTheta = TMath::ATan( tanMaxTheta ) * TMath::RadToDeg();
+  double velocity_ratio = bNu / bPar;
+  //double tanMaxTheta = ( bNu >= bPar ) ? 180.0 : 1.0 / ( gPar * std::sqrt( ( bPar / bNu ) * ( bPar / bNu ) - 1.0 ) );
+  double tanMaxTheta = ( bNu >= bPar ) ? 10000.0 : velocity_ratio / ( gPar * std::sqrt( 1.0 - velocity_ratio ) );
+  double maxTheta = ( bNu >= bPar ) ? 180.0 : TMath::ATan( tanMaxTheta ) * TMath::RadToDeg();
   if( maxTheta < 0.0 ) maxTheta += 180.0;
+
+  /*
+  LOG( "ExoticLLP", pDEBUG ) 
+    << "\nthetalab = " << thetalab << " [deg]"
+    << "\nLLP mass = " << mass << " [GeV]"
+    << "\nEPar, MPar = " << EPar << ", " << MPar << " [GeV]"
+    << "\nENu = " << ENu
+    << "\nisPos = " << isPos
+    << "\n~*~*~*~*~*~*~"
+    << "\npPar, bPar, gPar = " << pPar << " [GeV], " << bPar << ", " << gPar
+    << "\nqNu, bNu = " << qNu << " [GeV], " << bNu
+    << "\n~*~*~*~*~*~*~"
+    << "\ntanMaxTheta = " << tanMaxTheta
+    << "\nmaxTheta = " << maxTheta;
+  */
 
   double arg = 0.0;
   if( isPos ){ // positive solution
@@ -684,7 +732,10 @@ double FluxCreator::AccCorr_Solution( double thetalab, double mass,
       if( tsol < 0.0 ) tsol += 180.0;
       return tsol;
     } else { // labangle is not surjective, check if preimage can be found
-      if( thetalab > maxTheta ) return 0.0;
+      if( thetalab > maxTheta ) {
+	LOG( "ExoticLLP", pDEBUG ) << "Too much deviation! Can't be accepted";
+	return -1.0;
+      }
 
       arg = this->AccCorr_SolnArgs( thetalab, mass, EPar, MPar, ENu, isPos );
       double tsol = TMath::ATan( arg ) * TMath::RadToDeg();
@@ -695,7 +746,10 @@ double FluxCreator::AccCorr_Solution( double thetalab, double mass,
     if( bNu >= bPar ){ // LLP is too fast, so labangle is monotonic and no negative solution
       return 0.0;
     } else { // check if preimage can be found
-      if( thetalab > maxTheta ) return 0.0;
+      if( thetalab > maxTheta ) {
+	LOG( "ExoticLLP", pDEBUG ) << "Too much deviation! Can't be accepted";
+	return -1.0;
+      }
 
       arg = this->AccCorr_SolnArgs( thetalab, mass, EPar, MPar, ENu, isPos );
       double tsol = TMath::ATan( arg ) * TMath::RadToDeg();
