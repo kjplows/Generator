@@ -574,6 +574,20 @@ void FluxCreator::LoadConfig(void)
     ++it_modes;
   }
 
+  // For the purposes of scaling, if the sum of all the scores in this parent is not 1, rescale every
+  // item by the sum
+  for( auto & it_fgp : fGroupedModes ) {
+    double sum = 0.0;
+    for( std::vector<ModeObject>::iterator it_mob = it_fgp.second.begin();
+	 it_mob != it_fgp.second.end(); ++it_mob ) sum += (*it_mob).fScore;
+    if( sum > 0.0 && sum != 1.0 ) {
+      LOG( "ExoticLLP", pWARN ) << "Sum of all production modes for parent PDG "
+				<< it_fgp.first << " is not 1, rescaling by " << 1.0 / sum;
+      for( std::vector<ModeObject>::iterator it_mob = it_fgp.second.begin();
+	   it_mob != it_fgp.second.end(); ++it_mob ) (*it_mob).fScore *= 1.0 / sum;
+    } // rescale
+  } // check sum of parents is 1
+
   LOG( "ExoticLLP", pDEBUG ) << "For all parents together, there are " << llp_production_modes.size()
 			     << " production modes";
 

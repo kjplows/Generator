@@ -473,6 +473,17 @@ int main(int argc, char ** argv)
 	std::vector< genie::llp::ModeObject > llp_decay_modes = llp.GetDecayModes();
 	//LOG( "gevgen_exotic_llp", pDEBUG ) << "There are " << llp_decay_modes.size() << " decay modes available to choose from";
 
+	// Check the sum of scores is 1, and if not rescale it
+	double score_sum = 0.0;
+	for( std::vector<genie::llp::ModeObject>::iterator it_mod = llp_decay_modes.begin();
+	     it_mod != llp_decay_modes.end(); ++it_mod ) score_sum += (*it_mod).fScore;
+	if( score_sum != 1.0 ) {
+	  LOG( "gevgen_exotic_llp", pWARN ) << "Sum of all decay modes is not 1, "
+					    << "rescaling by " << 1.0 / score_sum;
+	} // rescale
+	for( std::vector<genie::llp::ModeObject>::iterator it_mod = llp_decay_modes.begin();
+	     it_mod != llp_decay_modes.end(); ++it_mod ) (*it_mod).fScore *= 1.0 / score_sum;	
+	
 	double decay_score = rnd->RndGen().Rndm();
 
 	std::vector< genie::llp::ModeObject >::iterator it_modes = llp_decay_modes.begin();
