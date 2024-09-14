@@ -399,11 +399,11 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   //TLorentzVector * lab_llp_p4 = constrained_llp_p4; lab_llp_p4->Boost( parent_p4.BoostVector() );
 
   // update the coproduced stuff
-  fFluxInfo.cop_pdgs.emplace_back( llp_pdg );
-  fFluxInfo.cop_p4xs.emplace_back( llp_rest_frame_p4_final.Px() );
-  fFluxInfo.cop_p4ys.emplace_back( llp_rest_frame_p4_final.Py() );
-  fFluxInfo.cop_p4zs.emplace_back( llp_rest_frame_p4_final.Pz() );
-  fFluxInfo.cop_p4Es.emplace_back( llp_rest_frame_p4_final.E()  );
+  fFluxInfo.cop_pdgs.emplace_back( parent_pdg );
+  fFluxInfo.cop_p4xs.emplace_back( 0.0 );
+  fFluxInfo.cop_p4ys.emplace_back( 0.0 );
+  fFluxInfo.cop_p4zs.emplace_back( 0.0 );
+  fFluxInfo.cop_p4Es.emplace_back( parent_p4.M() );
   for( std::vector<GHepParticle>::iterator it_fss = constrained_rest_stack.begin();
        it_fss != constrained_rest_stack.end(); ++it_fss ) {
     GHepParticle part = *it_fss;

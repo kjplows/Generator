@@ -22,6 +22,61 @@ string fTopVolume = "";
 TGeoManager * fGeoManager = 0;
 TGeoVolume * fGeoVolume = 0;
 //____________________________________________________________________________
+Vertex::Vertex(): fIndex(0), fX(0.0), fY(0.0), fZ(0.0)
+{
+
+}
+//____________________________________________________________________________
+Vertex::Vertex( int i, double x, double y, double z ) : fIndex(i), fX(x), fY(y), fZ(z)
+{
+
+}
+//____________________________________________________________________________
+Vertex::Vertex( int i, const TVector3 & v ) : fIndex(i), fX(v.X()), fY(v.Y()), fZ(v.Z())
+{
+
+}
+//____________________________________________________________________________
+Vertex::Vertex( int i, const Vertex & v ) : fIndex(i), fX(v.fX), fY(v.fY), fZ(v.fZ)
+{
+
+}
+//____________________________________________________________________________
+Vertex::~Vertex()
+{
+  fIndex = 0; fX = 0.0; fY = 0.0; fZ = 0.0;
+}
+//____________________________________________________________________________
+double Vertex::Dist( const Vertex v ) const
+{
+  double dx = fX - v.fX;
+  double dy = fY - v.fY;
+  double dz = fZ - v.fZ;
+  return std::sqrt( dx*dx + dy*dy + dz*dz );
+}
+//____________________________________________________________________________
+TVector3 Vertex::Displacement( const Vertex v ) const
+{
+  double dx = v.fX - fX;
+  double dy = v.fY - fY;
+  double dz = v.fZ - fZ;
+  return TVector3( dx, dy, dz );
+}
+//____________________________________________________________________________
+double Vertex::Intersection( const Vertex v, const TVector3 unit, const double d ) const
+{
+  double lambda = -9.9;
+  
+  TVector3 path = this->Displacement( v );
+  double denom = unit.Dot( path );
+  if( denom == 0.0 ) return lambda; // no intersection as edge is coplanar with viewing plane
+
+  double numer = d + unit.Dot( this->Displacement( Vertex() ) ); 
+  // same as d - unit.Dot( (0,0,0) - *this )
+  
+  return numer / denom;
+}
+//____________________________________________________________________________
 VolumeSeeker::VolumeSeeker()
 {
   LOG("ExoticLLP", pINFO) << "VolumeSeeker late initialization";
@@ -130,7 +185,12 @@ void VolumeSeeker::PrintConfig()
 TVector3 VolumeSeeker::Translate( TVector3 input, bool direction ) const
 {
   // true: NEAR --> USER | false : USER --> NEAR
-  TVector3 tr_vec = ( direction == true ) ? fTopVolumeOffset : -fTopVolumeOffset;
+  TVector3 tr_vec = ( direction == true ) ? fUserOrigin : -fUserOrigin;
+  /*
+  LOG( "ExoticLLP", pDEBUG ) 
+    << "\nInput vec = " << utils::print::Vec3AsString( &input )
+    << "\nTranslating by " << utils::print::Vec3AsString( &tr_vec ) << " backwards...";
+  */
   return input - tr_vec;
 }
 //____________________________________________________________________________
@@ -393,9 +453,10 @@ TGeoMatrix * VolumeSeeker::FindFullTransformation( TGeoVolume * top_vol, TGeoVol
   // Also set the member variables at this stage
   //fTopVolumeOriginROOT.SetXYZ( final_tra[0], final_tra[1], final_tra[2] );
   //fTopVolumeOrigin = fTopVolumeOriginROOT * fToLUnits;
-  fTopVolumeOrigin.SetXYZ( final_tra[0] * fToLUnits, 
+  fTopVolumeOffset.SetXYZ( final_tra[0] * fToLUnits, 
 			   final_tra[1] * fToLUnits, 
 			   final_tra[2] * fToLUnits );
+  fTopVolumeOrigin = fTopVolumeOffset;
   fTopVolumeOriginNEAR = VolumeSeeker::RotateToNear( fTopVolumeOrigin );
   fTopVolumeOriginNEAR = VolumeSeeker::TranslateToNear( fTopVolumeOriginNEAR );
 
@@ -515,8 +576,8 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
   fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
   fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
 
-  LOG( "ExoticLLP", pDEBUG ) << "fMomentum = " << utils::print::Vec3AsString( &fMomentum );
-  LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
+  //LOG( "ExoticLLP", pDEBUG ) << "fMomentum = " << utils::print::Vec3AsString( &fMomentum );
+  //LOG( "ExoticLLP", pDEBUG ) << "Checking point " << utils::print::Vec3AsString( &fZeroPointROOT ) << " [ROOT]";
 
   // check that this point lies in the geometry.
   std::string pathString = VolumeSeeker::CheckGeomPoint( fZeroPointROOT );
@@ -555,8 +616,8 @@ bool VolumeSeeker::RaytraceDetector( bool grace ) const
     }
   }
 
-  LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
-  LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
+  //LOG( "ExoticLLP", pDEBUG ) << "Here is the pathString: " << pathString;
+  //LOG( "ExoticLLP", pDEBUG ) << "Starting to search for intersections...";
 
   if( pathString.find( fTopVolume.c_str() ) == string::npos ) return false; // No luck.
 
@@ -660,8 +721,10 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   std::string original_pathString = this->CheckGeomPoint( booked_origin_point_ROOT );
   //LOG( "ExoticLLP", pDEBUG ) << "original_pathString = " << original_pathString;
 
+  /*
   if( original_pathString.find( fTopVolume.c_str() ) == string::npos )
     LOG("ExoticLLP", pWARN) << "ARGH. NOT IN TOP VOLUME.";
+  */
 
   if( original_pathString.find( fTopVolume.c_str() ) != string::npos ) {
     const double halfpi = constants::kPi / 2.0;
@@ -682,10 +745,8 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   //LOG( "ExoticLLP", pDEBUG ) << "seed_vector = " << utils::print::Vec3AsString(&seed_vector);
 
   // We make a potentially strong assumption here, that the top_volume is simply connected.
-  // The calculation will be garbage if not, and we'll crash out rather than give garbage.
   fMomentum = seed_vector.Unit();
-  //assert( VolumeSeeker::RaytraceDetector() && "The origin point of the top_volume lies inside the top volume" );
-  fMomentum = booked_momentum;
+  //fMomentum = booked_momentum;
 
   // Of course, the angles are defined with respect to the momentum axis...
   // We need to first project seed_vector onto the theta = 0 plane
@@ -693,12 +754,6 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   TVector3 transverse_seed = seed_vector - fAxis.Dot( seed_vector ) * fAxis;
   if( transverse_seed.Mag() > 1.0e-3 * seed_vector.Mag() ) fThetaAxis = transverse_seed.Unit();
   else{ // just pick a convenient direction
-    /*
-    if( fAxis.Y() == 0.0 ) fThetaAxis = TVector3( 0.0, 1.0, 0.0 );
-    else if( fAxis.X() == 0.0 ) fThetaAxis = TVector3( 1.0, 0.0, 0.0 );
-    else if( fAxis.Z() == 0.0 ) fThetaAxis = TVector3( 0.0, 0.0, 1.0 );
-    else fThetaAxis = TVector3( fAxis.Y(), -fAxis.X(), 0.0 );
-    */
     if( fAxis.X() == 0.0 ) fThetaAxis = TVector3( 0.0, fAxis.Z(), -fAxis.Y() );
     else if( fAxis.Y() == 0.0 ) fThetaAxis = TVector3( fAxis.Z(), 0.0, fAxis.X() );
     else if( fAxis.Z() == 0.0 ) fThetaAxis = TVector3( fAxis.Y(), -fAxis.X(), 0.0 );
@@ -729,6 +784,7 @@ AngularRegion VolumeSeeker::AngularAcceptance() const
   // This is an overestimation of the angular acceptance, and it's a configurable option.
 
   if( m_use_saa ) alpha = VolumeSeeker::SmallAngleRegion();
+  else if( m_use_cmv ) alpha = VolumeSeeker::ComputerVision();
   else {
     VolumeSeeker::Rasterise( alpha, true ); // once moving from centre to the right
     VolumeSeeker::Rasterise( alpha, false ); // and once from centre to the left
@@ -766,20 +822,29 @@ AngularRegion VolumeSeeker::SmallAngleRegion() const
     std::max( fLx * std::sqrt( 1.0 - fAxis.X() * fAxis.X() ), 
 	      std::max ( fLy * std::sqrt( 1.0 - fAxis.Y() * fAxis.Y() ), 
 			 fLz * std::sqrt( 1.0 - fAxis.Z() * fAxis.Z() ) ) );
+  // Now also get the baseline! RETHERE this is a little bit too big but w/e
   TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nfTopVolumeOrigin = " << utils::print::Vec3AsString( &fTopVolumeOrigin )
+    << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint )
+    << "\n==> seed_vector = " << utils::print::Vec3AsString( &seed_vector );
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nfAxis = " << utils::print::Vec3AsString( &fAxis )
+    << "\ntransverse_size = " << transverse_size
+    << "\n==>baseline = " << seed_vector.Mag();
+  /*
   // modify seed_vector by the projection of the BBox on the fAxis direction
   seed_vector.SetXYZ( seed_vector.X() - fLx * fAxis.X(),
 		      seed_vector.Y() - fLy * fAxis.Y(),
 		      seed_vector.Z() - fLz * fAxis.Z() );
+  */
   const double baseline = seed_vector.Mag();
   const double zeta = std::atan( transverse_size / baseline );
 
-  //LOG( "ExoticLLP", pDEBUG ) << "zeta = " << zeta;
-
-  Point pt_dl = std::pair<double, double>( 0.0, -zeta );
-  Point pt_ul = std::pair<double, double>(  zeta, -zeta );
-  Point pt_dr = std::pair<double, double>( 0.0,  zeta );
-  Point pt_ur = std::pair<double, double>(  zeta,  zeta );
+  Point pt_dl = std::pair<double, double>( -zeta, -constants::kPi );
+  Point pt_ul = std::pair<double, double>(  zeta, -constants::kPi );
+  Point pt_dr = std::pair<double, double>( -zeta,  constants::kPi );
+  Point pt_ur = std::pair<double, double>(  zeta,  constants::kPi );
 
   PointRaster ras_left  = std::pair<Point, Point>( pt_dl, pt_ul );
   PointRaster ras_right = std::pair<Point, Point>( pt_dr, pt_ur );
@@ -787,6 +852,30 @@ AngularRegion VolumeSeeker::SmallAngleRegion() const
   alpha.emplace_back( ras_left ); alpha.emplace_back( ras_right );
 
   return alpha;
+}
+//____________________________________________________________________________
+Vertex VolumeSeeker::FindIntersection( std::array< Vertex, 4 > path, 
+				       const TVector3 unit, const double d ) const
+{
+  double lambda = -9.0;
+  int active_vertex = -1;
+  Vertex v0, v1;
+
+  while( (lambda < 0.0 || lambda > 1.0) && active_vertex < 3 ) {
+    active_vertex++;
+    v0 = path[active_vertex];
+    v1 = path[active_vertex+1];
+    lambda = v0.Intersection(v1, unit, d);
+  }
+
+  if( lambda < 0.0 || lambda > 1.0 ) // no intersection along this path
+    return Vertex( -1, 0.0, 0.0, 0.0 );
+
+  double vx = v0.fX + lambda * ( v0.Displacement(v1) ).X();
+  double vy = v0.fY + lambda * ( v0.Displacement(v1) ).Y();
+  double vz = v0.fZ + lambda * ( v0.Displacement(v1) ).Z();
+
+  return Vertex( 0, vx, vy, vz );
 }
 //____________________________________________________________________________
 AngularRegion VolumeSeeker::ComputerVision() const
@@ -797,6 +886,297 @@ AngularRegion VolumeSeeker::ComputerVision() const
 
   AngularRegion alpha;
   
+  // Get the unit normal vector of the viewing plane of the box...
+  TVector3 norm_vec = -(fOriginPoint.Unit());
+
+  // First, one declares the eight vertices of the bounding box and the starting vertex. 
+  Vertex vOrigin( 0, fOriginPoint ); // USER m
+  //double origin_dist = vOrigin.Dist( Vertex() ); // Vertex() is just (0,0,0)
+
+  std::vector< Vertex > vVertices;
+  vVertices.emplace_back( 1, -fLx, -fLy, -fLz );
+  vVertices.emplace_back( 2,  fLx, -fLy, -fLz );
+  vVertices.emplace_back( 3,  fLx,  fLy, -fLz );
+  vVertices.emplace_back( 4, -fLx,  fLy, -fLz );
+  vVertices.emplace_back( 5,  fLx,  fLy,  fLz );
+  vVertices.emplace_back( 6, -fLx,  fLy,  fLz );
+  vVertices.emplace_back( 7, -fLx, -fLy,  fLz );
+  vVertices.emplace_back( 8,  fLx, -fLy,  fLz );
+
+  // Now take the distances of all these vertices from origin
+  std::vector< double > distances; // m
+  for( std::vector< Vertex >::iterator it_vtx = vVertices.begin();
+       it_vtx != vVertices.end(); ++it_vtx ) distances.emplace_back( vOrigin.Dist( *it_vtx ) );
+  std::vector< double >::iterator min_distance = std::min_element( distances.begin(), distances.end() );
+
+  int iMinDist = min_distance - distances.begin();
+  // Now we construct the paths based on which vertex we picked.
+  int first_idx = (vVertices.at(iMinDist)).fIndex;
+
+  std::array< Vertex, 4 > path_1, path_2, path_3;
+  std::pair< Vertex, Vertex > phantom_1, phantom_2, phantom_3;
+  switch( first_idx ) {
+  case 1: // 1 --> 5
+    path_1 = { vVertices.at(0), vVertices.at(1), vVertices.at(7), vVertices.at(4) }; // 1, 2, 8, 5
+    path_2 = { vVertices.at(0), vVertices.at(3), vVertices.at(2), vVertices.at(4) }; // 1, 4, 3, 5
+    path_3 = { vVertices.at(0), vVertices.at(6), vVertices.at(5), vVertices.at(4) }; // 1, 7, 6, 5
+    phantom_1 = std::pair< Vertex, Vertex >( vVertices.at(1), vVertices.at(2) );
+    phantom_2 = std::pair< Vertex, Vertex >( vVertices.at(3), vVertices.at(5) );
+    phantom_3 = std::pair< Vertex, Vertex >( vVertices.at(6), vVertices.at(7) );
+    break;
+  case 5: // 5 --> 1, backwards of 1 --> 5. Note invert paths 2 and 3 to keep the system RH
+    path_1 = { vVertices.at(4), vVertices.at(7), vVertices.at(1), vVertices.at(0) }; 
+    path_3 = { vVertices.at(4), vVertices.at(2), vVertices.at(3), vVertices.at(0) };
+    path_2 = { vVertices.at(4), vVertices.at(5), vVertices.at(6), vVertices.at(0) }; 
+    phantom_1 = std::pair< Vertex, Vertex >( vVertices.at(2), vVertices.at(1) );
+    phantom_3 = std::pair< Vertex, Vertex >( vVertices.at(5), vVertices.at(3) );
+    phantom_2 = std::pair< Vertex, Vertex >( vVertices.at(7), vVertices.at(6) );
+    break;
+  case 2: // 2 --> 6
+    path_1 = { vVertices.at(1), vVertices.at(7), vVertices.at(4), vVertices.at(5) }; // 2, 8, 5, 6
+    path_2 = { vVertices.at(1), vVertices.at(2), vVertices.at(3), vVertices.at(5) }; // 2, 3, 4, 6
+    path_3 = { vVertices.at(1), vVertices.at(0), vVertices.at(6), vVertices.at(5) }; // 2, 1, 7, 6
+    phantom_1 = std::pair< Vertex, Vertex >( vVertices.at(7), vVertices.at(6) );
+    phantom_2 = std::pair< Vertex, Vertex >( vVertices.at(2), vVertices.at(4) );
+    phantom_3 = std::pair< Vertex, Vertex >( vVertices.at(0), vVertices.at(3) );
+    break;
+  case 6: // 6 --> 2
+    path_1 = { vVertices.at(5), vVertices.at(4), vVertices.at(7), vVertices.at(1) };
+    path_3 = { vVertices.at(5), vVertices.at(3), vVertices.at(2), vVertices.at(1) };
+    path_2 = { vVertices.at(5), vVertices.at(6), vVertices.at(0), vVertices.at(1) };
+    phantom_1 = std::pair< Vertex, Vertex >( vVertices.at(6), vVertices.at(7) );
+    phantom_3 = std::pair< Vertex, Vertex >( vVertices.at(4), vVertices.at(2) );
+    phantom_2 = std::pair< Vertex, Vertex >( vVertices.at(3), vVertices.at(0) );
+    break;
+  case 3: // 3 --> 7
+    path_1 = { vVertices.at(2), vVertices.at(4), vVertices.at(5), vVertices.at(6) }; // 3, 5, 6, 7
+    path_2 = { vVertices.at(2), vVertices.at(3), vVertices.at(0), vVertices.at(6) }; // 3, 4, 1, 7
+    path_3 = { vVertices.at(2), vVertices.at(1), vVertices.at(7), vVertices.at(6) }; // 3, 2, 8, 7
+    phantom_1 = std::pair< Vertex, Vertex >( vVertices.at(4), vVertices.at(7) );
+    phantom_2 = std::pair< Vertex, Vertex >( vVertices.at(3), vVertices.at(5) );
+    phantom_3 = std::pair< Vertex, Vertex >( vVertices.at(1), vVertices.at(0) );
+    break;
+  case 7: // 7 --> 3
+    path_1 = { vVertices.at(6), vVertices.at(5), vVertices.at(4), vVertices.at(2) };
+    path_3 = { vVertices.at(6), vVertices.at(0), vVertices.at(3), vVertices.at(2) };
+    path_2 = { vVertices.at(6), vVertices.at(7), vVertices.at(1), vVertices.at(2) };
+    phantom_1 = std::pair< Vertex, Vertex >( vVertices.at(7), vVertices.at(4) );
+    phantom_3 = std::pair< Vertex, Vertex >( vVertices.at(5), vVertices.at(3) );
+    phantom_2 = std::pair< Vertex, Vertex >( vVertices.at(0), vVertices.at(1) );
+    break;
+  case 4: // 4 --> 8
+    path_1 = { vVertices.at(3), vVertices.at(2), vVertices.at(4), vVertices.at(7) }; // 4, 3, 5, 8
+    path_2 = { vVertices.at(3), vVertices.at(5), vVertices.at(6), vVertices.at(7) }; // 4, 6, 7, 8
+    path_3 = { vVertices.at(3), vVertices.at(0), vVertices.at(1), vVertices.at(7) }; // 4, 1, 2, 8
+    phantom_1 = std::pair< Vertex, Vertex >( vVertices.at(2), vVertices.at(1) );
+    phantom_2 = std::pair< Vertex, Vertex >( vVertices.at(4), vVertices.at(5) );
+    phantom_3 = std::pair< Vertex, Vertex >( vVertices.at(0), vVertices.at(6) );
+    break;
+  case 8: // 8 --> 4
+    path_1 = { vVertices.at(7), vVertices.at(4), vVertices.at(2), vVertices.at(3) };
+    path_3 = { vVertices.at(7), vVertices.at(6), vVertices.at(5), vVertices.at(3) };
+    path_2 = { vVertices.at(7), vVertices.at(1), vVertices.at(0), vVertices.at(3) };
+    phantom_1 = std::pair< Vertex, Vertex >( vVertices.at(1), vVertices.at(2) );
+    phantom_3 = std::pair< Vertex, Vertex >( vVertices.at(5), vVertices.at(4) );
+    phantom_2 = std::pair< Vertex, Vertex >( vVertices.at(6), vVertices.at(0) );
+    break;
+  default: break;
+  }
+
+  // Now we have the three independent paths set up with each consisting of four Vertices.
+  // Find for each path the intersection
+  
+  std::vector< Vertex > vIntersections;
+  std::array< Vertex, 4 > active_path; 
+
+  // check path 1
+  active_path = path_1;
+  vIntersections.emplace_back( this->FindIntersection( active_path, norm_vec, 0.0 ) );
+  
+  // check path 2
+  active_path = path_2;
+  vIntersections.emplace_back( this->FindIntersection( active_path, norm_vec, 0.0 ) );
+
+  // check path 3
+  active_path = path_3;
+  vIntersections.emplace_back( this->FindIntersection( active_path, norm_vec, 0.0 ) );
+
+  // Now there are potentially other vertices along the "phantom" edges we didn't pick up. 
+  // We need to check them explicitly.
+  
+  double lambda;
+  Vertex v0, v1;
+  // check phantom 1
+  lambda = -9.0; v0 = phantom_1.first; v1 = phantom_1.second;
+  lambda = v0.Intersection( v1, norm_vec, 0.0 );
+  if( lambda >= 0.0 && lambda <= 1.0 )
+    vIntersections.emplace_back( Vertex( 0, v0.fX + lambda * ( v0.Displacement(v1) ).X(),
+					 v0.fY + lambda * ( v0.Displacement(v1) ).Y(),
+					 v0.fZ + lambda * ( v0.Displacement(v1) ).Z() ) );
+  // check phantom 2
+  lambda = -9.0; v0 = phantom_2.first; v1 = phantom_2.second;
+  lambda = v0.Intersection( v1, norm_vec, 0.0 );
+  if( lambda >= 0.0 && lambda <= 1.0 )
+    vIntersections.emplace_back( Vertex( 0, v0.fX + lambda * ( v0.Displacement(v1) ).X(),
+					 v0.fY + lambda * ( v0.Displacement(v1) ).Y(),
+					 v0.fZ + lambda * ( v0.Displacement(v1) ).Z() ) );
+  // check phantom 3
+  lambda = -9.0; v0 = phantom_3.first; v1 = phantom_3.second;
+  lambda = v0.Intersection( v1, norm_vec, 0.0 );
+  if( lambda >= 0.0 && lambda <= 1.0 )
+    vIntersections.emplace_back( Vertex( 0, v0.fX + lambda * ( v0.Displacement(v1) ).X(),
+					 v0.fY + lambda * ( v0.Displacement(v1) ).Y(),
+					 v0.fZ + lambda * ( v0.Displacement(v1) ).Z() ) );
+
+  LOG( "ExoticLLP", pDEBUG ) << "Found " << vIntersections.size() << " intersection vertices";
+
+  /*
+   * By now we have from 3 to 6 intersection vertices. Need to sort them, so that they
+   * form a *convex* shape! Then we will calculate the area of this volume
+   * RETHERE: Assume for now the origin is at the centre
+   */
+
+  // Need the int to keep track of which vector element we're using. I'll be popping elements to sort
+  std::vector< std::pair< int, double > > vAngles; // angle is in (\phi, cos\theta) space wrt centre
+
+  // Define a local coordinate system on the plane
+  TVector3 loc_X_axis( norm_vec.Y() * norm_vec.Z(), 
+		       norm_vec.X() * norm_vec.Y(),
+		       -2.0 * norm_vec.X() * norm_vec.Y() );
+  loc_X_axis = loc_X_axis.Unit();
+  TVector3 loc_Y_axis = norm_vec.Cross( loc_X_axis );
+
+  LOG( "ExoticLLP", pDEBUG ) 
+    << "\nnorm_vec   = " << utils::print::Vec3AsString( &norm_vec )
+    << "\nloc_X_axis = " << utils::print::Vec3AsString( &loc_X_axis )
+    << "\nloc_Y_axis = " << utils::print::Vec3AsString( &loc_Y_axis );
+
+  // project each vertex onto the localised axes
+  std::vector<Point> vPoints;
+  std::ostringstream psts;
+  for( std::vector< Vertex >::iterator it_vtx = vIntersections.begin();
+       it_vtx != vIntersections.end(); ++it_vtx ) {
+    double vtx_X = (*it_vtx).fX * loc_X_axis.X() + 
+      (*it_vtx).fY * loc_X_axis.Y() + (*it_vtx).fZ * loc_X_axis.Z();
+    double vtx_Y = (*it_vtx).fX * loc_Y_axis.X() + 
+      (*it_vtx).fY * loc_Y_axis.Y() + (*it_vtx).fZ * loc_Y_axis.Z();
+    vPoints.emplace_back( std::pair< double, double >( vtx_X, vtx_Y ) );
+    psts << "\nPoint with 3D coordinates ( " << (*it_vtx).fX
+	 << ", " << (*it_vtx).fY << ", " << (*it_vtx).fZ << " ) maps to "
+	 << "( " << vtx_X << ", " << vtx_Y << " )";
+  }
+  LOG( "ExoticLLP", pDEBUG ) << psts.str();
+
+  // and from these localised coordinates calculate the angle...
+  for( std::vector< Point >::iterator it_cor = vPoints.begin();
+       it_cor != vPoints.end(); ++it_cor ) {
+    int elem_idx = it_cor - vPoints.begin();
+    
+    
+    double elem_ang = std::atan( (*it_cor).second / (*it_cor).first );  
+    // support on [-pi/2, pi/2] i.e 1st and 4th quadrants
+    
+    // get the quadrants right
+    if( (*it_cor).first >= 0.0 
+	&& (*it_cor).second >= 0.0 ) elem_ang *= 1.0; // first 
+    else if( (*it_cor).first < 0.0 
+	     && (*it_cor).second >= 0.0 ) elem_ang = constants::kPi + elem_ang; // second
+    else if( (*it_cor).first < 0.0 
+	     && (*it_cor).second < 0.0 ) elem_ang += constants::kPi; // third
+    else if( (*it_cor).first >= 0.0 
+	     && (*it_cor).second < 0.0 ) elem_ang = 2.0 * constants::kPi + elem_ang; // fourth
+    
+    vAngles.emplace_back( std::pair< int, double >( elem_idx, elem_ang ) );
+  }
+  
+  // now we have these angles, we can sort the coordinates into a vector such that they're clockwise
+  std::vector< int > sorted_intersection_idcs;
+  while( vAngles.size() > 0 ) {
+    std::vector< std::pair< int, double > >::iterator it_ang = 
+      std::min_element( vAngles.begin(), vAngles.end(), 
+			[](std::pair<int, double> a, std::pair<int, double> b) 
+			{ return a.second < b.second; }); // inject lambda to compare second members
+
+    sorted_intersection_idcs.emplace_back( (*it_ang).first ); // get the index of the smallest angle
+    vAngles.erase( it_ang ); // dealt with this
+  } // sort the intersection vertices by angle such that they're clockwise
+
+  // and put the full vertices into a sorted vector
+  std::vector< Vertex > vSortedVertices;
+  std::vector< Point > vSortedPoints;
+  for( std::vector<int>::iterator it_sii = sorted_intersection_idcs.begin();
+       it_sii != sorted_intersection_idcs.end(); ++it_sii ) {
+    vSortedVertices.emplace_back( vIntersections.at( *it_sii ) );
+    vSortedPoints.emplace_back( vPoints.at( *it_sii ) );
+  }
+
+  std::ostringstream csts;
+  csts << "\nHere are the sorted coordinates of each vertex:";
+  for( std::vector< Vertex >::iterator it_cor = vSortedVertices.begin();
+       it_cor != vSortedVertices.end(); ++it_cor ) {
+    int idx = it_cor - vSortedVertices.begin();
+    csts << "\nVertex " << idx << ": "
+	 << " ( " << (*it_cor).fX << ", " << (*it_cor).fY << ", " << (*it_cor).fZ << " )"
+	 << "\n\t(local point = ( " << vSortedPoints.at( idx ).first
+	 << ", " << vSortedPoints.at( idx ).second << " ) )";
+  }
+  LOG( "ExoticLLP", pDEBUG ) << csts.str();
+
+  // Get the area of this polygon
+  double area = 0.0;
+  std::ostringstream asts;
+
+  double ox = 0.0, oy = 0.0; // to properly use shoelace formula on triangle
+  for( std::vector<Point>::iterator it_spt = vSortedPoints.begin();
+       it_spt != vSortedPoints.end(); ++it_spt ) {
+    ox += (*it_spt).first  / static_cast<double>( vSortedPoints.size() );
+    oy += (*it_spt).second / static_cast<double>( vSortedPoints.size() );
+  }
+  /*
+   *   ox cx nx ox
+   *     X  X  X   = (oxcy - oycx) + (cxny - cynx) + (nxoy - nyox)
+   *   oy cy ny oy
+   */
+  for( int ipt = 0; ipt < vSortedPoints.size(); ipt++ ) {
+    int idx = ipt+1; if(idx == vSortedPoints.size()) idx = 0;
+    double cx = vSortedPoints.at(ipt).first; double cy = vSortedPoints.at(ipt).second;
+    double nx = vSortedPoints.at(idx).first; double ny = vSortedPoints.at(idx).second;
+    
+    double triangle = std::abs( cx * ny - nx * cy + ox * cy - cx * oy + nx * oy - ox * ny );
+    triangle *= 0.5;
+
+    asts << "\nFrom points O = ( " << ox << ", " << oy << " ), "
+	 << "C = ( " << cx << ", " << cy << " ), and "
+	 << "N = ( " << nx << ", " << ny << " ) we get an area = " << triangle; 
+    area += triangle;
+  }
+  LOG( "ExoticLLP", pDEBUG ) << asts.str();
+
+  // and a circle of this area has radius...
+  double rad = std::sqrt( area / constants::kPi );
+
+  // Now also get the baseline! RETHERE this is a little bit too big but w/e
+  TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nfTopVolumeOrigin = " << utils::print::Vec3AsString( &fTopVolumeOrigin )
+    << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint )
+    << "\n==> seed_vector = " << utils::print::Vec3AsString( &seed_vector );
+  /*
+  // modify seed_vector by the projection of the BBox on the fAxis direction
+  seed_vector.SetXYZ( seed_vector.X() - fLx * fAxis.X(),
+		      seed_vector.Y() - fLy * fAxis.Y(),
+		      seed_vector.Z() - fLz * fAxis.Z() );
+  */
+  const double baseline = seed_vector.Mag();
+
+  // return an AngularRegion that holds (radius, baseline) in the first point
+  Point pt = std::pair< double, double >( rad, baseline );
+  PointRaster rs = std::pair<Point, Point>(pt, pt);
+
+  LOG( "ExoticLLP", pDEBUG ) << "rad = " << rad << ", baseline = " << baseline;
+
+  alpha.emplace_back(rs);
+    
   return alpha;
 }
 //____________________________________________________________________________
@@ -812,8 +1192,23 @@ double VolumeSeeker::AngularSize( AngularRegion alpha ) const
     lower_points.emplace_back( (*ait).first );
   }
 
-  double size = VolumeSeeker::Trapezoid( upper_points, lower_points );
+  //double size = VolumeSeeker::Trapezoid( upper_points, lower_points );
+  double size = 0.0;
 
+  if( m_use_saa ) {
+    double zeta = upper_points.at(0).first;
+    size = 2.0 * constants::kPi * ( 1.0 - std::cos(zeta) );
+  }
+
+  if( m_use_cmv ) {
+    double rad = upper_points.at(0).first;
+    double baseline = upper_points.at(0).second;
+
+    double zeta = std::atan( rad / baseline );
+    size = 2.0 * constants::kPi * ( 1.0 - std::cos(zeta) ); // This is still valid...
+  }
+
+  LOG( "ExoticLLP", pDEBUG ) << "size/4pi = " << size / (4.0 * constants::kPi);
   return size;
 }
 //____________________________________________________________________________
@@ -853,7 +1248,7 @@ double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn
      * In that case, you have to split the width....
 
      * To be even worse, you could have a case which looks like case 2, but D1<U1<0 and 0<D2<U2.
-     * I can't think of anyone who'd build a detector that looks like that.
+     * I can't think of anyone who'd build a detector that looks like that, it's not simply connected.
      */
 
     double theta_up_prev = previous_point_up.first;
@@ -888,13 +1283,13 @@ double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn
 	// Also D2 < U2 < 0 as there's no crossing of zero
 
 	total_up += width * (cand_D1 + cand_D2)/2.0;
-	total_dn += width * (cand_U1 + cand_U2)/2.0;
+	total_dn -= width * (cand_U1 + cand_U2)/2.0;
       } else if( theta_dn_prev >= 0.0 ) {
 	// 0 < D1 < U1 --> 1-cos(U1) > 1-cos(D1) > 0
 	// Also 0 < D2 < U2 as there's not crossing of zero
 
 	total_up += width * (cand_U1 + cand_U2)/2.0;
-	total_dn += width * (cand_D1 + cand_D2)/2.0;
+	total_dn -= width * (cand_D1 + cand_D2)/2.0;
       }
     }
 
@@ -902,26 +1297,96 @@ double VolumeSeeker::Trapezoid( std::vector<Point> up_vec, std::vector<Point> dn
      * CASE 3: Zero-deflection OK in one raster, but not in the other. 
      * There is a zero-crossing which we must estimate by interpolation
      * and reduce to a simultaneous evaluation of Case 1 and Case 2.
-
-     * RETHERE need to code this in when / if needed
      */
 
-    /*
-    // Get the size of the upper region
-    double cand_one = 1.0 - std::cos( previous_point_up.first );
-    double cand_two = 1.0 - std::cos( current_point_up.first );
-    small_height = std::min( cand_one, cand_two );
-    large_height = std::max( cand_one, cand_two );
-    // trapezoid area is w * (h + H)/2
-    total_up += width * ( small_height + large_height ) / 2.0;
+    if( ( theta_up_prev * theta_dn_prev <= 0.0 && theta_up_curr * theta_dn_curr > 0.0 ) ||
+	( theta_up_prev * theta_dn_prev > 0.0 && theta_up_curr * theta_dn_curr <= 0.0 ) ) {
 
-    // Get the size of the lower region
-    cand_one = 1.0 - std::cos( previous_point_dn.first );
-    cand_two = 1.0 - std::cos( current_point_dn.first );
-    small_height, large_height = std::min( cand_one, cand_two ), std::max( cand_one, cand_two );
-    // trapezoid area is w * (h + H)/2
-    total_dn += width * ( small_height + large_height ) / 2.0;
-    */
+      // First, find the zero-crossing
+      double interp = 0.0;
+      double dtheta_dn = theta_dn_curr - theta_dn_prev;
+      double dtheta_up = theta_up_curr - theta_up_prev;
+
+      double dphi = current_point_up.second - previous_point_up.second;
+
+      // depending on if crossing is up or dn, interp accordingly
+      double dth; double t0 = 0.0;
+      if( theta_up_prev * theta_up_curr <= 0.0 ) { // crosses at up
+	dth = dtheta_up; t0 = theta_up_curr;
+      } else { // crosses at dn
+	dth = dtheta_dn; t0 = theta_dn_curr;
+      }
+      interp = std::abs(t0) / std::abs(dth);
+
+      double theta_zero = 0.0;
+      double phi_zero = current_point_up.second + interp * dphi;
+
+      double theta_up_zero, theta_dn_zero;
+
+      // make a new pair of Points
+      Point pt_uz, pt_dz; double cand_UZ, cand_DZ;
+      if( theta_up_prev * theta_up_curr <= 0.0 ) { // crosses at up
+	theta_zero = current_point_dn.first + interp * dth;
+	pt_uz = std::pair< double, double >( 0.0, phi_zero ); cand_UZ = 0.0;
+	pt_dz = std::pair< double, double >( theta_zero, phi_zero ); cand_DZ = 1.0 - std::cos( theta_zero );
+	theta_up_zero = 0.0; theta_dn_zero = theta_zero;
+      } else { // crosses at dn
+	pt_uz = std::pair< double, double >( theta_zero, phi_zero ); cand_UZ = 1.0 - std::cos( theta_zero );
+	pt_dz = std::pair< double, double >( 0.0, phi_zero ); cand_DZ = 0.0;
+	theta_up_zero = theta_zero; theta_dn_zero = 0.0;
+      }
+
+      // there are two ranges: [curr --> zero] and [zero --> prev]
+      // and now we evaluate which is case 1 and which is case 2.
+
+      if( theta_up_curr * theta_dn_curr <= 0.0 ) { // [curr --> zero] 1, [zero --> prev] 2
+	// case 1 bit
+	double h1_cz = cand_U1 + cand_D1;
+	double h2_cz = cand_UZ + cand_DZ;
+
+	total_up += interp * width * (h1_cz+h2_cz)/2.0;
+	total_dn += 0.0;
+
+	// case 2 bit
+	if( theta_up_prev < 0.0 ) { 
+	  // DZ < UZ < 0 --> 1-cos(DZ) > 1-cos(UZ) > 0
+	  // Also D2 < U2 < 0 as there's no crossing of zero
+
+	  total_up += (1.0 - interp) * width * (cand_DZ + cand_D2)/2.0;
+	  total_dn -= (1.0 - interp) * width * (cand_UZ + cand_U2)/2.0;
+	} else if( theta_dn_prev >= 0.0 ) {
+	  // 0 < DZ < UZ --> 1-cos(U1) > 1-cos(D1) > 0
+	  // Also 0 < D2 < U2 as there's not crossing of zero
+
+	  total_up += (1.0 - interp) * width * (cand_UZ + cand_U2)/2.0;
+	  total_dn -= (1.0 - interp) * width * (cand_DZ + cand_D2)/2.0;
+	}
+      } else { // [curr --> zero] 2, [zero --> prev] 1
+	// case 1 bit
+	double h1_cz = cand_UZ + cand_DZ;
+	double h2_cz = cand_U2 + cand_D2;
+
+	total_up += (1.0 - interp) * width * (h1_cz+h2_cz)/2.0;
+	total_dn += 0.0;
+
+	// case 2 bit
+	if( theta_up_zero < 0.0 ) { 
+	  // DZ < UZ < 0 --> 1-cos(DZ) > 1-cos(UZ) > 0
+	  // Also D1 < U1 < 0 as there's no crossing of zero
+
+	  total_up += interp * width * (cand_DZ + cand_D1)/2.0;
+	  total_dn -= interp * width * (cand_UZ + cand_U1)/2.0;
+	} else if( theta_dn_zero >= 0.0 ) {
+	  // 0 < DZ < UZ --> 1-cos(UZ) > 1-cos(DZ) > 0
+	  // Also 0 < D1 < U1 as there's not crossing of zero
+
+	  total_up += interp * width * (cand_UZ + cand_U1)/2.0;
+	  total_dn -= interp * width * (cand_DZ + cand_D1)/2.0;
+	}
+      }
+
+    } // case 3
+
 
     previous_point_up = current_point_up; // update
     previous_point_dn = current_point_dn; // update

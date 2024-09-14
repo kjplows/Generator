@@ -103,7 +103,9 @@ void ExoticLLP::ConstructModes( ModeVector modes ) const
 	LOG( "ExoticLLP", pFATAL )
 	  << "Error! A non-zero score " << score << " was associated with the decay mode " << name 
 	  << "\nHere is the total_mass: " << total_mass
-	  << "\nThis means your xml file contains unphysical channels - please check. Exiting now!";
+	  //<< "\nThis means your xml file contains unphysical channels - please check. Exiting now!";
+	  << "\nSetting the score to zero.";
+	score = 0.0;
       } // error message
 
       assert( ( total_mass <= fMass || score == 0.0 ) &&
@@ -144,10 +146,13 @@ void ExoticLLP::ConstructModes( ModeVector modes ) const
       double parent_mass = (dbase->GetParticle(*mmit))->Mass(); ++mmit;
       double total_mass = fMass; ++mmit;
       for( ; mmit != pdgList.end() ; ++mmit ) total_mass += (dbase->GetParticle(*mmit))->Mass(); // GeV
+      LOG( "ExoticLLP", pFATAL ) << "In mode " << name << " total mass = " << total_mass << " and parent mass = " << parent_mass;
       if( total_mass > parent_mass && score > 0.0 ) {
 	LOG( "ExoticLLP", pFATAL )
 	  << "Error! A non-zero score " << score << " was associated with the production mode " << name 
-	  << "\nThis means your xml file contains unphysical channels - please check. Exiting now!";
+	  //<< "\nThis means your xml file contains unphysical channels - please check. Exiting now!";
+	  << "\nSetting the score to zero.";
+	score = 0.0;
       } // error message
 
       assert( ( total_mass <= parent_mass || score == 0.0 ) &&

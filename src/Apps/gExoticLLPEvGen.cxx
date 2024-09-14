@@ -404,8 +404,8 @@ int main(int argc, char ** argv)
       TLorentzVector * p4_parent = gOptFluxPtInfo.p4_parent;
 
       LOG("gevgen_exotic_llp", pNOTICE)
-	<< " *** Origin v4 (to populate event) is " << utils::print::X4AsString( v4 )
-	<< " *** Parent p4 (to populate event) is " << utils::print::P4AsString( p4_parent );
+	<< "\n*** Origin v4 (to populate event) is " << utils::print::X4AsString( v4 )
+	<< "\n*** Parent p4 (to populate event) is " << utils::print::P4AsString( p4_parent );
 
       TVector3 origin_point = v4->Vect();
       TVector3 momentum = p4_parent->Vect();

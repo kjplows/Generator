@@ -46,13 +46,31 @@
 #include "Framework/Utils/UnitUtils.h"
 #include "Framework/Utils/PrintUtils.h"
 
-typedef std::pair< double, double > Point; //! To store (theta, phi) values
+typedef std::pair< double, double > Point; //! To store (phi, theta) values
 typedef std::pair< Point, Point > PointRaster; //! To associate (thetamin, thetamax) for each phi
 typedef std::vector< PointRaster > AngularRegion; //! The bounding shape, in (theta, phi) space
 
 namespace genie {
 
   namespace llp {
+
+    struct Vertex {
+
+      int fIndex;
+      double fX; double fY; double fZ;
+
+      Vertex();
+      Vertex( int i, double x, double y, double z );
+      Vertex( int i, const TVector3 & v );
+      Vertex( int i, const Vertex & v );
+      ~Vertex();
+      
+      double Dist( const Vertex v ) const;
+      TVector3 Displacement( const Vertex v ) const; // from this Vertex to the argument Vertex
+      
+      // method to calculate lambda in Rezk Salama and Kolb eq (3)
+      double Intersection( const Vertex v, const TVector3 unit, const double d ) const;
+    }; // struct Vertex
 
     class VolumeSeeker {
 
@@ -128,12 +146,16 @@ namespace genie {
       //! Obtain the node (in the ROOT sense) where a point exists
       std::string CheckGeomPoint( TVector3 chkpoint ) const;
 
+      //! Function to calculate intersections of a viewing plane with paths along bounding box
+      Vertex FindIntersection( std::array<Vertex, 4> path, const TVector3 unit, const double d ) const;
+
       //! Given an origin point and a momentum, find the entry and exit points to the detector
       //bool RaytraceDetector() const;
 
       //! Some controls
       mutable bool   m_use_saa = false; // small angle approximation?
       mutable bool   m_use_cmv = false; // computer-vision algo? Overridden by m_use_saa
+
       mutable double m_coarse_theta_deflection = 2.0; // modifier
       mutable double m_fine_theta_deflection = 2.0; // modifier
       mutable double m_coarse_phi_deflection = 5.0; // modifier
