@@ -822,22 +822,24 @@ AngularRegion VolumeSeeker::SmallAngleRegion() const
     std::max( fLx * std::sqrt( 1.0 - fAxis.X() * fAxis.X() ), 
 	      std::max ( fLy * std::sqrt( 1.0 - fAxis.Y() * fAxis.Y() ), 
 			 fLz * std::sqrt( 1.0 - fAxis.Z() * fAxis.Z() ) ) );
-  // Now also get the baseline! RETHERE this is a little bit too big but w/e
+  // Now also get the baseline!
   TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
   LOG( "ExoticLLP", pDEBUG )
     << "\nfTopVolumeOrigin = " << utils::print::Vec3AsString( &fTopVolumeOrigin )
     << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint )
     << "\n==> seed_vector = " << utils::print::Vec3AsString( &seed_vector );
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nfAxis = " << utils::print::Vec3AsString( &fAxis )
-    << "\ntransverse_size = " << transverse_size
-    << "\n==>baseline = " << seed_vector.Mag();
-  /*
+
   // modify seed_vector by the projection of the BBox on the fAxis direction
   seed_vector.SetXYZ( seed_vector.X() - fLx * fAxis.X(),
 		      seed_vector.Y() - fLy * fAxis.Y(),
 		      seed_vector.Z() - fLz * fAxis.Z() );
-  */
+
+  LOG( "ExoticLLP", pDEBUG )
+    << "\nfAxis = " << utils::print::Vec3AsString( &fAxis )
+    << "\ntransverse_size = " << transverse_size
+    << "\n==>baseline = " << seed_vector.Mag();
+
+
   const double baseline = seed_vector.Mag();
   const double zeta = std::atan( transverse_size / baseline );
 
@@ -1033,7 +1035,6 @@ AngularRegion VolumeSeeker::ComputerVision() const
   /*
    * By now we have from 3 to 6 intersection vertices. Need to sort them, so that they
    * form a *convex* shape! Then we will calculate the area of this volume
-   * RETHERE: Assume for now the origin is at the centre
    */
 
   // Need the int to keep track of which vector element we're using. I'll be popping elements to sort
@@ -1155,18 +1156,16 @@ AngularRegion VolumeSeeker::ComputerVision() const
   // and a circle of this area has radius...
   double rad = std::sqrt( area / constants::kPi );
 
-  // Now also get the baseline! RETHERE this is a little bit too big but w/e
+  // Now also get the baseline!
   TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
   LOG( "ExoticLLP", pDEBUG )
     << "\nfTopVolumeOrigin = " << utils::print::Vec3AsString( &fTopVolumeOrigin )
     << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint )
     << "\n==> seed_vector = " << utils::print::Vec3AsString( &seed_vector );
-  /*
   // modify seed_vector by the projection of the BBox on the fAxis direction
   seed_vector.SetXYZ( seed_vector.X() - fLx * fAxis.X(),
 		      seed_vector.Y() - fLy * fAxis.Y(),
 		      seed_vector.Z() - fLz * fAxis.Z() );
-  */
   const double baseline = seed_vector.Mag();
 
   // return an AngularRegion that holds (radius, baseline) in the first point
