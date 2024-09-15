@@ -822,25 +822,69 @@ AngularRegion VolumeSeeker::SmallAngleRegion() const
     std::max( fLx * std::sqrt( 1.0 - fAxis.X() * fAxis.X() ), 
 	      std::max ( fLy * std::sqrt( 1.0 - fAxis.Y() * fAxis.Y() ), 
 			 fLz * std::sqrt( 1.0 - fAxis.Z() * fAxis.Z() ) ) );
-  // Now also get the baseline!
-  TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nfTopVolumeOrigin = " << utils::print::Vec3AsString( &fTopVolumeOrigin )
-    << "\nfOriginPoint = " << utils::print::Vec3AsString( &fOriginPoint )
-    << "\n==> seed_vector = " << utils::print::Vec3AsString( &seed_vector );
 
-  // modify seed_vector by the projection of the BBox on the fAxis direction
-  seed_vector.SetXYZ( seed_vector.X() - fLx * fAxis.X(),
-		      seed_vector.Y() - fLy * fAxis.Y(),
-		      seed_vector.Z() - fLz * fAxis.Z() );
+  /* To get the baseline, calculate the possible intersections of the line from fOriginPoint to fTopVolumeOrigin
+   * with each face. Then get the minimum of each.
+   * For accounting, we will evaluate the faces at (x = +- fLx, y = +- fLy, z = +- fLz) in that order.
+   */
+  
+  const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+  TVector3 baseline_seed = seed_vector.Unit();
+  std::array< TVector3, 3 > aNormalFaces = { TVector3( 1, 0, 0 ),   // +- fLx
+					     TVector3( 0, 1, 0 ),   // +- fLy
+					     TVector3( 0, 0, 1 ) }; // +- fLz
+  std::array< double, 3 > aProductFaces = { baseline_seed.Dot( aNormalFaces[0] ),
+					    baseline_seed.Dot( aNormalFaces[1] ),
+					    baseline_seed.Dot( aNormalFaces[2] ) };
+  std::array< double, 3 > aDimensions = { fLx, fLy, fLz }; // syntactic sugar
 
-  LOG( "ExoticLLP", pDEBUG )
-    << "\nfAxis = " << utils::print::Vec3AsString( &fAxis )
-    << "\ntransverse_size = " << transverse_size
-    << "\n==>baseline = " << seed_vector.Mag();
+  // Check each pair of faces in turn
+  double baseline = seed_vector.Mag(); // the distance between origin and topVolumeCentre
+  for( int iface = 0; iface < 3; iface++ ) {
+    if( aProductFaces[iface] == 0.0 ) continue; // no intersection for sure
 
+    TVector3 pos_vec =  aDimensions[iface] * aNormalFaces[iface];
+    TVector3 neg_vec = -aDimensions[iface] * aNormalFaces[iface];
 
-  const double baseline = seed_vector.Mag();
+    TVector3 pos_Dvec = pos_vec - fTopVolumeOrigin;
+    TVector3 neg_Dvec = neg_vec - fTopVolumeOrigin;
+
+    double t_pos = pos_Dvec.Dot( aNormalFaces[iface] ) / aProductFaces[iface];
+    double t_neg = neg_Dvec.Dot( aNormalFaces[iface] ) / aProductFaces[iface];
+
+    // evaluate the intersection point at these values
+    TVector3 intersection_pos = fTopVolumeOrigin + baseline_seed * t_pos;
+    TVector3 intersection_neg = fTopVolumeOrigin + baseline_seed * t_neg;
+
+    // which is a "seed vector" of...
+    TVector3 pos_seed = intersection_pos - fOriginPoint;
+    TVector3 neg_seed = intersection_neg - fOriginPoint;
+
+    // if the intersection is not in the face, then scale the vector to be larger than baseline as it is not a valid intersection
+    switch( iface ) {
+    case 0: // evaluating X, check Y and Z
+      if( std::abs( intersection_pos.Y() ) > fLy || std::abs( intersection_pos.Z() ) > fLz ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( intersection_neg.Y() ) > fLy || std::abs( intersection_neg.Z() ) > fLz ) neg_seed.SetMag( 2.0 * baseline );
+      break;
+    case 1: // evaluating Y, check X and Z
+      if( std::abs( intersection_pos.X() ) > fLx || std::abs( intersection_pos.Z() ) > fLz ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( intersection_neg.X() ) > fLx || std::abs( intersection_neg.Z() ) > fLz ) neg_seed.SetMag( 2.0 * baseline );
+      break;
+    case 2: // evaluating Z, check X and Y
+      if( std::abs( intersection_pos.X() ) > fLx || std::abs( intersection_pos.Y() ) > fLy ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( intersection_neg.X() ) > fLx || std::abs( intersection_neg.Y() ) > fLy ) neg_seed.SetMag( 2.0 * baseline );
+      break;
+    } // argh I could not avoid the switch...
+
+    // only update baseline if the magnitude of either is smaller
+    baseline = std::min( baseline, std::min( pos_seed.Mag(), neg_seed.Mag() ) );
+    LOG( "ExoticLLP", pDEBUG ) << "Found intersection at \npos = " 
+			       << utils::print::Vec3AsString( &intersection_pos )
+			       << ", \nneg = " << utils::print::Vec3AsString( &intersection_neg )
+			       << "\n==> baseline = " << baseline;
+
+  } // check each pair of faces in turn
+  
   const double zeta = std::atan( transverse_size / baseline );
 
   Point pt_dl = std::pair<double, double>( -zeta, -constants::kPi );
@@ -1193,6 +1237,7 @@ AngularRegion VolumeSeeker::ComputerVision() const
   double rad = std::sqrt( area / constants::kPi );
 
   // Now also get the baseline!
+  /*
   TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
   LOG( "ExoticLLP", pDEBUG )
     << "\nfTopVolumeOrigin = " << utils::print::Vec3AsString( &fTopVolumeOrigin )
@@ -1203,6 +1248,69 @@ AngularRegion VolumeSeeker::ComputerVision() const
 		      seed_vector.Y() - fLy * fAxis.Y(),
 		      seed_vector.Z() - fLz * fAxis.Z() );
   const double baseline = seed_vector.Mag();
+  */
+
+  /* To get the baseline, calculate the possible intersections of the line from fOriginPoint to fTopVolumeOrigin
+   * with each face. Then get the minimum of each.
+   * For accounting, we will evaluate the faces at (x = +- fLx, y = +- fLy, z = +- fLz) in that order.
+   */
+  
+  const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+  TVector3 baseline_seed = seed_vector.Unit();
+  std::array< TVector3, 3 > aNormalFaces = { TVector3( 1, 0, 0 ),   // +- fLx
+					     TVector3( 0, 1, 0 ),   // +- fLy
+					     TVector3( 0, 0, 1 ) }; // +- fLz
+  std::array< double, 3 > aProductFaces = { baseline_seed.Dot( aNormalFaces[0] ),
+					    baseline_seed.Dot( aNormalFaces[1] ),
+					    baseline_seed.Dot( aNormalFaces[2] ) };
+  std::array< double, 3 > aDimensions = { fLx, fLy, fLz }; // syntactic sugar
+
+  // Check each pair of faces in turn
+  double baseline = seed_vector.Mag(); // the distance between origin and topVolumeCentre
+  for( int iface = 0; iface < 3; iface++ ) {
+    if( aProductFaces[iface] == 0.0 ) continue; // no intersection for sure
+
+    TVector3 pos_vec =  aDimensions[iface] * aNormalFaces[iface];
+    TVector3 neg_vec = -aDimensions[iface] * aNormalFaces[iface];
+
+    TVector3 pos_Dvec = pos_vec - fTopVolumeOrigin;
+    TVector3 neg_Dvec = neg_vec - fTopVolumeOrigin;
+
+    double t_pos = pos_Dvec.Dot( aNormalFaces[iface] ) / aProductFaces[iface];
+    double t_neg = neg_Dvec.Dot( aNormalFaces[iface] ) / aProductFaces[iface];
+
+    // evaluate the intersection point at these values
+    TVector3 intersection_pos = fTopVolumeOrigin + baseline_seed * t_pos;
+    TVector3 intersection_neg = fTopVolumeOrigin + baseline_seed * t_neg;
+
+    // which is a "seed vector" of...
+    TVector3 pos_seed = intersection_pos - fOriginPoint;
+    TVector3 neg_seed = intersection_neg - fOriginPoint;
+
+    // if the intersection is not in the face, then scale the vector to be larger than baseline as it is not a valid intersection
+    switch( iface ) {
+    case 0: // evaluating X, check Y and Z
+      if( std::abs( intersection_pos.Y() ) > fLy || std::abs( intersection_pos.Z() ) > fLz ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( intersection_neg.Y() ) > fLy || std::abs( intersection_neg.Z() ) > fLz ) neg_seed.SetMag( 2.0 * baseline );
+      break;
+    case 1: // evaluating Y, check X and Z
+      if( std::abs( intersection_pos.X() ) > fLx || std::abs( intersection_pos.Z() ) > fLz ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( intersection_neg.X() ) > fLx || std::abs( intersection_neg.Z() ) > fLz ) neg_seed.SetMag( 2.0 * baseline );
+      break;
+    case 2: // evaluating Z, check X and Y
+      if( std::abs( intersection_pos.X() ) > fLx || std::abs( intersection_pos.Y() ) > fLy ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( intersection_neg.X() ) > fLx || std::abs( intersection_neg.Y() ) > fLy ) neg_seed.SetMag( 2.0 * baseline );
+      break;
+    } // argh I could not avoid the switch...
+
+    // only update baseline if the magnitude of either is smaller
+    baseline = std::min( baseline, std::min( pos_seed.Mag(), neg_seed.Mag() ) );
+    LOG( "ExoticLLP", pDEBUG ) << "Found intersection at \npos = " 
+			       << utils::print::Vec3AsString( &intersection_pos )
+			       << ", \nneg = " << utils::print::Vec3AsString( &intersection_neg )
+			       << "\n==> baseline = " << baseline;
+
+  } // check each pair of faces in turn
 
   // return an AngularRegion that holds (radius, baseline) in the first point
   Point pt = std::pair< double, double >( rad, baseline );
