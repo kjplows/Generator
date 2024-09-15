@@ -1127,17 +1127,52 @@ AngularRegion VolumeSeeker::ComputerVision() const
   double area = 0.0;
   std::ostringstream asts;
 
+  // use the half-cross product formula instead
+  double ox = 0.0, oy = 0.0, oz = 0.0;
+  for( std::vector<Vertex>::iterator it_spt = vSortedVertices.begin();
+       it_spt != vSortedVertices.end(); ++it_spt ) {
+    ox += (*it_spt).fX / static_cast<double>( vSortedVertices.size() );
+    oy += (*it_spt).fY / static_cast<double>( vSortedVertices.size() );
+    oz += (*it_spt).fZ / static_cast<double>( vSortedVertices.size() );
+  }
+  for( int ipt = 0; ipt < vSortedVertices.size(); ipt++ ) {
+    int idx = ipt+1; if(idx == vSortedVertices.size()) idx = 0;
+    Vertex vA = vSortedVertices.at(ipt);
+    Vertex vB = vSortedVertices.at(idx);
+
+    double Ax = vA.fX, Ay = vA.fY, Az = vA.fZ;
+    double Bx = vB.fX, By = vB.fY, Bz = vB.fZ;
+
+    TVector3 dOA( Ax - ox, Ay - oy, Az - oz );
+    TVector3 dOB( Bx - ox, By - oy, Bz - oz );
+
+    double sq_yz = std::pow( dOA.Y() * dOB.Z() - dOA.Z() * dOB.Y(), 2.0 );
+    double sq_zx = std::pow( dOA.Z() * dOB.X() - dOA.X() * dOB.Z(), 2.0 );
+    double sq_xy = std::pow( dOA.X() * dOB.Y() - dOA.Y() * dOB.X(), 2.0 );
+
+    area += 0.5 * std::sqrt( sq_yz + sq_zx + sq_xy );
+
+    asts << "\nFrom points O = ( " << ox << ", " << oy << ", " << oz << " ),"
+	 << "A = ( " << Ax << ", " << Ay << ", " << Az << " ), and "
+	 << "B = ( " << Bx << ", " << By << ", " << Bz << " ) we get an area = "
+	 << 0.5 * std::sqrt( sq_yz + sq_zx + sq_xy ); 
+  }
+  LOG( "ExoticLLP", pDEBUG ) << asts.str();
+
+  /*
   double ox = 0.0, oy = 0.0; // to properly use shoelace formula on triangle
   for( std::vector<Point>::iterator it_spt = vSortedPoints.begin();
        it_spt != vSortedPoints.end(); ++it_spt ) {
     ox += (*it_spt).first  / static_cast<double>( vSortedPoints.size() );
     oy += (*it_spt).second / static_cast<double>( vSortedPoints.size() );
   }
+  */
   /*
    *   ox cx nx ox
    *     X  X  X   = (oxcy - oycx) + (cxny - cynx) + (nxoy - nyox)
    *   oy cy ny oy
    */
+  /*
   for( int ipt = 0; ipt < vSortedPoints.size(); ipt++ ) {
     int idx = ipt+1; if(idx == vSortedPoints.size()) idx = 0;
     double cx = vSortedPoints.at(ipt).first; double cy = vSortedPoints.at(ipt).second;
@@ -1152,6 +1187,7 @@ AngularRegion VolumeSeeker::ComputerVision() const
     area += triangle;
   }
   LOG( "ExoticLLP", pDEBUG ) << asts.str();
+  */
 
   // and a circle of this area has radius...
   double rad = std::sqrt( area / constants::kPi );
