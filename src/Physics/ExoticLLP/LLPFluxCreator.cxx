@@ -89,11 +89,20 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   while( it_vetmd != llp_production_modes.end() ) {
     // Check if the mode can actually make LLP
     std::vector<int> mode_pdg_list = (*it_vetmd).GetPDGList();
-    double mass_sum = 0.0;
-    double mass_parent = PDGLibrary::Instance()->Find( mode_pdg_list.at(0) )->Mass();
+    double mass_sum = 0.0, mass_parent = 0.0;
+    mass_parent = PDGLibrary::Instance()->Find( mode_pdg_list.at(0) )->Mass();
+
     for( std::vector<int>::iterator it_pdg = mode_pdg_list.begin()+1; 
-	 it_pdg != mode_pdg_list.end(); ++it_pdg ) 
-      mass_sum += PDGLibrary::Instance()->Find( *it_pdg )->Mass();
+	 it_pdg != mode_pdg_list.end(); ++it_pdg ) {
+      if( PDGLibrary::Instance()->Find( *it_pdg ) == 0 ) { // last ditch effort to add the LLP now
+	assert( std::abs( *it_pdg ) == kPdgLLP );
+	mass_sum += fMass;
+	PDGLibrary::Instance()->DBase()->AddParticle("LLP", "LLP", fMass, true, 0., 0, "LLP", kPdgLLP);
+	PDGLibrary::Instance()->DBase()->AddParticle("LLPBar", "LLPBar", fMass, true, 0., 0, "LLP", -1*kPdgLLP);
+      }
+      else
+	mass_sum += PDGLibrary::Instance()->Find( *it_pdg )->Mass();
+    }
 
     if( mass_sum <= mass_parent ) {
       llp_vetted_modes.emplace_back( *it_vetmd );
@@ -128,7 +137,8 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   ModeObject chosen_production = *(it_modes);
   LOG( "ExoticLLP", pDEBUG ) 
     << "With thrown score " << production_score << " we picked the channel with name " 
-    << chosen_production.GetName();
+    << chosen_production.GetName()
+    << "\nThe PDG list has " << chosen_production.GetPDGList().size() << " elements";
 
   int llp_pdg = kPdgLLP;
   if( fFluxInfo.pdg < 0 ) llp_pdg = kPdgAntiLLP;
@@ -144,6 +154,9 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
        it_vec != chosen_PDGVector.end(); ++it_vec ) {
     // first check that typeMod * pdg code exists. If not, it's something like -1 * pi0
     // (which is its own antiparticle), and we drop the typeMod
+    if( std::abs(*it_vec) == kPdgLLP ) {
+      
+    }
     if( chosen_PDGList.ExistsInPDGLibrary( type_mod * (*it_vec) ) )
       chosen_PDGList.push_back( type_mod * (*it_vec) );
     else
