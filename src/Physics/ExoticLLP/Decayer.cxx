@@ -199,5 +199,5 @@ void Decayer::SetBoost( TVector3 boost_vec ) const
 void Decayer::SetProducts( PDGCodeList pdgv ) const
 { 
   for( PDGCodeList::iterator itp = pdgv.begin(); itp != pdgv.end(); ++itp )
-      fPDGCodeList.push_back( *itp );
+    fPDGCodeList.push_back( *itp );
 }

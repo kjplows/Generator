@@ -493,9 +493,6 @@ int main(int argc, char ** argv)
 	}
 	if( it_modes == llp_decay_modes.end() ) --it_modes;
 	genie::llp::ModeObject chosen_decay = *(it_modes);
-	//LOG( "ExoticLLP", pDEBUG ) 
-	//  << "With thrown score " << decay_score << " we picked the channel with name " 
-	//  << chosen_decay.GetName();
 
 	// make the PDG product list from this
 	std::vector<int> chosen_PDGVector = chosen_decay.GetPDGList();

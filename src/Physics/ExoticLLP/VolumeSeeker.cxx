@@ -502,7 +502,9 @@ TVector3 VolumeSeeker::GetRandomPointInTopVolNEAR() const
 {
   // This returns in NEAR coordinates
   TVector3 outVec = VolumeSeeker::GetRandomPointInTopVol();
-  outVec += fTopVolumeOffset; // adds the position of USER origin in NEAR frame
+  //outVec += fTopVolumeOffset; // adds the position of USER origin in NEAR frame
+  outVec = VolumeSeeker::RotateToNear( outVec );
+  outVec = VolumeSeeker::TranslateToNear( outVec );
   return outVec;
 }
 //____________________________________________________________________________
