@@ -46,6 +46,7 @@ void VertexGenerator::ReadFluxContainer( const FluxContainer flc ) const
 void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 {
   LOG( "ExoticLLP", pDEBUG ) << "Processing vertex positioning...";
+  std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
   fDecayPoint = TLorentzVector(0.0, 0.0, 0.0, 0.0);
 
   // get the entry and exit points from the volume, for a ray
@@ -55,7 +56,10 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   vsek->PopulateEvent( fFluxContainer.v4.Vect(), fFluxContainer.p4.Vect() ); // only in NEAR 
   
   // Raytrace the detector and get out the entry and exit points
-  vsek->RaytraceDetector();
+  double reached_raytrace = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count();
+  //vsek->RaytraceDetector(); // this is slow
+  vsek->IntersectDetector(); // this is less slow and as correct
+  double finished_raytrace = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - reached_raytrace;
   TVector3 entry_point = vsek->GetEntryPoint(); // USER, m
   TVector3 exit_point  = vsek->GetExitPoint(); // USER, m
 
@@ -114,6 +118,8 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
 			     << " [ m ]";
   */
 
+  double reached_tof = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - finished_raytrace;
+
   // We can also calculate the time of arrival of this LLP
   // We'll use the parent decay vertex time as an input, and add the time-of-flight on top
 
@@ -148,6 +154,8 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   // now set the final decay point
   fDecayPoint.SetXYZT( vtx.X(), vtx.Y(), vtx.Z(), full_time ); // m, ns
 
+  double finished_decayPoint = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - reached_tof;
+
   /*
   LOG( "ExoticLLP", pDEBUG ) << "\nThe velocity v = beta * c = " << velocity 
 			     << " [ " << lunitString << " / " << tunitString << " ]";
@@ -176,7 +184,16 @@ void VertexGenerator::ProcessEventRecord(GHepRecord * event_rec) const
   fFluxContainer.wgt_survival = std::exp( -ray_to_detector.Mag() / ( beta * gamma * fLifetime ) );
   fFluxContainer.wgt_detdecay = 1.0 - std::exp( -max_length / ( beta * gamma * fLifetime ) );
 
+  double end_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - finished_decayPoint;
+
   //LOG( "ExoticLLP", pDEBUG ) << fFluxContainer;
+
+  LOG( "ExoticLLP", pDEBUG ) 
+    << "\nTook " << reached_raytrace << " ms to reach raytrace"
+    << "\nTook " << finished_raytrace << " ms to finish raytrace"
+    << "\nTook " << reached_tof << " ms to reach ToF"
+    << "\nTook " << finished_decayPoint << " ms to finish decayPoint"
+    << "\nTook " << end_time << " ms to wrap up";
 }
 //____________________________________________________________________________
 double VertexGenerator::CalcTravelLength( double betaMag, double CoMLifetime, double maxLength ) const

@@ -110,6 +110,7 @@ namespace genie {
 
       //! Given an origin point and a momentum, find the entry and exit points to the detector
       bool RaytraceDetector( bool grace = false ) const;
+      void IntersectDetector() const;
       
       //! Define a region in (theta, phi) space that an HNL can be accepted in...
       //! Note that (theta, phi) are angles with respect to the parent momentum

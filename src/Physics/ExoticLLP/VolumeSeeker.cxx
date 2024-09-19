@@ -534,6 +534,109 @@ std::string VolumeSeeker::CheckGeomPoint( TVector3 chkpoint ) const
   return fGeoManager->GetPath();
 }
 //____________________________________________________________________________
+void VolumeSeeker::IntersectDetector() const
+{
+  // Our point starts out at fOriginPoint and has directional cosines fMomentum
+
+  // Have to find the appropriate deviation vector that will get you onto the correct plane
+  // that is orthogonal to fAxis. 
+  
+  const TVector3 seed_vector = fOriginPoint - fTopVolumeOrigin;
+  TVector3 baseline_seed = seed_vector.Unit();
+  std::array< TVector3, 3 > aNormalFaces = { TVector3( 1, 0, 0 ),   // +- fLx
+					     TVector3( 0, 1, 0 ),   // +- fLy
+					     TVector3( 0, 0, 1 ) }; // +- fLz
+  std::array< double, 3 > aProductFaces = { baseline_seed.Dot( aNormalFaces[0] ),
+					    baseline_seed.Dot( aNormalFaces[1] ),
+					    baseline_seed.Dot( aNormalFaces[2] ) };
+  std::array< double, 3 > aDimensions = { fLx, fLy, fLz }; // syntactic sugar
+
+  std::vector<TVector3> vIntersections;
+
+  // Check each pair of faces in turn
+  for( int iface = 0; iface < 3; iface++ ) {
+    if( aProductFaces[iface] == 0.0 ) continue; // no intersection for sure
+
+    TVector3 pos_vec =  aDimensions[iface] * aNormalFaces[iface];
+    TVector3 neg_vec = -aDimensions[iface] * aNormalFaces[iface];
+
+    TVector3 pos_Dvec = fTopVolumeOrigin - pos_vec;
+    TVector3 neg_Dvec = fTopVolumeOrigin - neg_vec;
+
+    double t_pos = pos_Dvec.Dot( aNormalFaces[iface] ) / aProductFaces[iface];
+    double t_neg = neg_Dvec.Dot( aNormalFaces[iface] ) / aProductFaces[iface];
+
+    // RETHERE: Seems this gives a slightly, slightly wrong value. Shift it by half the value
+    // Why is this wrong?
+    double t_avg  = 0.5 * (t_pos + t_neg);
+    t_pos = t_avg; t_neg = -t_avg;
+
+    // evaluate the intersection point at these values
+    TVector3 intersection_pos = fTopVolumeOrigin - baseline_seed * t_pos;
+    TVector3 intersection_neg = fTopVolumeOrigin - baseline_seed * t_neg;
+
+    TVector3 dev_pos = intersection_pos - fTopVolumeOrigin;
+    TVector3 dev_neg = intersection_neg - fTopVolumeOrigin;
+
+    // if the intersection is not in the face, then scale the vector to be larger than baseline as it is not a valid intersection
+    switch( iface ) {
+    case 0: // evaluating X, check Y and Z
+      if( std::abs( dev_pos.Y() ) <= fLy && std::abs( dev_pos.Z() ) <= fLz ) 
+	vIntersections.emplace_back( intersection_pos );
+      if( std::abs( dev_neg.Y() ) <= fLy && std::abs( dev_neg.Z() ) <= fLz )
+	vIntersections.emplace_back( intersection_neg );
+      break;
+    case 1: // evaluating Y, check X and Z
+      if( std::abs( dev_pos.X() ) <= fLx && std::abs( dev_pos.Z() ) <= fLz ) 
+	vIntersections.emplace_back( intersection_pos );
+      if( std::abs( dev_neg.X() ) <= fLx && std::abs( dev_neg.Z() ) <= fLz )
+	vIntersections.emplace_back( intersection_neg );
+      break;
+    case 2: // evaluating Z, check X and Y
+      if( std::abs( dev_pos.Y() ) <= fLy && std::abs( dev_pos.X() ) <= fLx ) 
+	vIntersections.emplace_back( intersection_pos );
+      if( std::abs( dev_neg.Y() ) <= fLy && std::abs( dev_neg.X() ) <= fLx )
+	vIntersections.emplace_back( intersection_neg );
+      break;
+    } // argh I could not avoid the switch...
+  } // check each pair of faces in turn
+
+  // awesome, now sort the intersections by increasing distance to fOriginPoint
+  std::vector< TVector3 > vSortedIntersections;
+  while( vIntersections.size() > 0 ) {
+    std::vector< TVector3 >::iterator it_int = 
+      std::min_element( vIntersections.begin(), vIntersections.end(),
+			[this](TVector3 a, TVector3 b){ // capture this to use fOriginPoint
+			  return (a-fOriginPoint).Mag() < (b-fOriginPoint).Mag(); } );
+    LOG( "ExoticLLP", pDEBUG ) << "Found intersection " << utils::print::Vec3AsString( &(*it_int) )
+			       << " with distance from ray origin = " << ((*it_int)-fOriginPoint).Mag();
+    vSortedIntersections.emplace_back( *it_int );
+    vIntersections.erase( it_int );
+  }
+
+  // and do some accounting for internal variables
+  double t_param = 0.0;
+  if( seed_vector.Mag() > 0.0 ) 
+    t_param = fAxis.Dot( seed_vector ) / fAxis.Dot( fMomentum ); // guaranteed nonzero
+
+  fZeroPoint.SetXYZ( fOriginPoint.X() + t_param * fMomentum.X(),
+		     fOriginPoint.Y() + t_param * fMomentum.Y(),
+		     fOriginPoint.Z() + t_param * fMomentum.Z() );
+  fZeroPointNEAR = VolumeSeeker::RotateToNear( fZeroPoint );
+  fZeroPointNEAR = VolumeSeeker::TranslateToNear( fZeroPointNEAR );
+  fZeroPointROOT = (fZeroPoint - fTopVolumeOrigin) * fToROOTUnits; // subtract translation subtlety
+
+  fEntryPoint = vSortedIntersections.at(0);
+  fEntryPointROOT = (fEntryPoint - fTopVolumeOrigin) * fToROOTUnits;
+  fEntryPointNEAR = VolumeSeeker::RotateToNear( fEntryPoint );
+  fEntryPointNEAR = VolumeSeeker::TranslateToNear( fEntryPointNEAR );
+
+  fExitPoint = vSortedIntersections.at(vSortedIntersections.size()-1);
+  fExitPointROOT = (fExitPoint - fTopVolumeOrigin) * fToROOTUnits;
+  fExitPointNEAR = VolumeSeeker::RotateToNear( fExitPoint );
+  fExitPointNEAR = VolumeSeeker::TranslateToNear( fExitPointNEAR );
+}
+//____________________________________________________________________________
 bool VolumeSeeker::RaytraceDetector( bool grace ) const
 {
   // Our point starts out at fOriginPoint and has directional cosines fMomentum
@@ -830,7 +933,7 @@ AngularRegion VolumeSeeker::SmallAngleRegion() const
    * For accounting, we will evaluate the faces at (x = +- fLx, y = +- fLy, z = +- fLz) in that order.
    */
   
-  const TVector3 seed_vector = fTopVolumeOrigin - fOriginPoint;
+  const TVector3 seed_vector = fOriginPoint - fTopVolumeOrigin;
   TVector3 baseline_seed = seed_vector.Unit();
   std::array< TVector3, 3 > aNormalFaces = { TVector3( 1, 0, 0 ),   // +- fLx
 					     TVector3( 0, 1, 0 ),   // +- fLy
@@ -848,15 +951,23 @@ AngularRegion VolumeSeeker::SmallAngleRegion() const
     TVector3 pos_vec =  aDimensions[iface] * aNormalFaces[iface];
     TVector3 neg_vec = -aDimensions[iface] * aNormalFaces[iface];
 
-    TVector3 pos_Dvec = pos_vec - fTopVolumeOrigin;
-    TVector3 neg_Dvec = neg_vec - fTopVolumeOrigin;
+    TVector3 pos_Dvec = fTopVolumeOrigin - pos_vec;
+    TVector3 neg_Dvec = fTopVolumeOrigin - neg_vec;
 
     double t_pos = pos_Dvec.Dot( aNormalFaces[iface] ) / aProductFaces[iface];
     double t_neg = neg_Dvec.Dot( aNormalFaces[iface] ) / aProductFaces[iface];
 
+    // RETHERE: Seems this gives a slightly, slightly wrong value. Shift it by half the value
+    // Why is this wrong?
+    double t_avg  = 0.5 * (t_pos + t_neg);
+    t_pos = t_avg; t_neg = -t_avg;
+
     // evaluate the intersection point at these values
     TVector3 intersection_pos = fTopVolumeOrigin + baseline_seed * t_pos;
     TVector3 intersection_neg = fTopVolumeOrigin + baseline_seed * t_neg;
+
+    TVector3 dev_pos = intersection_pos - fTopVolumeOrigin;
+    TVector3 dev_neg = intersection_neg - fTopVolumeOrigin;
 
     // which is a "seed vector" of...
     TVector3 pos_seed = intersection_pos - fOriginPoint;
@@ -865,16 +976,16 @@ AngularRegion VolumeSeeker::SmallAngleRegion() const
     // if the intersection is not in the face, then scale the vector to be larger than baseline as it is not a valid intersection
     switch( iface ) {
     case 0: // evaluating X, check Y and Z
-      if( std::abs( intersection_pos.Y() ) > fLy || std::abs( intersection_pos.Z() ) > fLz ) pos_seed.SetMag( 2.0 * baseline );
-      if( std::abs( intersection_neg.Y() ) > fLy || std::abs( intersection_neg.Z() ) > fLz ) neg_seed.SetMag( 2.0 * baseline );
+      if( std::abs( dev_pos.Y() ) > fLy || std::abs( dev_pos.Z() ) > fLz ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( dev_neg.Y() ) > fLy || std::abs( dev_neg.Z() ) > fLz ) neg_seed.SetMag( 2.0 * baseline );
       break;
     case 1: // evaluating Y, check X and Z
-      if( std::abs( intersection_pos.X() ) > fLx || std::abs( intersection_pos.Z() ) > fLz ) pos_seed.SetMag( 2.0 * baseline );
-      if( std::abs( intersection_neg.X() ) > fLx || std::abs( intersection_neg.Z() ) > fLz ) neg_seed.SetMag( 2.0 * baseline );
+      if( std::abs( dev_pos.X() ) > fLx || std::abs( dev_pos.Z() ) > fLz ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( dev_neg.X() ) > fLx || std::abs( dev_neg.Z() ) > fLz ) neg_seed.SetMag( 2.0 * baseline );
       break;
     case 2: // evaluating Z, check X and Y
-      if( std::abs( intersection_pos.X() ) > fLx || std::abs( intersection_pos.Y() ) > fLy ) pos_seed.SetMag( 2.0 * baseline );
-      if( std::abs( intersection_neg.X() ) > fLx || std::abs( intersection_neg.Y() ) > fLy ) neg_seed.SetMag( 2.0 * baseline );
+      if( std::abs( dev_pos.X() ) > fLx || std::abs( dev_pos.Y() ) > fLy ) pos_seed.SetMag( 2.0 * baseline );
+      if( std::abs( dev_neg.X() ) > fLx || std::abs( dev_neg.Y() ) > fLy ) neg_seed.SetMag( 2.0 * baseline );
       break;
     } // argh I could not avoid the switch...
 
