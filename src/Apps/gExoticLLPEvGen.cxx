@@ -18,6 +18,8 @@
 #include <vector>
 #include <sstream>
 
+#include <chrono>
+
 #include <TSystem.h>
 #include "TChain.h"
 #include "TFile.h"
@@ -197,6 +199,8 @@ struct FluxPointerContainer {
 FluxPointerContainer gOptFluxPtInfo;
 
 bool             gOptWriteAngularAcceptance = false;     // write an angular acceptance branch to tree
+bool             gOptDoAFluxCalculation = false;         // just run the FluxCreator.
+
 TFile *          gOutputFluxFile = 0;                    // output flux file (clone of input)
 TTree *          gOutputFluxTree = 0;                    // output flux tree
 AngularRegion    gAngularRegion;                         // Event-by-event angular region, for event generation purposes
@@ -396,6 +400,11 @@ int main(int argc, char ** argv)
 
     // If we want to calculate angular acceptance, don't actually process events but just populate branches.
 
+    std::chrono::time_point<std::chrono::system_clock> start_time;
+    double reached_fluxCreator, finished_fluxCreator;
+    double reached_vtxGenerator, finished_vtxGenerator;
+    double end_time;
+
     if( gOptWriteAngularAcceptance ){
       LOG("gevgen_exotic_llp", pNOTICE)
 	<< " *** Filling flux for event............ " << (ievent-gOptFirstEvent);
@@ -431,6 +440,8 @@ int main(int argc, char ** argv)
     } else {
       LOG("gevgen_exotic_llp", pNOTICE)
 	<< " *** Generating event............ " << (ievent-gOptFirstEvent);
+      LOG("gevgen_exotic_llp", pDEBUG) << "Starting chrono stopwatch!";
+      start_time = std::chrono::system_clock::now();
       
       EventRecord * event = new EventRecord;
       event->SetWeight(1.0);
@@ -452,8 +463,11 @@ int main(int argc, char ** argv)
       // First, we need to construct the input LLP. Based on the parent kinematics
       Decayer * decayer = Decayer::Instance();
       decayer->ClearEvent();
+
       fluxCreator->UpdateFluxInfo( gOptFluxInfo );
+      reached_fluxCreator = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count();
       fluxCreator->ProcessEventRecord(event);
+      finished_fluxCreator = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - reached_fluxCreator;
       LOG( "gevgen_exotic_llp", pDEBUG ) << "Should we move on?";
       // check if we should move on -- might be the flux was unable to produce an entry.
       if( event->Probability() <= 0 ){
@@ -466,123 +480,132 @@ int main(int argc, char ** argv)
 	gOptFluxInfo  = fluxCreator->RetrieveFluxInfo();
 	gOptEnergyLLP = (gOptFluxInfo.p4).E();
 
+	int decay = 0;
+	int typeMod = ( gOptFluxInfo.pdg >= 0 ) ? 1 : -1; 
+	Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
+
 	//LOG( "gevgen_exotic_llp", pDEBUG ) << "Sanity: boost factor is " << gOptFluxInfo.boost_factor;
 
-	// Choose from one of the available LLP decay channels and ask the Decayer to throw
-	decayer->ClearEvent();
-	std::vector< genie::llp::ModeObject > llp_decay_modes = llp.GetDecayModes();
-	//LOG( "gevgen_exotic_llp", pDEBUG ) << "There are " << llp_decay_modes.size() << " decay modes available to choose from";
+	if( gOptDoAFluxCalculation ) {
+	  event->AttachSummary(interaction);
+	  
+	  // Ensure the flux container pointer points to gOptFluxInfo
+	  gOptFluxInfoContainer = &gOptFluxInfo;
+	} else {
+	  // Choose from one of the available LLP decay channels and ask the Decayer to throw
+	  decayer->ClearEvent();
+	  std::vector< genie::llp::ModeObject > llp_decay_modes = llp.GetDecayModes();
+	  //LOG( "gevgen_exotic_llp", pDEBUG ) << "There are " << llp_decay_modes.size() << " decay modes available to choose from";
 
-	// Check the sum of scores is 1, and if not rescale it
-	double score_sum = 0.0;
-	for( std::vector<genie::llp::ModeObject>::iterator it_mod = llp_decay_modes.begin();
-	     it_mod != llp_decay_modes.end(); ++it_mod ) score_sum += (*it_mod).fScore;
-	if( score_sum != 1.0 ) {
-	  LOG( "gevgen_exotic_llp", pWARN ) << "Sum of all decay modes is not 1, "
-					    << "rescaling by " << 1.0 / score_sum;
-	} // rescale
-	for( std::vector<genie::llp::ModeObject>::iterator it_mod = llp_decay_modes.begin();
-	     it_mod != llp_decay_modes.end(); ++it_mod ) (*it_mod).fScore *= 1.0 / score_sum;	
+	  // Check the sum of scores is 1, and if not rescale it
+	  double score_sum = 0.0;
+	  for( std::vector<genie::llp::ModeObject>::iterator it_mod = llp_decay_modes.begin();
+	       it_mod != llp_decay_modes.end(); ++it_mod ) score_sum += (*it_mod).fScore;
+	  if( score_sum != 1.0 ) {
+	    LOG( "gevgen_exotic_llp", pWARN ) << "Sum of all decay modes is not 1, "
+					      << "rescaling by " << 1.0 / score_sum;
+	  } // rescale
+	  for( std::vector<genie::llp::ModeObject>::iterator it_mod = llp_decay_modes.begin();
+	       it_mod != llp_decay_modes.end(); ++it_mod ) (*it_mod).fScore *= 1.0 / score_sum;	
 	
-	double decay_score = rnd->RndGen().Rndm();
+	  double decay_score = rnd->RndGen().Rndm();
 
-	std::vector< genie::llp::ModeObject >::iterator it_modes = llp_decay_modes.begin();
-	double score_seen = (*it_modes).GetScore();
-	while( it_modes != llp_decay_modes.end() && score_seen < decay_score  ) {
-	  ++it_modes; score_seen += (*it_modes).GetScore();
+	  std::vector< genie::llp::ModeObject >::iterator it_modes = llp_decay_modes.begin();
+	  double score_seen = (*it_modes).GetScore();
+	  while( it_modes != llp_decay_modes.end() && score_seen < decay_score  ) {
+	    ++it_modes; score_seen += (*it_modes).GetScore();
+	  }
+	  if( it_modes == llp_decay_modes.end() ) --it_modes;
+	  genie::llp::ModeObject chosen_decay = *(it_modes);
+
+	  // make the PDG product list from this
+	  std::vector<int> chosen_PDGVector = chosen_decay.GetPDGList();
+	  bool allow_duplicate = true;
+	  PDGCodeList chosen_PDGList(allow_duplicate);
+	  for( std::vector<int>::iterator it_vec = chosen_PDGVector.begin();
+	       it_vec != chosen_PDGVector.end(); ++it_vec ) {
+	    // first check that typeMod * pdg code exists. If not, it's something like -1 * pi0
+	    // (which is its own antiparticle), and we drop the typeMod
+	    if( chosen_PDGList.ExistsInPDGLibrary( typeMod * (*it_vec) ) )
+	      chosen_PDGList.push_back( typeMod * (*it_vec) );
+	    else
+	      chosen_PDGList.push_back( *it_vec );
+	  }
+
+	  decayer->SetProducts( chosen_PDGList );
+	  // also let the Decayer know about the boost vector
+	  TVector3 bvec = (event->Particle(0)->P4())->BoostVector();
+	  TLorentzVector * dvec = event->Particle(0)->P4();
+	  decayer->SetBoost( bvec );
+	  // Perform a phase space decay
+	  // RETHERE: Add in angular correlations of final state products?
+	  [[maybe_unused]] bool decay_ok = decayer->UnpolarisedDecay();
+	  // Read in the results
+	  std::vector< GHepParticle > decayed_results = decayer->GetResults();
+
+	  int npro = 0, nneu = 0;
+	  int npip = 0, npi0 = 0, npim = 0;
+	  int ngam = 0;
+	  int nrhp = 0, nrh0 = 0, nrhm = 0;
+
+	  TLorentzVector p4_FSPrim(0.0, 0.0, 0.0, 0.0);
+	
+	  for( std::vector< GHepParticle >::iterator it_res = decayed_results.begin();
+	       it_res != decayed_results.end(); ++it_res ) {
+	    event->AddParticle( *it_res );
+
+	    switch( (*it_res).Pdg() ) {
+	    case kPdgPiP: npip++; break;
+	    case kPdgPi0: npi0++; break;
+	    case kPdgPiM: npim++; break;
+	    case kPdgProton: npro++; break;
+	    case kPdgNeutron: nneu++; break;
+	    case kPdgRhoP: nrhp++; break;
+	    case kPdgRho0: nrh0++; break;
+	    case kPdgRhoM: nrhm++; break;
+	    case kPdgGamma: ngam++; break;
+	    default: break;
+	    }
+	  
+	    if( pdg::IsLepton( (*it_res).Pdg() ) && (*it_res).P4()->E() > p4_FSPrim.E() )
+	      p4_FSPrim = *((*it_res).P4());
+	  }
+
+	  // Update the interaction tags
+	  interaction->InitStatePtr()->SetProbeP4( *(event->Particle(0)->P4()) );
+	  interaction->InitStatePtr()->SetProbePdg( event->Particle(0)->Pdg() );
+	
+	  // Because this is a decay, there is no four-momentum transfer to the FS system.
+	  // HOWEVER, if we pick a FS primary lepton, then q = p(LLP) - p(primary lepton)
+	  interaction->KinePtr()->SetFSLeptonP4(p4_FSPrim);
+	  TLorentzVector Q2 = *(event->Particle(0)->P4()) - p4_FSPrim;
+	  interaction->KinePtr()->Setx(0.0);
+	  interaction->KinePtr()->Sety(1.0 - p4_FSPrim.E() / event->Particle(0)->P4()->E() );
+	  interaction->KinePtr()->SetQ2(Q2.Mag2());
+	  interaction->KinePtr()->Setq2(-Q2.Mag2());
+	  interaction->KinePtr()->SetW(gOptFluxInfo.mass);
+	  //interaction->KinePtr()->Sett(Q2.Mag2());
+	
+	  interaction->ExclTagPtr()->SetNPions( npip, npi0, npim );
+	  interaction->ExclTagPtr()->SetNNucleons( npro, nneu );
+	  interaction->ExclTagPtr()->SetNSingleGammas( ngam );
+	  interaction->ExclTagPtr()->SetNRhos( nrhp, nrh0, nrhm );
+	
+	  event->AttachSummary(interaction);
 	}
-	if( it_modes == llp_decay_modes.end() ) --it_modes;
-	genie::llp::ModeObject chosen_decay = *(it_modes);
-
-	// make the PDG product list from this
-	std::vector<int> chosen_PDGVector = chosen_decay.GetPDGList();
-	bool allow_duplicate = true;
-	PDGCodeList chosen_PDGList(allow_duplicate);
-	int typeMod = ( gOptFluxInfo.pdg >= 0 ) ? 1 : -1; 
-	for( std::vector<int>::iterator it_vec = chosen_PDGVector.begin();
-	     it_vec != chosen_PDGVector.end(); ++it_vec ) {
-	  // first check that typeMod * pdg code exists. If not, it's something like -1 * pi0
-	  // (which is its own antiparticle), and we drop the typeMod
-	  if( chosen_PDGList.ExistsInPDGLibrary( typeMod * (*it_vec) ) )
-	    chosen_PDGList.push_back( typeMod * (*it_vec) );
-	  else
-	    chosen_PDGList.push_back( *it_vec );
-	}
-
-	decayer->SetProducts( chosen_PDGList );
-	// also let the Decayer know about the boost vector
-	TVector3 bvec = (event->Particle(0)->P4())->BoostVector();
-	TLorentzVector * dvec = event->Particle(0)->P4();
-	decayer->SetBoost( bvec );
-	// Perform a phase space decay
-	// RETHERE: Add in angular correlations of final state products?
-	[[maybe_unused]] bool decay_ok = decayer->UnpolarisedDecay();
-	// Read in the results
-	std::vector< GHepParticle > decayed_results = decayer->GetResults();
 
 	gOptFluxInfo.p4_user = *(event->Particle(0)->P4());
 	TVector3 tmp_vec = vsek->RotateToNear( gOptFluxInfo.p4_user.Vect() );
 	gOptFluxInfo.p4 = TLorentzVector( tmp_vec.Px(), tmp_vec.Py(), tmp_vec.Pz(), 
 					  gOptFluxInfo.p4_user.E() );
 
-	int npro = 0, nneu = 0;
-	int npip = 0, npi0 = 0, npim = 0;
-	int ngam = 0;
-	int nrhp = 0, nrh0 = 0, nrhm = 0;
-
-	TLorentzVector p4_FSPrim(0.0, 0.0, 0.0, 0.0);
-
-	for( std::vector< GHepParticle >::iterator it_res = decayed_results.begin();
-	     it_res != decayed_results.end(); ++it_res ) {
-	  event->AddParticle( *it_res );
-
-	  switch( (*it_res).Pdg() ) {
-	  case kPdgPiP: npip++; break;
-	  case kPdgPi0: npi0++; break;
-	  case kPdgPiM: npim++; break;
-	  case kPdgProton: npro++; break;
-	  case kPdgNeutron: nneu++; break;
-	  case kPdgRhoP: nrhp++; break;
-	  case kPdgRho0: nrh0++; break;
-	  case kPdgRhoM: nrhm++; break;
-	  case kPdgGamma: ngam++; break;
-	  default: break;
-	  }
-
-	  if( pdg::IsLepton( (*it_res).Pdg() ) && (*it_res).P4()->E() > p4_FSPrim.E() )
-	    p4_FSPrim = *((*it_res).P4());
-	}
-
-	int decay = 0;
-	Interaction * interaction = Interaction::LLP(typeMod * genie::kPdgLLP, gOptEnergyLLP, decay);
-
-	// Update the interaction tags
-	interaction->InitStatePtr()->SetProbeP4( *(event->Particle(0)->P4()) );
-	interaction->InitStatePtr()->SetProbePdg( event->Particle(0)->Pdg() );
-
-	// Because this is a decay, there is no four-momentum transfer to the FS system.
-	// HOWEVER, if we pick a FS primary lepton, then q = p(LLP) - p(primary lepton)
-	interaction->KinePtr()->SetFSLeptonP4(p4_FSPrim);
-	TLorentzVector Q2 = *(event->Particle(0)->P4()) - p4_FSPrim;
-	interaction->KinePtr()->Setx(0.0);
-	interaction->KinePtr()->Sety(1.0 - p4_FSPrim.E() / event->Particle(0)->P4()->E() );
-	interaction->KinePtr()->SetQ2(Q2.Mag2());
-	interaction->KinePtr()->Setq2(-Q2.Mag2());
-	interaction->KinePtr()->SetW(gOptFluxInfo.mass);
-	//interaction->KinePtr()->Sett(Q2.Mag2());
-
-	interaction->ExclTagPtr()->SetNPions( npip, npi0, npim );
-	interaction->ExclTagPtr()->SetNNucleons( npro, nneu );
-	interaction->ExclTagPtr()->SetNSingleGammas( ngam );
-	interaction->ExclTagPtr()->SetNRhos( nrhp, nrh0, nrhm );
-	
-	event->AttachSummary(interaction);
-
 	// finally, make the vertex itself and add timing information
 	//LOG( "gevgen_exotic_llp", pDEBUG ) << gOptFluxInfo;
 	std::cout.flush(); std::cerr.flush(); // again, weirdness
+	reached_vtxGenerator = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - finished_fluxCreator;
 	vtxGen->ReadFluxContainer( gOptFluxInfo );
 	vtxGen->ProcessEventRecord( event );
+	finished_vtxGenerator = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - reached_vtxGenerator;
 	gOptFluxInfo = vtxGen->RetrieveFluxContainer();
 
 	LOG("gevgen_exotic_llp", pDEBUG) << "Event vertex is " 
@@ -594,7 +617,7 @@ int main(int argc, char ** argv)
 	// Ensure the flux container pointer points to gOptFluxInfo
 	gOptFluxInfoContainer = &gOptFluxInfo;
 	
-	LOG( "gevgen_exotic_llp", pDEBUG ) << gOptFluxInfo;
+	LOG( "gevgen_exotic_llp", pINFO ) << gOptFluxInfo;
 	
 	// Add event at the output ntuple, refresh the mc job monitor & clean-up
 	ntpw.AddEventRecord(ievent, event);
@@ -603,6 +626,14 @@ int main(int argc, char ** argv)
       }
       
       delete event;
+      end_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - finished_vtxGenerator;
+
+      LOG( "gevgen_exotic_llp", pDEBUG ) 
+	<< "\nTook " << reached_fluxCreator << " ms to reach fluxCreator"
+	<< "\nTook " << finished_fluxCreator << " ms to finish fluxCreator"
+	<< "\nTook " << reached_vtxGenerator << " ms to reach vtxGenerator"
+	<< "\nTook " << finished_vtxGenerator << " ms to finish vtxGenerator"
+	<< "\nTook " << end_time << " ms to wrap up";
     } // main event generation
     
     ievent++;
@@ -729,6 +760,21 @@ void GetCommandLineArgs(int argc, char ** argv)
 
     gOptWriteAngularAcceptance = true;
   } // --calculate_angular_acceptance
+
+  // Flag to not perform decay or vertex placement: this devolves to a flux calculation
+  if( parser.OptionExists("calculate_flux") ){
+    LOG("gevgen_exotic_llp", pNOTICE)
+      << "\nWill calculate flux of particles arriving at the detector."
+      << "\nWill NOT generate events.";
+    gOptDoAFluxCalculation = true;
+  }
+
+  // first flux entry to read
+  if( parser.OptionExists("firstEvent") ) {
+    gOptFirstEvent = parser.ArgAsInt("firstEvent");
+    LOG( "gevgen_exotic_llp", pINFO )
+      << "Starting flux readin at first event = " << gOptFirstEvent;
+  } // --firstEvent
 #endif // #ifdef __CAN_USE_ROOT_GEOM__
 #endif // #ifdef __CAN_GENERATE_EVENTS_USING_A_FLUX__
 
@@ -750,13 +796,6 @@ void GetCommandLineArgs(int argc, char ** argv)
   }
 
   gOptIsMonoEnFlux = isMonoEnergeticFlux;
-
-  // first flux entry to read
-  if( parser.OptionExists("firstEvent") ) {
-    gOptFirstEvent = parser.ArgAsInt("firstEvent");
-    LOG( "gevgen_exotic_llp", pINFO )
-      << "Starting flux readin at first event = " << gOptFirstEvent;
-  } // --firstEvent
 
   // LLP decay mode
   int mode = -1;
