@@ -3336,6 +3336,11 @@ void DeclareLLPBranches( TTree * tree, TTree * intree )
   tree->Branch( "LLP_Lifetime",        &(gLLPFluxInfo->lifetime),        "LLP_Lifetime/D"        );
   tree->Branch( "LLP_Flux_evtno",      &(gLLPFluxInfo->evtno),           "LLP_Flux_evtno/I"      );
   tree->Branch( "LLP_Parent_pdg",      &(gLLPFluxInfo->pdg),             "LLP_Parent_pdg/I"      );
+  tree->Branch( "LLP_Coproduced_pdgs", &(gLLPFluxInfo->cop_pdgs)                                 );
+  tree->Branch( "LLP_Coproduced_p4xs", &(gLLPFluxInfo->cop_p4xs)                                 );
+  tree->Branch( "LLP_Coproduced_p4ys", &(gLLPFluxInfo->cop_p4ys)                                 );
+  tree->Branch( "LLP_Coproduced_p4zs", &(gLLPFluxInfo->cop_p4zs)                                 );
+  tree->Branch( "LLP_Coproduced_p4Es", &(gLLPFluxInfo->cop_p4Es)                                 );
   tree->Branch( "LLP_Parent_v4_NEAR",  &(gLLPFluxInfo->v4)                                       );
   tree->Branch( "LLP_Parent_v4",       &(gLLPFluxInfo->v4_user)                                  );
   tree->Branch( "LLP_Parent_p4_NEAR",  &(gLLPFluxInfo->p4_parent)                                );
