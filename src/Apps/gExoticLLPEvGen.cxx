@@ -349,10 +349,13 @@ int main(int argc, char ** argv)
     exit(1);
   }
 
-  bool tooManyEntries = false;
-  if( gOptNev < 0 ) gOptNev = flux_tree->GetEntries();
+  if( gOptNev < 0 ) gOptNev = flux_tree->GetEntries() - gOptFirstEvent;
+  bool tooManyEntries = ( gOptNev > flux_tree->GetEntries() - gOptFirstEvent );
   while (1) {
     if( tooManyEntries ){
+      gOptNev = flux_tree->GetEntries() - gOptFirstEvent;
+      LOG( "gevgen_exotic_llp", pINFO ) << "Only have " << gOptNev << " entries to iterate over!";
+
       if( gOptNev >= 10000 ){
 	if( (ievent-gOptFirstEvent) % (gOptNev / 1000) == 0 ){
 	  int irat = (iflux-gOptFirstEvent) / ( gOptNev / 1000 );
