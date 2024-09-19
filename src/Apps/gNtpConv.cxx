@@ -256,6 +256,19 @@ int main(int argc, char ** argv)
   GHepRecord::SetPrintLevel(RunOpt::Instance()->EventRecordPrintLevel());
 
   PDGLibrary::Instance()->AddDarkMatter( 1.0, 0.5 ) ;
+
+#ifdef __GENIE_EXOTIC_LLP_ENABLED__
+  /*
+  const Algorithm * algLLPConfigurator = AlgFactory::Instance()->GetAlgorithm("genie::llp::LLPConfigurator", "Default");
+
+  const LLPConfigurator * LLP_configurator = dynamic_cast< const LLPConfigurator * >( algLLPConfigurator );
+
+  ExoticLLP llp = LLP_configurator->RetrieveLLP();
+  double fMass = llp->GetMass();
+  */
+  PDGLibrary::Instance()->DBase()->AddParticle("LLP", "LLP", 0.0, true, 0., 0, "LLP", kPdgLLP);
+  PDGLibrary::Instance()->DBase()->AddParticle("LLPBar", "LLPBar", 0.0, true, 0., 0, "LLP", -1*kPdgLLP);
+#endif
   
   // Call the appropriate conversion function
   switch(gOptOutFileFormat) {
