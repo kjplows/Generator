@@ -38,6 +38,9 @@ FluxContainer::FluxContainer(const FluxContainer & flc) : TObject(flc)
   v4 = flc.v4;
   v4_user = flc.v4_user;
 
+  target = flc.target;
+  target_user = flc.target_user;
+
   p4_parent = flc.p4_parent;
   p4_parent_user = flc.p4_parent_user;
 
@@ -79,6 +82,9 @@ FluxContainer & FluxContainer::operator = (const FluxContainer & flc)
 
   this->v4 = flc.v4;
   this->v4_user = flc.v4_user;
+
+  this->target = flc.target;
+  this->target_user = flc.target_user;
 
   this->p4_parent = flc.p4_parent;
   this->p4_parent_user = flc.p4_parent_user;
@@ -123,6 +129,9 @@ void FluxContainer::ResetCopy() const
 
   v4.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
   v4_user.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
+
+  target.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
+  target_user.SetXYZT( 0.0, 0.0, 0.0, 0.0 );
 
   p4_parent.SetPxPyPzE( 0.0, 0.0, 0.0, 0.0 );
   p4_parent_user.SetPxPyPzE( 0.0, 0.0, 0.0, 0.0 );
@@ -178,6 +187,8 @@ namespace llp  {
       stream << "\n~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*";
       stream << "\nProduction vertex [NEAR, m, ns] = " << utils::print::X4AsString( &(info.v4) )
 	     << "\nProduction vertex [USER, m, ns] = " << utils::print::X4AsString( &(info.v4_user) )
+	     << "\nEvaluation vertex [NEAR, m, ns] = " << utils::print::X4AsString( &(info.target) )
+	     << "\nEvaluation vertex [USER, m, ns] = " << utils::print::X4AsString( &(info.target_user) )
 	     << "\nLLP momentum    [NEAR, GeV] = " << utils::print::P4AsString( &(info.p4) )
 	     << "\nLLP momentum    [USER, GeV] = " << utils::print::P4AsString( &(info.p4_user) )
 	     << "\nParent momentum [NEAR, GeV] = " << utils::print::P4AsString( &(info.p4_parent) )

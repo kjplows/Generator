@@ -104,6 +104,9 @@ namespace genie{
       mutable TLorentzVector v4;      ///< Production vertex in NEAR frame [m, ns]
       mutable TLorentzVector v4_user; ///< Production vertex in USER frame [m, ns]
 
+      mutable TLorentzVector target;       ///< Point at which the flux is evaluated in NEAR frame [m, ns]
+      mutable TLorentzVector target_user;  ///< Point at which the flux is evaluated in USER frame [m, ns]
+
       mutable TLorentzVector p4_parent;       ///< Parent momentum in NEAR frame, LLP production [GeV]
       mutable TLorentzVector p4_parent_user ; ///< Parent momentum in USER frame, LLP production [GeV]
 
@@ -128,7 +131,7 @@ namespace genie{
 
       mutable double vtx_rng; ///< Random number used to generate vertex
 
-      ClassDef( FluxContainer, 2 );
+      ClassDef( FluxContainer, 3 );
     }; // class FluxContainer
     
   } // namespace llp

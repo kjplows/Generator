@@ -403,11 +403,6 @@ int main(int argc, char ** argv)
 
     // If we want to calculate angular acceptance, don't actually process events but just populate branches.
 
-    std::chrono::time_point<std::chrono::system_clock> start_time;
-    double reached_fluxCreator, finished_fluxCreator;
-    double reached_vtxGenerator, finished_vtxGenerator;
-    double end_time;
-
     if( gOptWriteAngularAcceptance ){
       LOG("gevgen_exotic_llp", pNOTICE)
 	<< " *** Filling flux for event............ " << (ievent-gOptFirstEvent);
@@ -443,8 +438,6 @@ int main(int argc, char ** argv)
     } else {
       LOG("gevgen_exotic_llp", pNOTICE)
 	<< " *** Generating event............ " << (ievent-gOptFirstEvent);
-      LOG("gevgen_exotic_llp", pDEBUG) << "Starting chrono stopwatch!";
-      start_time = std::chrono::system_clock::now();
       
       EventRecord * event = new EventRecord;
       event->SetWeight(1.0);
@@ -468,9 +461,7 @@ int main(int argc, char ** argv)
       decayer->ClearEvent();
 
       fluxCreator->UpdateFluxInfo( gOptFluxInfo );
-      reached_fluxCreator = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count();
       fluxCreator->ProcessEventRecord(event);
-      finished_fluxCreator = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - reached_fluxCreator;
       LOG( "gevgen_exotic_llp", pDEBUG ) << "Should we move on?";
       // check if we should move on -- might be the flux was unable to produce an entry.
       if( event->Probability() <= 0 ){
@@ -605,10 +596,8 @@ int main(int argc, char ** argv)
 	// finally, make the vertex itself and add timing information
 	//LOG( "gevgen_exotic_llp", pDEBUG ) << gOptFluxInfo;
 	std::cout.flush(); std::cerr.flush(); // again, weirdness
-	reached_vtxGenerator = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - finished_fluxCreator;
 	vtxGen->ReadFluxContainer( gOptFluxInfo );
 	vtxGen->ProcessEventRecord( event );
-	finished_vtxGenerator = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - reached_vtxGenerator;
 	gOptFluxInfo = vtxGen->RetrieveFluxContainer();
 
 	LOG("gevgen_exotic_llp", pDEBUG) << "Event vertex is " 
@@ -629,14 +618,6 @@ int main(int argc, char ** argv)
       }
       
       delete event;
-      end_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count() - finished_vtxGenerator;
-
-      LOG( "gevgen_exotic_llp", pDEBUG ) 
-	<< "\nTook " << reached_fluxCreator << " ms to reach fluxCreator"
-	<< "\nTook " << finished_fluxCreator << " ms to finish fluxCreator"
-	<< "\nTook " << reached_vtxGenerator << " ms to reach vtxGenerator"
-	<< "\nTook " << finished_vtxGenerator << " ms to finish vtxGenerator"
-	<< "\nTook " << end_time << " ms to wrap up";
     } // main event generation
     
     ievent++;

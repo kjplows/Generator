@@ -133,6 +133,9 @@ namespace genie {
       { return ( near ) ? fEntryPointNEAR : fEntryPoint; }
       TVector3 GetExitPoint( bool near = false ) const 
       { return ( near ) ? fExitPointNEAR : fExitPoint; }
+      //! And a setter method to get the target
+      void SetTarget( TVector3 tgt ) const 
+      { fTarget = tgt; }
 
     private:
 
@@ -207,6 +210,7 @@ namespace genie {
       mutable TVector3 fExitPointNEAR;                 //! (X, Y, Z) of ray exit from detector [m]
 
       mutable TVector3 fMomentum, fMomentumNEAR;       //! (px, py, pz) of particle. [GeV/c]
+      mutable TVector3 fTarget;                        //! (x, y, z) of point at which flux is being evaluated [m]
 
       /*
 	The following 3 vectors describe a RH coordinate system in USER space.

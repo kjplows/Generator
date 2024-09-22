@@ -193,9 +193,16 @@ void FluxCreator::ProcessEventRecord(GHepRecord * evrec) const
   // Get a random point in the top volume to evaluate the flux at
   VolumeSeeker * vsek = VolumeSeeker::Instance();
   TVector3 rand_point = vsek->GetRandomPointInTopVolNEAR();
+  TVector3 rand_point_user = vsek->TranslateToUser( rand_point );
+  rand_point_user = vsek->RotateToUser( rand_point_user );
   TVector3 origin     = parent_v4.Vect();
-  LOG( "ExoticLLP", pWARN ) << "Evaluating flux at NEAR point " 
-			    << utils::print::Vec3AsString( &rand_point );
+  LOG( "ExoticLLP", pWARN ) << "\nEvaluating flux at NEAR point " 
+			    << utils::print::Vec3AsString( &rand_point )
+			    << "\nThis is a USER point "
+			    << utils::print::Vec3AsString( &rand_point_user );
+
+  fFluxInfo.target.SetXYZT( rand_point.X(), rand_point.Y(), rand_point.Z(), 0.0 );
+  fFluxInfo.target_user.SetXYZT( rand_point_user.X(), rand_point_user.Y(), rand_point_user.Z(), 0.0 );
 
   // First, apply the constraint of kinematics.
   TVector3 separation = rand_point - origin; // m
