@@ -124,8 +124,9 @@ namespace genie {
       //  inherit from Algorithm. This means it can be an instanced class (which is good)
       void AdoptControls( bool use_saa, bool use_cmv,
 			  double ct, double cp, double ft, double fp, double gr ) const;
+
       //! And a method to allow VolumeSeeker to read the origin point from Algorithm
-      void SetOffset( double x, double y, double z ) const;
+      //void SetOffset( double x, double y, double z ) const;
       //! RETHERE also add rotation...
 
       //! Getter methods to interface with FluxContainer
@@ -233,7 +234,7 @@ namespace genie {
       mutable double fOxROOT, fOyROOT, fOzROOT; //! Bounding box origin [cm]
 
       mutable TVector3 fTopVolumeOrigin;        //! Origin of top_volume in USER coords [m]
-      mutable TVector3 fTopVolumeOffset;        //! Position of USER (0, 0, 0) in NEAR coords [m]
+      //mutable TVector3 fTopVolumeOffset;        //! Position of USER (0, 0, 0) in ~NEAR~ USER coords [m]
       mutable TVector3 fTopVolumeOriginNEAR;    //! Origin of top_volume in NEAR coords [m]
 
       struct Cleaner {

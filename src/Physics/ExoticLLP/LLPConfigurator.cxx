@@ -100,9 +100,9 @@ void LLPConfigurator::LoadConfig(void)
   vsek->SetConfig( TVector3( user_origin.at(0), user_origin.at(1), user_origin.at(2) ), 
 		   TVector3( user_rotation.at(0), user_rotation.at(1), user_rotation.at(2) ) );
 
-  std::vector<double> user_offset; // the top volume origin in USER coords
-  this->GetParamVect( "TopVolumeCentre", user_offset );
-  vsek->SetOffset( user_offset.at(0), user_offset.at(1), user_offset.at(2) );
+  //std::vector<double> user_offset; // the top volume origin in USER coords
+  //this->GetParamVect( "TopVolumeCentre", user_offset );
+  //vsek->SetOffset( user_offset.at(0), user_offset.at(1), user_offset.at(2) );
 
   bool use_saa = false; bool use_cmv = false;
   this->GetParam( "UseSmallAngleApproximation", use_saa );

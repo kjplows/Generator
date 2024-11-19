@@ -42,6 +42,9 @@ April 11th, 2022
 
          R(a, b, c) = R_x(c) * R_z(b) * R_x(a). See PRD 107 (2023) 055003 Appendix 3. -->
     <param type="vec-double" name="Rotation" delim=";"> 0.0 ; 0.0 ; 0.0 </param> <!-- rad -->
+
+    <!-- Position of top volume centre in USER frame, in case it is not at USER origin -->
+    <!-- <param type="vec-double" name="TopVolumeCentre" delim=";"> 0.0 ; 0.0 ; 0.0 </param> --> <!-- m -->
     
   </param_set>
 

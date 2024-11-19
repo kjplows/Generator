@@ -172,8 +172,9 @@ namespace hnl {
     mutable double fCx, fCy, fCz;   // translation: from NEAR origin to USER origin [m]
     mutable double fTx, fTy, fTz;   // translation of --top_volume wrt geometry file's top volume origin [m]
     mutable double fUx, fUy, fUz;   // translation: from USER origin to top volume origin [m]
+    mutable double fAx1, fAz, fAx2; // rotation: from NEAR frame to BEAM frame
     mutable double fBx1, fBz, fBx2; // rotation: from NEAR frame to USER frame
-    mutable std::vector< double > fUserOrigin, fDetTranslation, fDetRotation;
+    mutable std::vector< double > fUserOrigin, fB2UTranslation, fB2URotation, fDetTranslation, fDetRotation;
 
   }; // class VertexGenerator
 

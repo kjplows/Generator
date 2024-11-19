@@ -90,10 +90,10 @@ bool Decayer::UnpolarisedDecay( bool fudge ) const
     sum += m;
   }
 
-  LOG("ExoticLLP", pINFO)
-    << "Decaying N = " << fPDGCodeList.size()-1 << " particles / total mass = " << sum;
-
   double parent_mass = PDGLibrary::Instance()->Find( *(fPDGCodeList.begin()) )->Mass();
+  LOG("ExoticLLP", pINFO)
+    << "Decaying N = " << fPDGCodeList.size()-1 << " particles / total mass = " << sum << " / parent mass = " << parent_mass;
+ 
   // First construct the rest-frame parent
   TLorentzVector parent_p4_rest( 0.0, 0.0, 0.0, parent_mass );
 
