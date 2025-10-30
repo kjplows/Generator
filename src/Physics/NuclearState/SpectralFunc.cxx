@@ -53,13 +53,7 @@ SpectralFunc::SpectralFunc(string config) :
 //____________________________________________________________________________
 SpectralFunc::~SpectralFunc()
 {
-  // Delete the TH2D objects from the spectral function map
-  std::map<std::pair<int,int>, TH2D*>::iterator begin = fSpectralFunctionMap.begin();
-  std::map<std::pair<int,int>, TH2D*>::iterator end = fSpectralFunctionMap.end();
-  for (std::map<std::pair<int,int>, TH2D*>::iterator iter = begin; iter != end; ++iter) {
-    TH2D* hist = iter->second;
-    if ( hist ) delete hist;
-  }
+  fSpectralFunctionMap.clear();
 }
 //____________________________________________________________________________
 bool SpectralFunc::GenerateNucleon(const Target& target) const
