@@ -38,6 +38,7 @@ typedef enum EKinePhaseSpace {
   kPSlogyfEx,
   kPSxyfE,
   kPSlogxlogyfE,
+  kPSxQ2fE,
   kPSQ2fE,
   kPSQD2fE,
   kPSlogQ2fE,
@@ -68,7 +69,6 @@ typedef enum EKinePhaseSpace {
   kPSTAfE,
   kPSEgTlOgfE,
   kPSDMELEvGen, // Equivalent to kPSQELEvGen for Dark Matter scattering  
-  kPSxQ2fE,
   kPSlog10xlog10Q2fE,
   kPSEDNufE, // Used for Dark Neutrinos, two body final state
   kPSn1n2fE,
