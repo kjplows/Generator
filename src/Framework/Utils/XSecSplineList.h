@@ -25,6 +25,7 @@
 #include <string>
 
 #include "Framework/Conventions/XmlParserStatus.h"
+#include "Framework/Numerical/SplinePostProcessor.h"
 
 using std::map;
 using std::set;
@@ -38,6 +39,7 @@ namespace genie {
 class XSecAlgorithmI;
 class Interaction;
 class Spline;
+class SplinePostProcessor;
 
 class XSecSplineList;
 ostream & operator << (ostream & stream, const XSecSplineList & xsl);
@@ -97,6 +99,8 @@ private:
   virtual ~XSecSplineList();
 
   static XSecSplineList * fInstance;
+  
+  SplinePostProcessor fPostProcessor;
 
   bool   fUseLogE;
   int    fNKnots;

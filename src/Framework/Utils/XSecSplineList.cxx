@@ -267,6 +267,20 @@ void XSecSplineList::CreateSpline(const XSecAlgorithmI * alg,
 
   }
 
+  // Check if need to post-process
+  if( fPostProcessor.IsHandled(alg) ) {
+    SLOG("XSecSplList", pINFO) << "Post processing spline with key: " << key;
+    xsec = fPostProcessor.ProcessSpline(E, xsec);
+
+    // Output so the user can see the new spline
+    for( size_t i = 0; i < E.size(); i++ ) {
+      SLOG("XSecSplList", pNOTICE)
+	<< "xsec(E = " << E[i] << ") =  "
+	<< (1E+38/units::cm2)*xsec[i] << " x 1E-38 cm^2 post-smoothing";
+    }
+  }
+
+
   // Warn about odd case of decreasing cross section
   //    but allow for small variation due to integration errors
   const double eps_xsec = 1.0e-5;
