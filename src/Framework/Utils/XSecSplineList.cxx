@@ -57,6 +57,7 @@ XSecSplineList::XSecSplineList()
   fNKnots      = 100;
   fEmin        =   0.01; // GeV
   fEmax        = 100.00; // GeV
+  fPostProcessor = SplinePostProcessor();
 }
 //____________________________________________________________________________
 XSecSplineList::~XSecSplineList()
@@ -267,18 +268,20 @@ void XSecSplineList::CreateSpline(const XSecAlgorithmI * alg,
 
   }
 
-  // Check if need to post-process
-  if( fPostProcessor.IsHandled(alg) ) {
-    SLOG("XSecSplList", pINFO) << "Post processing spline with key: " << key;
-    xsec = fPostProcessor.ProcessSpline(E, xsec);
+  if( fPostProcessor.UsePostProcessing() ) {
+    // Check if need to post-process
+    if( fPostProcessor.IsHandled(alg) ) {
+      SLOG("XSecSplList", pINFO) << "Post processing spline with key: " << key;
+      xsec = fPostProcessor.ProcessSpline(E, xsec);
 
-    // Output so the user can see the new spline
-    for( size_t i = 0; i < E.size(); i++ ) {
-      SLOG("XSecSplList", pNOTICE)
-	<< "xsec(E = " << E[i] << ") =  "
-	<< (1E+38/units::cm2)*xsec[i] << " x 1E-38 cm^2 post-smoothing";
-    }
-  }
+      // Output so the user can see the new spline
+      for( size_t i = 0; i < E.size(); i++ ) {
+	SLOG("XSecSplList", pNOTICE)
+	  << "xsec(E = " << E[i] << ") =  "
+	  << (1E+38/units::cm2)*xsec[i] << " x 1E-38 cm^2 post-processing";
+      } // output
+    } // if handled alg
+  } // if post processing
 
 
   // Warn about odd case of decreasing cross section

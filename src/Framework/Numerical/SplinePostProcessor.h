@@ -91,6 +91,10 @@ namespace genie {
     bool IsHandled (std::string alg_name, std::string alg_config);
     bool IsHandled (const Algorithm * alg);
 
+    //-- Check if we've enabled post-processing
+    bool UsePostProcessing() const { return fUsePostProcessing; }
+
+    //-- Workhorse method
     Spline * ProcessSpline( const Spline * spl ) const;
 
   private:
@@ -106,6 +110,8 @@ namespace genie {
 
     std::vector<double> fStops;  ///< Abscissae for the interpolation of the Gaussian kernel smoother
     std::vector<double> fWidths; ///< Widths of the Gaussian kernel smoother at the stops
+
+    bool fUsePostProcessing; ///< If true, do post processing. If false, do nothing.
 
   }; // class SplinePostProcessor
 

@@ -110,6 +110,8 @@ void SplinePostProcessor::LoadConfig(void) {
 				       << " (" << fStops.size() << " vs " << fWidths.size() << ")";
     throw SplineProcessingException("N stops != N widths", true);
   }
+
+  this->GetParam( "UsePostProcessing", fUsePostProcessing );
   
 }
 //___________________________________________________________________________
@@ -145,6 +147,11 @@ bool SplinePostProcessor::IsHandled(const Algorithm * alg) {
 //___________________________________________________________________________
 std::vector<double> SplinePostProcessor::ProcessSpline( const std::vector<double> E,
 							const std::vector<double> xsec ) const {
+
+  // If we don't want post processing, return out now.
+  if( !fUsePostProcessing ) {
+    return xsec;
+  } // no op if no post processing
 
   // Are the thresholds sensible?
   std::vector<double> stops;
