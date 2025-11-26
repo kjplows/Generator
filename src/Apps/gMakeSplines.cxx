@@ -196,7 +196,6 @@ int main(int argc, char ** argv)
       GEVGDriver driver;
       driver.SetEventGeneratorList(RunOpt::Instance()->EventGeneratorList());
       driver.Configure(init_state);
-      LOG("gmkspl", pDEBUG) << "Configured for init_state:" << init_state;
       driver.CreateSplines(gOptNKnots, gOptMaxE);
     }
   }
@@ -374,8 +373,7 @@ PDGCodeList * GetNeutrinoCodes(void)
   vector<string>::const_iterator iter;
   for(iter = nuvec.begin(); iter != nuvec.end(); ++iter) {
     list->push_back( atoi(iter->c_str()) );
-  }
-  
+  }  
   return list;
 }
 //____________________________________________________________________________
