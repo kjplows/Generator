@@ -40,6 +40,7 @@ if(($match = grep(/--help/i, @ARGV)) > 0) {
   print "    geant4               Interface with Geant4 for nuclear transport                 default: disabled \n";
   print "    masterclass          Enable GENIE neutrino masterclass app                       default: disabled (Experimental) \n";
   print "    test                 Build test programs                                         default: disabled \n";
+  print "    address-sanitize     Adds address sanitizer in the compiler options              default: disabled \n";
   print "    debug                Adds -g in the compiler options to request debug info       default: disabled \n";
   print "    dylibversion         Adds version number in library names (recommended)          default: enabled  \n";
   print "    lowlevel-mesg        Disable (rather than filter) prolific low level messages    default: disabled \n";
@@ -173,6 +174,7 @@ my $gopt_enable_incl                 = "NO";
 my $gopt_enable_geant4_interface     = "NO";
 my $gopt_enable_masterclass          = "NO";
 my $gopt_enable_test                 = "NO";
+my $gopt_enable_address_san          = "NO";
 my $gopt_enable_debug                = "NO";
 my $gopt_enable_dylibversion         = "YES";
 my $gopt_enable_lowlevel_mesg        = "NO";
@@ -211,6 +213,7 @@ if(($match = grep(/--enable-incl/i,                 @ARGV)) > 0) { $gopt_enable_
 if(($match = grep(/--enable-geant4/i,               @ARGV)) > 0) { $gopt_enable_geant4_interface     = "YES"; }
 if(($match = grep(/--enable-masterclass/i,          @ARGV)) > 0) { $gopt_enable_masterclass          = "YES"; }
 if(($match = grep(/--enable-test/i,                 @ARGV)) > 0) { $gopt_enable_test                 = "YES"; }
+if(($match = grep(/--enable-address-sanitize/i,     @ARGV)) > 0) { $gopt_enable_address_san          = "YES"; }
 if(($match = grep(/--enable-debug/i,                @ARGV)) > 0) { $gopt_enable_debug                = "YES"; }
 if(($match = grep(/--disable-dylibversion/i,        @ARGV)) > 0) { $gopt_enable_dylibversion         = "NO";  }
 if(($match = grep(/--enable-lowlevel-mesg/i,        @ARGV)) > 0) { $gopt_enable_lowlevel_mesg        = "YES"; }
@@ -243,6 +246,10 @@ if($gopt_enable_flux_drivers eq "NO" || $gopt_enable_geom_drivers eq "NO") {
   $gopt_enable_fnal = "NO";
   $gopt_enable_atmo = "NO";
 }
+
+# Set address sanitize flag
+my $gopt_with_cxx_address_san_flag="";
+if($gopt_enable_address_san eq "YES") { $gopt_with_cxx_address_san_flag = "-fsanitize=address"; }
 
 # Set debug flag
 my $gopt_with_cxx_debug_flag="";
@@ -1021,6 +1028,7 @@ print MKCONF "GOPT_ENABLE_GFORTRAN=$gopt_enable_gfortran\n";
 print MKCONF "GOPT_ENABLE_G2C=$gopt_enable_g2c\n";
 print MKCONF "GOPT_ENABLE_PROFESSOR2=$gopt_enable_professor2\n";
 print MKCONF "GOPT_WITH_COMPILER=$gopt_with_compiler\n";
+print MKCONF "GOPT_WITH_CXX_ADDRESS_SAN_FLAG=$gopt_with_cxx_address_san_flag\n";
 print MKCONF "GOPT_WITH_CXX_DEBUG_FLAG=$gopt_with_cxx_debug_flag\n";
 print MKCONF "GOPT_WITH_CXX_OPTIMIZ_FLAG=-$gopt_with_cxx_optimiz_flag\n";
 print MKCONF "GOPT_WITH_PROFILER_LIB=$gopt_with_profiler_lib\n";
