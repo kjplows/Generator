@@ -36,7 +36,8 @@ namespace genie {
     //-- define the SplinePostProcessorI interface
 
     virtual std::vector<double> ProcessSpline(const std::vector<double> E,
-					      const std::vector<double> xsec) const = 0;
+					      const std::vector<double> xsec,
+					      const int pdg) const = 0;
 
   protected:
 

@@ -57,7 +57,6 @@ XSecSplineList::XSecSplineList()
   fNKnots      = 100;
   fEmin        =   0.01; // GeV
   fEmax        = 100.00; // GeV
-  fPostProcessor = SplinePostProcessor();
 }
 //____________________________________________________________________________
 XSecSplineList::~XSecSplineList()
@@ -268,11 +267,13 @@ void XSecSplineList::CreateSpline(const XSecAlgorithmI * alg,
 
   }
 
+  fPostProcessor = *( SplinePostProcessor::Instance() );
   if( fPostProcessor.UsePostProcessing() ) {
     // Check if need to post-process
     if( fPostProcessor.IsHandled(alg) ) {
       SLOG("XSecSplList", pINFO) << "Post processing spline with key: " << key;
-      xsec = fPostProcessor.ProcessSpline(E, xsec);
+      xsec = fPostProcessor.ProcessSpline(E, xsec,
+					  interaction->InitStatePtr()->ProbePdg());
 
       // Output so the user can see the new spline
       for( size_t i = 0; i < E.size(); i++ ) {

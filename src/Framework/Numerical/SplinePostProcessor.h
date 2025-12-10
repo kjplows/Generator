@@ -34,6 +34,7 @@
 #include <vector>
 #include <utility>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace genie {
 
@@ -78,9 +79,12 @@ namespace genie {
     SplinePostProcessor(std::string name, std::string config);
     ~SplinePostProcessor();
 
+    static SplinePostProcessor * Instance();
+
     //-- implement the SplinePostProcessorI interface
     std::vector<double> ProcessSpline(const std::vector<double> E,
-				      const std::vector<double> xsec) const;
+				      const std::vector<double> xsec,
+				      const int pdg) const;
 
     //-- override the Algorithm::Configure methods to load configuration
     //   data to private data members
@@ -94,10 +98,15 @@ namespace genie {
     //-- Check if we've enabled post-processing
     bool UsePostProcessing() const { return fUsePostProcessing; }
 
-    //-- Workhorse method
-    Spline * ProcessSpline( const Spline * spl ) const;
+    //-- Simple getter-setter machinery
+    std::vector<double> GetStops() const       { return  fStops;   }
+    void SetStops(std::vector<double> stops ) const { fStops  = stops;  }
+    std::vector<double> GetWidths() const      { return  fWidths;  }
+    void SetWidths(std::vector<double> widths) const { fWidths = widths; }
 
   private:
+
+    static SplinePostProcessor * fInstance;
 
     void Init       (void);
     void LoadConfig (void);
@@ -108,8 +117,15 @@ namespace genie {
     //-- private data members
     std::unordered_set<std::string> fAlgs; ///< Algorithms handled by the SplinePostProcessor. 
 
-    std::vector<double> fStops;  ///< Abscissae for the interpolation of the Gaussian kernel smoother
-    std::vector<double> fWidths; ///< Widths of the Gaussian kernel smoother at the stops
+    // Stops and widths to be used when processing a spline
+    mutable std::vector<double> fStops;  ///< Abscissae for the interpolation of the Gaussian kernel smoother
+    mutable std::vector<double> fWidths; ///< Widths of the Gaussian kernel smoother at the stops
+
+    // Map of the stops and widths to be used, potentially.
+    // If a key with "@PDG=.." is seen, add this PDG to the map.
+    // There is always a key "0" that is the default.
+    std::unordered_map<int, std::vector<double>> fStopMap;
+    std::unordered_map<int, std::vector<double>> fWidthMap;
 
     bool fUsePostProcessing; ///< If true, do post processing. If false, do nothing.
 

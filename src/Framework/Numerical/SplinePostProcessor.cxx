@@ -65,6 +65,8 @@ namespace genie::exceptions {
 using namespace genie::exceptions;
 
 //___________________________________________________________________________
+SplinePostProcessor * SplinePostProcessor::fInstance = 0;
+//___________________________________________________________________________
 SplinePostProcessor::SplinePostProcessor() : SplinePostProcessorI("genie::SplinePostProcessor") {
   this->Init();
 }
@@ -82,16 +84,25 @@ SplinePostProcessor::SplinePostProcessor(string name, string config) :
 SplinePostProcessor::~SplinePostProcessor() {
   fStops.clear();
   fWidths.clear();
+  fStopMap.clear();
+  fWidthMap.clear();
   fAlgs.clear();
 }
 //___________________________________________________________________________
+SplinePostProcessor * SplinePostProcessor::Instance()
+{
+  if(fInstance == 0) fInstance = new SplinePostProcessor;
+  return fInstance;
+}
+//___________________________________________________________________________
 void SplinePostProcessor::Init(void) {
+  if(fAlgs.size() > 0) return;
   LOG("SplinePostProcessor", pDEBUG) << "Initialising SplinePostProcessor...";
   this->Configure("Default");
 }
 //___________________________________________________________________________
 void SplinePostProcessor::LoadConfig(void) {
-  fStops.clear(); fWidths.clear(); fAlgs.clear();
+  fStops.clear(); fWidths.clear(); fAlgs.clear(); fStopMap.clear(); fWidthMap.clear();
   LOG("SplinePostProcessor", pDEBUG) << "Loading the SplinePostProcessor configuration...";
 
   vector<string> alg_vect;
@@ -104,12 +115,77 @@ void SplinePostProcessor::LoadConfig(void) {
 
   this->GetParamVect( "Stops", fStops );
   this->GetParamVect( "Widths", fWidths );
-  if( fStops.size() != fWidths.size() ) {
-    // The Algorithm has been misconfigured. It's early, so complain and ask user to fix.
-    LOG("SplinePostProcessor", pFATAL) << "Different number of stops and widths! "
-				       << " (" << fStops.size() << " vs " << fWidths.size() << ")";
-    throw SplineProcessingException("N stops != N widths", true);
-  }
+  fStopMap[0]  = fStops;
+  fWidthMap[0] = fWidths;
+
+  // If there are any more keys, typically delineated with "@Pdg=...", add these to the map
+  // Similar architecture to NuclearModelMap's implementation
+  RgIMap entries = (this->GetConfig()).GetItemMap();
+  for(RgIMap::const_iterator it = entries.begin(); it != entries.end(); ++it){
+    const std::string  key  = it->first; // Notice this prepends "N" and appends "s"
+    const std::string  sens = "@Pdg=";
+    if( key.find(sens.c_str()) != std::string::npos
+	&& strcmp(key.substr(0, 1).c_str(), "N") == 0 ) {
+      // Figure out the size of this thing
+      int n;
+      LOG("SplinePostProcessor", pDEBUG) << "Getting N stops from here " << key;
+      this->GetParam( key, n );
+      
+      // Decide if this is stops or widths
+      // See https://stackoverflow.com/questions/14265581
+      std::string comm_name(key);
+      comm_name.erase(0, 1);
+      comm_name.erase(comm_name.size() - 1);
+      std::string dup_name(comm_name); dup_name.append(",");
+      LOG("SplinePostProcessor", pDEBUG) << "Key = " << comm_name << " with size "
+					 << comm_name.size();
+      if( key.find("Stops") != std::string::npos ) {
+	std::string subs = dup_name.substr(10); // 5 "Stops" + 5 "@Pdg="
+	std::vector<int> pdgs;
+	size_t pos = 0;
+	while( (pos = subs.find(",", 0)) != std::string::npos ) {
+	  int pdg = std::stoi(subs.substr(0, pos));
+	  LOG("SplinePostProcessor", pDEBUG) << "Adding key " << pdg << " to stops";
+	  subs.erase(0, pos+1); // "," has length 1
+	  std::vector<double> stops; stops.resize(n);
+	  for( int i = 0; i < n; ++i ) {
+	    RgKey tmp_key = Algorithm::BuildParamVectKey(comm_name, i);
+	    this->GetParam( tmp_key, stops[i] );
+	  }
+	  fStopMap[pdg] = stops;
+	} // split strings
+	  
+      } else if ( key.find("Widths") != std::string::npos ) {
+	std::string subs = dup_name.substr(11); // 6 "Widths" + 5 "@Pdg="
+	std::vector<int> pdgs;
+	size_t pos = 0;
+	while( (pos = subs.find(",", 0)) != std::string::npos ) {
+	  int pdg = std::stoi(subs.substr(0, pos));
+	  LOG("SplinePostProcessor", pDEBUG) << "Adding key " << pdg << " to widths";
+	  subs.erase(0, pos+1); // "," has length 1
+	  std::vector<double> widths; widths.resize(n);
+	  for( int i = 0; i < n; ++i ) {
+	    RgKey tmp_key = Algorithm::BuildParamVectKey(comm_name, i);
+	    this->GetParam( tmp_key, widths[i] );
+	  }
+	  fWidthMap[pdg] = widths;
+	} // split strings
+      } // stops or widths
+    } // extract PDG entries
+  } // loop over registry entries of this Alg
+
+  // Check for misconfigurations
+  for ( const auto & mapkey : fStopMap ) {
+    if( fStopMap[mapkey.first].size() != fWidthMap[mapkey.first].size() ) {
+      // The Algorithm has been misconfigured. It's early, so complain and ask user to fix.
+      LOG("SplinePostProcessor", pFATAL) << "Different number of stops and widths! "
+					 << " (" << fStopMap[mapkey.first].size()
+					 << " vs " << fWidthMap[mapkey.first].size() << ")"
+					 << " at PDG key = " << mapkey.first
+					 << " (key 0 means default)";
+      throw SplineProcessingException("N stops != N widths", true);
+    } // misconfiguration check
+  } // over each key
 
   this->GetParam( "UsePostProcessing", fUsePostProcessing );
   
@@ -146,12 +222,17 @@ bool SplinePostProcessor::IsHandled(const Algorithm * alg) {
 }
 //___________________________________________________________________________
 std::vector<double> SplinePostProcessor::ProcessSpline( const std::vector<double> E,
-							const std::vector<double> xsec ) const {
+							const std::vector<double> xsec,
+							const int pdg ) const {
 
   // If we don't want post processing, return out now.
   if( !fUsePostProcessing ) {
     return xsec;
   } // no op if no post processing
+
+  // Set the stops and widths to be what we asked for
+  int elem = (fStopMap.find(pdg) != fStopMap.end()) ? pdg : 0;
+  this->SetStops(fStopMap.at(elem)); this->SetWidths(fWidthMap.at(elem));
 
   // Are the thresholds sensible?
   std::vector<double> stops;
