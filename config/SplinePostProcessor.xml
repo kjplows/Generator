@@ -25,8 +25,8 @@ Widths                    vec-double  no    Reference widths of the Gaussian ker
     <param type="vec-double" delim="," name="Stops"> 0.1,0.2,0.5,1.0,2.0,5.0,10.0,50.0,100.0 </param>
     <param type="vec-double" delim="," name="Widths"> 0.005,0.01,0.025,0.05,0.1,0.25,0.47,2.34,4.7 </param>
     <!-- separate list for nutau due to high thresholds -->
-    <param type="vec-double" delim="," name="Stops@Pdg=16,-16"> 2.8,3.0,3.5,4.0,5.0,7.5,10.0,50.0,100.0 </param>
-    <param type="vec-double" delim="," name="Widths@Pdg=16,-16"> 0.005,0.01,0.025,0.05,0.1,0.25,0.47,2.34,4.7 </param>
+    <param type="vec-double" delim="," name="Stops@Pdg=16,-16"> 2.8,3.0,4.0,5.0,10.0 </param>
+    <param type="vec-double" delim="," name="Widths@Pdg=16,-16"> 0.005,0.01,0.03,0.075,0.1 </param>
 
     <param type="bool" name="UsePostProcessing"> true </param>
 
