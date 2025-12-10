@@ -244,7 +244,7 @@ std::vector<double> SplinePostProcessor::ProcessSpline( const std::vector<double
       LOG("SplinePostProcessor", pFATAL) << exception;
       exit(1);
     } else {
-      LOG("SplinePostProcessor", pERROR) << exception;
+      LOG("SplinePostProcessor", pWARN) << exception;
     }
   } // Set thresholds
 
@@ -324,7 +324,7 @@ void SplinePostProcessor::SetThresholds( std::vector<double> & stops,
   }
   
   if(n_rejected_front > 0 || n_rejected_back > 0) { // Complain, but don't stop execution
-    LOG("SplinePostProcessor", pERROR) << "Removed " << n_rejected_front << " elements from the front"
+    LOG("SplinePostProcessor", pWARN)  << "Removed " << n_rejected_front << " elements from the front"
 				       << " of the stops / widths vectors, and " << n_rejected_back
 				       << " from the back. Take note!";
     throw SplineProcessingException("Using different stops to those configured");

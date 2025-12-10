@@ -205,6 +205,7 @@
   <priority msgstream="SpectralFunc1">         NOTICE </priority>
   <priority msgstream="SpectralFunc">          NOTICE </priority>
   <priority msgstream="Spline">                INFO   </priority>
+  <priority msgstream="SplinePostProcessor">   WARN   </priority>
   <priority msgstream="Target">                INFO   </priority>
   <priority msgstream="Utils">                 INFO   </priority>
   <priority msgstream="Vtx">                   WARN   </priority>
