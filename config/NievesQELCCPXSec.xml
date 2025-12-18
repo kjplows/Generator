@@ -87,4 +87,14 @@ RmaxMode                             string   Yes        Method to use to comput
     <param type="bool" name="RPA">            false                      </param>
   </param_set>
 
+  <param_set name="ZExpNoRPA_minerva">
+    <param type="alg"  name="FormFactorsAlg"> genie::LwlynSmithFFCC/ZExp_minerva </param>
+    <param type="bool" name="RPA">            false                      </param>
+  </param_set> 
+
+  <param_set name="ZExpNoRPA_lqcd">
+    <param type="alg"  name="FormFactorsAlg"> genie::LwlynSmithFFCC/ZExp_lqcd </param>
+    <param type="bool" name="RPA">            false                      </param>
+  </param_set>    
+
 </alg_conf>
