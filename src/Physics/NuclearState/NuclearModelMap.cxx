@@ -157,7 +157,7 @@ void NuclearModelMap::LoadConfig(void)
     // Does it start with the right string?
     // Edit: Protect from descending keys (NuclearModel@Pdg should not descend into subalgs)
     if( (key.compare(0, keyStart.size(), keyStart.c_str()) == 0) &&
-	(key.find("/") == std::string::npos)){
+	(key.find("/") == std::string::npos) ){
       // The rest is the PDG code
       const int pdg = atoi(key.c_str()+keyStart.size());
       const int Z = pdg::IonPdgCodeToZ(pdg);
