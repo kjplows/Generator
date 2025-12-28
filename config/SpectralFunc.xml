@@ -38,4 +38,12 @@ FermiMomentumTable      string   No         Table of Fermi momentum (kF) constan
     <param type="bool" name="AllowElementMatch"> true </param>
   </param_set>
 
+  <!-- The below parameter set points the argon SF to the bugfixed versions using the coercive approach
+       defined in SBNSoftware/Generator/#4 -->
+  <param_set name="Coerced">
+    <param type="bool" name="AllowElementMatch"> true </param>
+    <param type="string" name="SpectFuncTable@Pdg=1000180400_2212"> pke40p_tot_coerced.data </param>
+    <param type="string" name="SpectFuncTable@Pdg=1000180400_2112"> pke40n_tot_coerced.data </param>
+  </param_set>
+
 </alg_conf>

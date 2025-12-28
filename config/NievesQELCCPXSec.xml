@@ -87,4 +87,13 @@ RmaxMode                             string   Yes        Method to use to comput
     <param type="bool" name="RPA">            false                      </param>
   </param_set>
 
+  <param_set name="RunningMA">
+    <param type="alg"  name="FormFactorsAlg"> genie::LwlynSmithFFCC/RunningMA </param>
+  </param_set>
+
+  <param_set name="RunningMANoRPA">
+    <param type="alg"  name="FormFactorsAlg"> genie::LwlynSmithFFCC/RunningMA </param>
+    <param type="bool" name="RPA">            false                           </param>
+  </param_set>
+
 </alg_conf>
