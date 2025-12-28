@@ -32,7 +32,7 @@
   <!-- EDIT: add notification for DM EL algorithm -->
   <priority msgstream="AhrensDMEL">            WARN   </priority>
 
-  <priority msgstream="AlgFactory">            INFO   </priority>
+  <priority msgstream="AlgFactory">            WARN   </priority>
   <priority msgstream="Algorithm">             WARN   </priority>
   <priority msgstream="AlgConfigPool">         WARN   </priority>
   <priority msgstream="AlvarezRusoCohPi">      WARN   </priority>
@@ -99,7 +99,7 @@
   <priority msgstream="FMap">                  WARN   </priority>
   <priority msgstream="FragmRecUtils">         NOTICE </priority>
   <priority msgstream="GEVGDriver">            WARN </priority>
-  <priority msgstream="GMCJDriver">            NOTICE </priority>
+  <priority msgstream="GMCJDriver">            WARN </priority>
   <priority msgstream="GEVGPool">              INFO   </priority>
   <priority msgstream="GMCJob">                INFO   </priority>
   <priority msgstream="GMCJMonitor">           WARN   </priority>
@@ -158,7 +158,7 @@
   <priority msgstream="NucleonDecay">          NOTICE </priority>
   <priority msgstream="ResonanceDecay">        WARN </priority>
   <priority msgstream="NucleonP">              INFO   </priority>
-  <priority msgstream="Nuclear">               NOTICE </priority>
+  <priority msgstream="Nuclear">               WARN </priority>
   <priority msgstream="Numerical">             INFO   </priority>
   <priority msgstream="NuEXSec">               INFO   </priority>
   <priority msgstream="Ntp">                   NOTICE </priority>
@@ -195,7 +195,7 @@
   <priority msgstream="ReinSehgalSpp">         NOTICE </priority>
   <priority msgstream="RSHAmpl">               WARN   </priority>
   <priority msgstream="SPPEventGen">          NOTICE </priority>
-  <priority msgstream="Registry">              WARN   </priority>
+  <priority msgstream="Registry">              INFO   </priority>
   <priority msgstream="ReW">                   NOTICE </priority>
   <priority msgstream="RESHadronicVtx">        WARN   </priority>
   <priority msgstream="RESKinematics">         WARN   </priority>
@@ -206,7 +206,6 @@
   <priority msgstream="SpectralFunc1">         NOTICE </priority>
   <priority msgstream="SpectralFunc">          NOTICE </priority>
   <priority msgstream="Spline">                INFO   </priority>
-  <priority msgstream="SplinePostProcessor">   WARN   </priority>
   <priority msgstream="Target">                INFO   </priority>
   <priority msgstream="Utils">                 INFO   </priority>
   <priority msgstream="Vtx">                   WARN   </priority>
