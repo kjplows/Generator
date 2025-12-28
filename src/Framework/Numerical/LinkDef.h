@@ -5,15 +5,11 @@
 #pragma link off all functions;
 
 #pragma link C++ namespace genie;
-#pragma link C++ namespace genie::exceptions;
 #pragma link C++ namespace genie::utils::math;
 #pragma link C++ namespace genie::utils::gsl;
 
 #pragma link C++ class genie::RandomGen;
 #pragma link C++ class genie::Spline;
-#pragma link C++ class genie::SplinePostProcessorI;
-#pragma link C++ class genie::exceptions::SplineProcessingException;
-#pragma link C++ class genie::SplinePostProcessor;
 #pragma link C++ class genie::BLI2DGrid;
 #pragma link C++ class genie::BLI2DUnifGrid;
 #pragma link C++ class genie::BLI2DNonUnifGrid;
