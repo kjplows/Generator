@@ -16,6 +16,8 @@
 #include "Framework/Numerical/RandomGen.h"
 #include "Framework/Numerical/MathUtils.h"
 
+//using namespace genie::utils::math;
+
 //____________________________________________________________________________
 TMatrixD genie::utils::math::CholeskyDecomposition(const TMatrixD& cov_matrix)
 {
@@ -73,7 +75,7 @@ TMatrixD genie::utils::math::CholeskyDecomposition(const TMatrixD& cov_matrix)
   return LT;
 }
 //____________________________________________________________________________
-TVectorD  genie::utils::math::CholeskyGenerateCorrelatedParams (
+TVectorD genie::utils::math::CholeskyGenerateCorrelatedParams (
     const TMatrixD& cholesky_triangular, TVectorD& mean_params)
 {
 // Generate a vector of correlated params
@@ -116,7 +118,7 @@ TVectorD  genie::utils::math::CholeskyGenerateCorrelatedParams (
   return correlated_params;
 }
 //____________________________________________________________________________
-TVectorD  genie::utils::math::CholeskyGenerateCorrelatedParams (
+TVectorD genie::utils::math::CholeskyGenerateCorrelatedParams (
  const TMatrixD& cholesky_triangular, TVectorD& mean_params, TVectorD& g_uncorrelated)
 {
 // Generate a vector of correlated params
@@ -162,7 +164,7 @@ TVectorD  genie::utils::math::CholeskyGenerateCorrelatedParams (
   return correlated_params;
 }
 //____________________________________________________________________________
-TVectorD  genie::utils::math::CholeskyGenerateCorrelatedParamVariations (
+TVectorD genie::utils::math::CholeskyGenerateCorrelatedParamVariations (
     const TMatrixD& cholesky_triangular)
 {
   int ncols = cholesky_triangular.GetNcols();
@@ -183,7 +185,7 @@ TVectorD  genie::utils::math::CholeskyGenerateCorrelatedParamVariations (
   return g;
 }
 //____________________________________________________________________________
-TVectorD  genie::utils::math::CholeskyCalculateCorrelatedParamVariations (
+TVectorD genie::utils::math::CholeskyCalculateCorrelatedParamVariations (
     const TMatrixD& cholesky_triangular, TVectorD & g_uncorrelated)
 {
   int ncols = cholesky_triangular.GetNcols();
@@ -284,3 +286,105 @@ double genie::utils::math::NonNegative(float x)
   return TMath::Max( (float)0., x);
 }
 //____________________________________________________________________________
+genie::utils::math::GaussLegendreQuadrature * 
+genie::utils::math::GaussLegendreQuadrature::fInstance = 0;
+//____________________________________________________________________________
+genie::utils::math::GaussLegendreQuadrature * 
+genie::utils::math::GaussLegendreQuadrature::Instance() {
+  if( fInstance == 0 ) fInstance = new genie::utils::math::GaussLegendreQuadrature;
+  return fInstance;
+}
+//____________________________________________________________________________
+genie::utils::math::GaussLegendreQuadrature::GaussLegendreQuadrature() : fDataPath("") {
+  this->Init();
+}
+//____________________________________________________________________________
+genie::utils::math::GaussLegendreQuadrature::~GaussLegendreQuadrature() {
+  this->Clear();
+}
+//____________________________________________________________________________
+// Change the data path of the GL coefficients. 
+// This should *always* be accompanied by GaussLegendreQuadrature::ReadGLFile() !!
+void genie::utils::math::GaussLegendreQuadrature::SetDataPath(std::string newPath) {
+  LOG("Math", pWARN) << "Setting new path for Gauss-Legendre quadrature coefficients."
+		     << " Please ensure GaussLegendreQuadrature::ReadGLFile() is called!";
+  fDataPath = newPath;
+}
+//____________________________________________________________________________
+void genie::utils::math::GaussLegendreQuadrature::Init() {
+  // Hard coding to find this in 
+  // $GENIE/data/numerical/Gauss-Legendre_quadrature_coefficients.csv
+  std::string genie_path = gSystem->Getenv("GENIE");
+  genie_path += "/";
+  std::string relative_data_path = "data/numerical/Gauss-Legendre_quadrature_coefficients.csv";
+  fDataPath = genie_path + relative_data_path;
+
+  // Read the coefficients into `GaussLegQuad` objects and add these to the table
+  this->ReadGLFile();
+}
+//____________________________________________________________________________
+// Returns a row from fGLTable. This is dummy (n=0) if n was not found
+const genie::utils::math::GaussLegQuad 
+genie::utils::math::GaussLegendreQuadrature::GetGLQuad(int n) {
+  if( fGLTable.find(n) == fGLTable.end() ) {
+    LOG("Math", pERROR) << "Gauss-Legendre quadrature coefficients at order = " << n
+			<< " not found in data path " << fDataPath
+			<< " . Returning a dummy row. Any integrals will be wrong / break.";
+    return fGLTable[0];
+  }
+  return fGLTable[n];
+}
+//____________________________________________________________________________
+// Simple parser to handle streaming of the CSV-ified Gauss-Legendre coefficients
+/* CSV structure:
+ * n, N, x_1, ..., x_N, w_1, ..., w_N, K_n
+ * n = order of approximation
+ * N = floor(M/2) with M = number of control points
+ * x_i = control points (if X is a ctrl-pt, so is -X)
+ * w_i = weights (same for +X and -X)
+ * K_n = coefficient of the error term, see CRC 33rd ed 8.3.1.7
+ */
+void genie::utils::math::GaussLegendreQuadrature::ReadGLFile() {
+  // Add a dummy row to the table for error handling
+  if( fGLTable.find(0) == fGLTable.end() ) {
+    genie::utils::math::GaussLegQuad dummy = 
+      { 0, std::vector<double>{}, std::vector<double>{}, -1.0 };
+    this->AddGL(dummy);
+  } // insert dummy if needed
+
+  LOG("MATH", pNOTICE) << "Loading Gauss-Legendre quadrature coefficients from " 
+		       << fDataPath;
+
+  std::string line; std::ifstream fin(fDataPath.c_str());
+  while( std::getline( fin, line ) ) {
+    std::istringstream iss(line);
+    if (line.rfind("#", 0) == 0) continue;
+    double nd; if( ! (iss >> nd) ) continue;
+    double Nd; if( ! (iss >> Nd) ) continue;
+    if( std::floor(nd) != nd || std::floor(Nd) != Nd ) {
+      LOG("Math", pWARN) << "Skipping malformed line: \n\t" << line
+			 << "\nbecause the first two fields should be integers, and they're not.";
+      continue;
+    }
+    int n = static_cast<int>(nd); int N = static_cast<int>(Nd);
+
+    // store the control points and weights
+    // Assuming the control points are ordered, the vectors will be ordered too
+    std::vector<double> nodes; std::vector<double> weights;
+    double first_node = -999.9;
+    for( int i = 0; i < N; i++ ) {
+      double x; if( ! (iss >> x) ) break;
+      first_node = x;
+      nodes.emplace_back(x); if(x!=0.0) { nodes.insert(nodes.begin(), -x); }
+    } // get the nodes
+    for( int i = 0; i < N; i++ ) {
+      double w; if( ! (iss >> w) ) break;
+      weights.emplace_back(w); if( ! (first_node==0.0 && i==0) ) weights.emplace_back(w);
+    } // get the weights
+
+    double err; if( ! (iss >> err) ) continue;
+    genie::utils::math::GaussLegQuad glq = { n, nodes, weights, err };
+    this->AddGL(glq);
+    
+  } // read lines from fDataPath
+}

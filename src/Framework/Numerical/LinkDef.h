@@ -14,5 +14,6 @@
 #pragma link C++ class genie::BLI2DUnifGrid;
 #pragma link C++ class genie::BLI2DNonUnifGrid;
 #pragma link C++ class genie::Interpolator2D;
+#pragma link C++ class genie::utils::math::GaussLegendreQuadrature;
 
 #endif

@@ -19,9 +19,14 @@
 #define _MATH_UTILS_H_
 
 #include <vector>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <unordered_map>
 #include <TMatrixD.h>
 #include <TVectorD.h>
 #include <TLorentzVector.h>
+#include <TSystem.h>
 #include "Framework/Utils/Range1.h"
 #include "cmath"
 
@@ -32,6 +37,56 @@ namespace utils {
 
 namespace math
 {
+
+  // A struct to keep a single n of Gauss-Legendre quadrature.
+  // Approximates integral of some (integrable) function f(x) in [-1, 1]
+  // as \int_{-1}^{1} dx f(x) = \sum_{i=1}^{n} w_i * f(x_i) + K_n f^(2n)(\xi),
+  // where K_n is a constant and \xi some number \in (-1, 1)
+  struct GaussLegQuad {
+    int n;                        ///< Order of approximant.
+    std::vector<double> nodes;    ///< Control points x_i.
+    std::vector<double> weights;  ///< Weights w_i of function at control
+    double err;                   ///< Coefficient K_n of the error term
+  };
+
+  // This class has been created to provide a unified lookup for control
+  // points for Gauss-Legendre quadrature.
+  // See `CRC Standard Mathematical Tables and Formulas, 33rd ed`, Sec. 8.3.1.7,
+  // https://doi.org/10.1201/9781315154978
+  class GaussLegendreQuadrature {
+  public:
+    GaussLegendreQuadrature();
+    ~GaussLegendreQuadrature();
+    // Singleton
+    static GaussLegendreQuadrature * Instance ();
+    GaussLegendreQuadrature(const GaussLegendreQuadrature &) = delete;
+    GaussLegendreQuadrature & operator= (const GaussLegendreQuadrature &) = delete;
+
+    // Set data path (if you want to override the existing calculation.. Caveat emptor!)
+    // I assume this path is absolute.
+    void SetDataPath(std::string newPath);
+    // Read CSV of Gauss-Legendre quadrature calculations and populate the table
+    void ReadGLFile(void);
+    // Clear rows
+    void Clear(void) { fGLTable.clear(); }
+
+    // Get the Gauss-Legendre quadrature for a particular order.
+    // Returns a dummy if there is none.
+    const GaussLegQuad GetGLQuad(int n);
+
+  private:
+    // Initialise the singleton
+    void Init(void);
+    
+    // Insert a row into the table
+    void AddGL( const GaussLegQuad & glq ) { fGLTable[glq.n] = glq; }
+
+    // Members
+    std::unordered_map<int, GaussLegQuad> fGLTable; ///< Table of Gauss-Legendre quadratures
+    std::string fDataPath; ///< Data path to read calculations from.
+    
+    static GaussLegendreQuadrature * fInstance;
+  };
 
   // This class has been created to perform several operations with long 
   // doubles. It is needed in HEDIS because the kinematics of the outgoing
