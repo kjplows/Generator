@@ -21,6 +21,7 @@ LIBRARIES  := $(LIBRARIES) $(GENIE_LIBS)
 
 TGT_BASE =  gevgen             \
             gevgen_hadron      \
+	    gqelmap            \
             gevdump            \
             gevpick            \
             gevscan            \
@@ -207,6 +208,12 @@ $(GENIE_BIN_PATH)/gevcomp: gEvComp.o $(call find_libs,gevcomp)
 $(GENIE_BIN_PATH)/gxscomp: gXSecComp.o $(call find_libs,gxscomp)
 	@echo "** Building gxscomp"
 	$(LD) $(LDFLAGS) gXSecComp.o $(LIBRARIES) -o $(GENIE_BIN_PATH)/gxscomp
+
+# utility to map out the QEL models
+#
+$(GENIE_BIN_PATH)/gqelmap: gMapQEL.o $(call find_libs,gqelmap)
+	@echo "** Building gqelmap"
+	$(LD) $(LDFLAGS) gMapQEL.o $(LIBRARIES) -o $(GENIE_BIN_PATH)/gqelmap
 
 # x-section spline building utility
 #
