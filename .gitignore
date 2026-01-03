@@ -10,6 +10,8 @@ src/Framework/Conventions/GVersion.h
 *.d
 *.pcm
 *.bak
+*_dictUmbrella.h
+*_dictContent.h
 *~
 *.rootmap
 *_ROOT_DICT_*
