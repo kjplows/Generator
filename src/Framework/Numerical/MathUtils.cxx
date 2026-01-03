@@ -357,10 +357,10 @@ void genie::utils::math::GaussLegendreQuadrature::ReadGLFile() {
 
   std::string line; std::ifstream fin(fDataPath.c_str());
   while( std::getline( fin, line ) ) {
-    std::istringstream iss(line);
-    if (line.rfind("#", 0) == 0) continue;
-    double nd; if( ! (iss >> nd) ) continue;
-    double Nd; if( ! (iss >> Nd) ) continue;
+    std::istringstream iss(line); char comma;
+    if (line[0] == '#') continue;
+    double nd; if( ! (iss >> nd >> comma) ) continue;
+    double Nd; if( ! (iss >> Nd >> comma) ) continue;
     if( std::floor(nd) != nd || std::floor(Nd) != Nd ) {
       LOG("Math", pWARN) << "Skipping malformed line: \n\t" << line
 			 << "\nbecause the first two fields should be integers, and they're not.";
@@ -373,13 +373,14 @@ void genie::utils::math::GaussLegendreQuadrature::ReadGLFile() {
     std::vector<double> nodes; std::vector<double> weights;
     double first_node = -999.9;
     for( int i = 0; i < N; i++ ) {
-      double x; if( ! (iss >> x) ) break;
+      double x; if( ! (iss >> x >> comma) ) break;
       first_node = x;
       nodes.emplace_back(x); if(x!=0.0) { nodes.insert(nodes.begin(), -x); }
     } // get the nodes
     for( int i = 0; i < N; i++ ) {
-      double w; if( ! (iss >> w) ) break;
-      weights.emplace_back(w); if( ! (first_node==0.0 && i==0) ) weights.emplace_back(w);
+      double w; if( ! (iss >> w >> comma) ) break;
+      weights.emplace_back(w); if( ! (first_node==0.0 && i==0) )
+				 { weights.insert(weights.begin(), w); }
     } // get the weights
 
     double err; if( ! (iss >> err) ) continue;
