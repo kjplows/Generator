@@ -11,3 +11,4 @@ The physics content is the following
       but not extending pass the LFG cutoff in $p_{miss}$.
  - The parameters related to pion production are taken from the G18_10a_02_11b tune in order to ensure a better starting point. 
  - De-exitation photons are enabled for Argon
+ - LQCD form factors from https://arxiv.org/pdf/2512.14097
