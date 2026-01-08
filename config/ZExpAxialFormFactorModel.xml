@@ -50,11 +50,11 @@ QEL-Q4limit bool    Yes        1/Q^4 limit conditions     GPL value: QEL-Q4limit
 
     <param type="string"   name="CommonParam"> QuasiElastic  </param>
     
-    <param type="bool"   name="QEL-Q4limit"> true   </param>
+    <param type="bool"   name="QEL-Q4limit"> false  </param>
     <param type="int"    name="QEL-Kmax">     2     </param>
 
     <param type="double" name="QEL-T0">   -0.5   </param>
-    <param type="double" name="QEL-Tcut">  0.161604   </param>
+    <param type="double" name="QEL-Tcut">  0.161604   </param> <!-- 9*m_pi0^2 -->
 
     <param type="double" name="QEL-Z_A1">   1.65    </param>
     <param type="double" name="QEL-Z_A2">  -0.94    </param>
@@ -66,21 +66,49 @@ QEL-Q4limit bool    Yes        1/Q^4 limit conditions     GPL value: QEL-Q4limit
     <param type="string"   name="CommonParam"> QuasiElastic  </param>
     
     <param type="bool"   name="QEL-Q4limit"> true   </param>
-    <param type="int"    name="QEL-Kmax">     6     </param>
+    <param type="int"    name="QEL-Kmax">     2     </param>
 
     <param type="double" name="QEL-T0">   -0.5   </param>
-    <param type="double" name="QEL-Tcut">  0.161604   </param>
+    <param type="double" name="QEL-Tcut">  0.161604   </param> <!-- 9*m_pi0^2 -->
 
     <param type="double" name="QEL-Z_A1">   1.64778080    </param>
     <param type="double" name="QEL-Z_A2">  -0.94181417    </param>
-    <param type="double" name="QEL-Z_A3">  -0.41239729    </param>
-    <param type="double" name="QEL-Z_A4">  -0.36611559    </param>
-    <param type="double" name="QEL-Z_A5">   1.18722194    </param>
-    <param type="double" name="QEL-Z_A6">  -0.49976799    </param>
+
+  </param_set>
+
+  <param_set name="minervaNature"> 
+
+    <param type="string"   name="CommonParam"> QuasiElastic  </param>
+    
+    <param type="bool"   name="QEL-Q4limit"> true  </param>
+    <param type="int"    name="QEL-Kmax">     4     </param>
+
+    <param type="double" name="QEL-T0">   -0.75   </param>
+    <param type="double" name="QEL-Tcut">  0.1764 </param> <!-- 9*m_pi^2 -->
+
+    <param type="double" name="QEL-Z_A1">   1.50    </param>
+    <param type="double" name="QEL-Z_A2">  -1.2     </param>
+    <param type="double" name="QEL-Z_A3">  -0.1     </param>
+    <param type="double" name="QEL-Z_A4">   0.2     </param>
 
   </param_set>
 
   <param_set name="lqcd"> 
+
+    <param type="string"   name="CommonParam"> QuasiElastic  </param>
+    
+    <param type="bool"   name="QEL-Q4limit"> false  </param>
+    <param type="int"    name="QEL-Kmax">     2     </param>
+
+    <param type="double" name="QEL-T0">    -0.5    </param>
+    <param type="double" name="QEL-Tcut">  0.161604   </param>
+
+    <param type="double" name="QEL-Z_A1">   1.721     </param>
+    <param type="double" name="QEL-Z_A2">  -0.31      </param>
+
+  </param_set> 
+
+  <param_set name="lqcdFull"> 
 
     <param type="string"   name="CommonParam"> QuasiElastic  </param>
     
@@ -92,26 +120,6 @@ QEL-Q4limit bool    Yes        1/Q^4 limit conditions     GPL value: QEL-Q4limit
 
     <param type="double" name="QEL-Z_A1">   1.72089706     </param>
     <param type="double" name="QEL-Z_A2">  -0.30982708     </param>
-
-  </param_set> 
-
-  <param_set name="lqcdFull"> 
-
-    <param type="string"   name="CommonParam"> QuasiElastic  </param>
-    
-    <param type="bool"   name="QEL-Q4limit"> true   </param>
-    <param type="int"    name="QEL-Kmax">     6     </param>
-
-    <param type="double" name="QEL-T0">    -0.5    </param>
-    <param type="double" name="QEL-Tcut">  0.161604   </param>
-
-    <param type="double" name="QEL-Z_A1">   1.72089706     </param>
-    <param type="double" name="QEL-Z_A2">  -0.30982708     </param>
-    <param type="double" name="QEL-Z_A3">  -1.62125837     </param>
-    <param type="double" name="QEL-Z_A4">   0.     </param>
-    <param type="double" name="QEL-Z_A5">  -0.30982708     </param>
-    <param type="double" name="QEL-Z_A6">  -0.30982708     </param>
-
   </param_set> 
 
 </alg_conf>
