@@ -72,6 +72,8 @@ University of Liverpool
   Specify which cross section model is to be used by each GENIE event generation thread.
   The parameter name is build as: "XSecModel@[name of thread]"
   -->
+  <!-- New Nieves QE model   -->
+
 
   <param type="alg" name="XSecModel@genie::EventGenerator/QEL-CC">         genie::NievesQELCCPXSec/ZExpNoRPA_lqcdFull     </param>
 
