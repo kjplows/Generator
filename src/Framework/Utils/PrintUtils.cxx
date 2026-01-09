@@ -131,6 +131,13 @@ void genie::utils::print::PrintBanner(void)
   PrintBanner(warn_rc_banner, 0);
 #endif
 
+#ifdef __GENIE_SBN_VERSION__
+  string warn_sbn_banner =
+    base_dir +
+    string("/data/logo/warning_sbn_version.txt");
+  PrintBanner(warn_sbn_banner, 0);
+#endif
+
   string main_banner =
       base_dir +
       string("/data/logo/genie_banner_long.txt");

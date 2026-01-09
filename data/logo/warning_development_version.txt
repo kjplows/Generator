@@ -16,7 +16,7 @@ oooooo   oooooo     oooo       .o.       ooooooooo.   ooooo      ooo ooooo ooooo
 
                                    USE THIS VERSION AT YOUR OWN RISK.
 
- If you prefer to use a version with validated physics content, please see http://releases.genie-mc.org
+ If you prefer to use a version with validated physics content, please see http://genie-mc.github.io/releases.html
 
                             Site managers, please don't remove this notice!
 

@@ -7,11 +7,24 @@ oooooo   oooooo     oooo       .o.       ooooooooo.   ooooo      ooo ooooo ooooo
     `888.8'  `888.8'       .88ooo8888.    888`88b.     8     `88b.8   888   8     `88b.8  888     ooooo 
      `888'    `888'       .8'     `888.   888  `88b.   8       `888   888   8       `888  `88.    .88'  
       `8'      `8'       o88o     o8888o o888o  o888o o8o        `8  o888o o8o        `8   `Y8bood8P'   
-                                                                                                        
+                                                                                                       
+
+                                  /==================================\
+                                  ||   .-')  .-. .-')       .-') _  ||
+                                  ||  ( OO ).\  ( OO )     ( OO ) ) ||
+                                  || (_)---\_);-----.\ ,--./ ,--,'  ||
+                                  || /    _ | | .-.  | |   \ |  |\  ||
+                                  || \  :` `. | '-' /_)|    \|  | ) ||
+                                  ||  '..`''.)| .-. `. |  .     |/  ||
+                                  || .-._)   \| |  \  ||  |\    |   ||
+                                  || \       /| '--'  /|  | \   |   ||
+                                  ||  `-----' `------' `--'  `--'   ||
+                                  \==================================/
+ 
 
 ********************************************************************************************************
 
-                                   THIS IS A GENIE RELEASE CANDIDATE.
+                            THIS IS A DEVELOPMENT VERSION OF GENIE USED FOR SBN.
                       IT HAS *NOT* BEEN FULLY VALIDATED AND IT HAS EXPERIMENTAL FEATURES.
 
                                    USE THIS VERSION AT YOUR OWN RISK.
