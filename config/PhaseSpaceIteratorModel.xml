@@ -21,11 +21,10 @@ BindingEnergyBins         int         Yes        How many Eb points to simulate 
   <param_set name="Default"> 
     <param type="string" name="CommonParam"> FermiGas </param>
 
-    <!-- Matching the ranges and bin numbers given in Ar40 spectral function datafiles -->
-    <param type="vec-double" name="NucleonMomentumRange" delim=","> 0.0, 1.0 </param> <!-- GeV/c -->
-    <param type="vec-double" name="BindingEnergyRange" delim=","> 0.0, 500.0 </param> <!-- GeV/c -->
-    <param type="int" name="NucleonMomentumBins"> 200 </param>
-    <param type="int" name="BindingEnergyBins"> 200 </param>
+    <param type="vec-double" name="NucleonMomentumRange" delim=","> 0.0, 0.5 </param> <!-- GeV/c -->
+    <param type="vec-double" name="BindingEnergyRange" delim=","> 0.0, 100.0 </param> <!-- GeV/c -->
+    <param type="int" name="NucleonMomentumBins"> 50 </param>
+    <param type="int" name="BindingEnergyBins"> 80 </param>
   </param_set>
 
 </alg_conf>

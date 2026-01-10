@@ -71,6 +71,8 @@ public:
 
   // -- Iterate over histogram bins
   bool Next() const;
+  // -- Reset the histogram and counters
+  void Reset() const { fPhaseSpace->Reset(); fX = 1; fY = 1; }
   
  protected:
   //-- Note that LoadConfig() will be responsible for initialising the histogram.
