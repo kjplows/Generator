@@ -374,7 +374,7 @@ void genie::utils::math::GaussLegendreQuadrature::ReadGLFile() {
     double first_node = -999.9;
     for( int i = 0; i < N; i++ ) {
       double x; if( ! (iss >> x >> comma) ) break;
-      first_node = x;
+      first_node = (first_node < -1) ? x : first_node;
       nodes.emplace_back(x); if(x!=0.0) { nodes.insert(nodes.begin(), -x); }
     } // get the nodes
     for( int i = 0; i < N; i++ ) {
