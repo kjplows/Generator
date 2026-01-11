@@ -168,6 +168,20 @@ APFEL_LIBRARIES = -L$(GOPT_WITH_APFEL_LIB) -lAPFEL
 endif
 
 #-------------------------------------------------------------------
+#                             HDF5
+#-------------------------------------------------------------------
+
+HDF5_LIBRARIES =
+HDF5_INCLUDES  =
+
+ifeq ($(strip $(GOPT_ENABLE_HDF5)),YES)
+
+HDF5_INCLUDES  = -I$(GOPT_WITH_HDF5_INC)
+HDF5_LIBRARIES = -L$(GOPT_WITH_HDF5_LIB) -lhdf5_cpp -lhdf5
+
+endif
+
+#-------------------------------------------------------------------
 #                             INCL
 #-------------------------------------------------------------------
 
@@ -582,6 +596,7 @@ CPP_INCLUDES := \
     $(ROOT_INCLUDES) \
     $(LHAPDF_INCLUDES) \
     $(APFEL_INCLUDES) \
+    $(HDF5_INCLUDES) \
     $(GSL_INCLUDES) \
     $(GENIE_INCLUDES) \
     $(PROFESSOR2_INCLUDES)
@@ -598,6 +613,7 @@ LIBRARIES := $(SYSLIBS) \
              $(ROOT_LIBRARIES) \
              $(LHAPDF_LIBRARIES) \
              $(APFEL_LIBRARIES) \
+	     $(HDF5_LIBRARIES) \
              $(XML_LIBRARIES) \
              $(LOG_LIBRARIES) \
              $(GSL_LIBRARIES) \
