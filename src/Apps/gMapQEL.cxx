@@ -85,6 +85,7 @@
 #include <TDatabasePDG.h>
 #include <TFile.h>
 #include "TMath.h"
+#include "TObjectTable.h"
 #include "Math/IFunction.h"
 #include "Math/Integrator.h"
 
@@ -342,7 +343,11 @@ double ComputeGridQELPXSec(Interaction * interaction,
     // Compute the boost vector for moving from the COM frame to the
     // lab frame, i.e., the velocity of the COM frame as measured
     // in the lab frame.
-    TVector3 beta = COMframe2Lab( interaction->InitState() );
+    //TVector3 beta = COMframe2Lab( interaction->InitState() );
+
+    TLorentzVector totMom(p4Ni->Px(), p4Ni->Py(), 
+			  gOptEnu+p4Ni->Pz(), gOptEnu+p4Ni->E());
+    TVector3 beta = totMom.BoostVector();
 
     // FullDifferentialXSec depends on theta_0 and ph0, the lepton COM
     // frame angles with respect to the direction of the COM frame velocity
@@ -383,8 +388,9 @@ double ComputeGridQELPXSec(Interaction * interaction,
     lepton.Boost(beta);
     outNucleon.Boost(beta);
 
-    TLorentzVector  nuP4 = *(interaction->InitState().GetProbeP4( genie::kRfLab ));
-    TLorentzVector qP4 = nuP4 - lepton;
+    //TLorentzVector  nuP4 = *(interaction->InitState().GetProbeP4( genie::kRfLab ));
+    //TLorentzVector qP4 = nuP4 - lepton;
+    TLorentzVector qP4(-lepton.Px(), -lepton.Py(), gOptEnu-lepton.Pz(), gOptEnu-lepton.E());
     double Q2 = -1 * qP4.Mag2();
 
     interaction->KinePtr()->SetFSLeptonP4( lepton );
@@ -598,6 +604,7 @@ int main(int argc, char ** argv)
 	if( iy != iy_prev ) {
 	  LOG("gqelmap", pDEBUG) << "iy --> " << iy << " , Eb = " << 1000. * Eb << " MeV" ;
 	  iy_prev = iy;
+	  //gObjectTable->Print();
 	}
 	
 
