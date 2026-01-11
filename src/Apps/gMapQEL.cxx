@@ -5,18 +5,17 @@
 
 \brief   GENIE utility program constructing the cross section of the QEL model
          as a function of struck nucleon momentum and binding energy.
-	 Constructs one TH3D with three axes:
+	 Accepts a single neutrino energy.
+	 Constructs one TH2D with two axes:
 	   x --> struck nucleon p [GeV/c, lab frame]
 	   y --> nuclear binding energy [MeV]
-	   z --> probe energy [GeV]
 
          Syntax :
 
 	   gqelmap -p nupdg
 	           -t tgtpdg
 		   [-o output root file]
-		   -n N_Enu_points
-		   -E Enu_max
+		   -E Enu
 		   [-a, --angular-approximation-order]
 		      Order of the approximation for angular dependence of the xsec
 
@@ -40,14 +39,8 @@
            -o
                Path to the output ROOT file.
 	       Default: `qel_map.root`
-	   -n  
-	       Number of neutrino energies to evaluate
-	       By default, this is spread logarithmically to match the behaviour
-	       of gMakeSplines.cxx. The threshold energy Ethr is taken as a "0th knot"
-	       Passing n = 1 will give just Emax. n = 2 will be E1, Emax with
-	       log(E1) - log(Ethr) = log(Emax) - log(E1), etc.
 	   -E  
-	       Maximum neutrino energy [GeV]
+	       Neutrino energy [GeV]
 	   -a, --angular-approximation-order
 	       What order of approximation to use (Gauss-Legendre quadrature) for defining
 	       the dependence on the polar angle of the struck nucleon.
@@ -92,7 +85,6 @@
 #include <TDatabasePDG.h>
 #include <TFile.h>
 #include "TMath.h"
-#include "TH3.h"
 #include "Math/IFunction.h"
 #include "Math/Integrator.h"
 
@@ -128,6 +120,13 @@
 #include "Physics/XSectionIntegration/GSLXSecFunc.h"
 #include "Physics/XSectionIntegration/XSecIntegratorI.h"
 
+#ifdef __GENIE_HDF5_ENABLED__
+// Having this guard early on in the file is inappropriate.
+// This needs to be processed after GBuild tells GENIE about flags.
+#include "H5Cpp.h"
+using namespace H5;
+#endif
+
 using std::string;
 using std::vector;
 using namespace std::chrono ;
@@ -140,6 +139,9 @@ using namespace genie::utils::math;
 // Prototypes
 void          GetCommandLineArgs (int argc, char ** argv);
 void          PrintSyntax        (void);
+#ifdef __GENIE_HDF5_ENABLED__
+void          WriteToHDF5        (const TH2D & h, double Enu, const std::string fname);
+#endif
 // Reimplementing ComputeFullQELPXSec for absolute control over *exactly* what's happening.
 // Note Eb is *not a reference*. Also, we always assume the nucleon is bound.
 // Because genie::utils::BindHitNucleon() isn't called, we just pass the pN and Eb.
@@ -159,14 +161,14 @@ int gOptProbePDG = 0;
 int gOptTargetPDG = 0;
 // -- output file
 string kDefOutMapFile = "qel_map.root"; string gOptOutMapFile = kDefOutMapFile;
-// -- Number of knots
-int gOptNKnots = -1;
-// -- Maximum neutrino energy
-double gOptMaxE = -1.;
+// -- Neutrino energy
+double gOptEnu = -1.;
 // -- Order of the Gauss-Legendre angular approximation
 int kDefApproxOrder = 10; int gOptApproxOrder = kDefApproxOrder;
 // -- random number seed
 long int kDefRanSeed = -1; long int gOptRanSeed = kDefRanSeed;
+
+TDatabasePDG* tb = TDatabasePDG::Instance();
 
 // Class definition for our own implementation of FullQELdXSec, I want more control
 // Its name will be: GridQELdXSec
@@ -233,32 +235,31 @@ double GridQELdXSec::DoEval(const double * xin) const {
   double cth0 = xin[0];
   double ph0 = xin[1];
 
-  return ComputeGridQELPXSec(fInteraction, fNuclModel, fXSecModel, cth0, ph0, fpN, fEb,
-			     fApproximant);
+  double ev = ComputeGridQELPXSec(fInteraction, fNuclModel, fXSecModel, cth0, ph0, fpN, fEb,
+				  fApproximant);
+  return ev;
 }
 
 //____________________________________________________________________________
 // Helper
 TVector3 COMframe2Lab(const genie::InitialState& initialState) {
-    TLorentzVector* k4 = initialState.GetProbeP4( genie::kRfLab );
-    TLorentzVector* p4 = initialState.TgtPtr()->HitNucP4Ptr();
-    TLorentzVector totMom = *k4 + *p4;
+  TLorentzVector k4 = *(initialState.GetProbeP4( genie::kRfLab ) );
+  TLorentzVector p4 = *(initialState.TgtPtr()->HitNucP4Ptr());
+  TLorentzVector totMom = k4 + p4;
 
-    TVector3 beta = totMom.BoostVector();
+  TVector3 beta = totMom.BoostVector();
 
-    delete k4;
-
-    return beta;
+  return beta;
 }
 //____________________________________________________________________________
 
 // Our own implementation of ComputeFullQELdXSec, including bits from BindHitNucleon()
-double  ComputeGridQELPXSec(Interaction * interaction,
-			    const PhaseSpaceIteratorModel * nucl_model,
-			    const XSecAlgorithmI * xsec_model,
-			    double cth0, double ph0, 
-			    const double pN, const double Eb,
-			    GaussLegQuad approximant) {
+double ComputeGridQELPXSec(Interaction * interaction,
+			   const PhaseSpaceIteratorModel * nucl_model,
+			   const XSecAlgorithmI * xsec_model,
+			   double cth0, double ph0, 
+			   const double pN, const double Eb,
+			   GaussLegQuad approximant) {
   
   // First, ensure we've done everything BindHitNucleon() would have done for a bound nucleon
   Target * tgt = interaction->InitState().TgtPtr();
@@ -269,8 +270,7 @@ double  ComputeGridQELPXSec(Interaction * interaction,
   TVector3 p3N_ref( 0.0, 0.0, pN );
   
   // Look up the (on-shell) mass of the initial nucleon
-  TDatabasePDG* tb = TDatabasePDG::Instance();
-  double mNi = tb->GetParticle( tgt->HitNucPdg() )->Mass();
+  double mNi = tb->GetParticle( tgt->HitNucPdg() )->Mass(); 
 
   // Set the (possibly off-shell) initial nucleon energy based on
   // the selected binding energy mode. Always put the initial nucleon
@@ -315,8 +315,8 @@ double  ComputeGridQELPXSec(Interaction * interaction,
   // In here, we will have to do one evaluation for each choice of the nucleon cos_theta,
   // i.e. the direction of p4Ni.Vect(). This will influence the kinematics
   // Sample from the approximant
-  std::vector<double> weights = approximant.weights;
-  std::vector<double> cthetas = approximant.nodes;
+  auto const & weights = approximant.weights;
+  auto const & cthetas = approximant.nodes;
 
   double xsec = 0.;
   for( int i = 0; i < weights.size() ; i++ ) {
@@ -383,9 +383,8 @@ double  ComputeGridQELPXSec(Interaction * interaction,
     lepton.Boost(beta);
     outNucleon.Boost(beta);
 
-    TLorentzVector * nuP4 = interaction->InitState().GetProbeP4( genie::kRfLab );
-    TLorentzVector qP4 = *nuP4 - lepton;
-    delete nuP4;
+    TLorentzVector  nuP4 = *(interaction->InitState().GetProbeP4( genie::kRfLab ));
+    TLorentzVector qP4 = nuP4 - lepton;
     double Q2 = -1 * qP4.Mag2();
 
     interaction->KinePtr()->SetFSLeptonP4( lepton );
@@ -399,7 +398,6 @@ double  ComputeGridQELPXSec(Interaction * interaction,
 
     // Compute the QE cross section for the current kinematics
     xsec_cth = xsec_model->XSec(interaction, genie::kPSQELEvGen);
-
     // update the xsec
     xsec += wgt * xsec_cth;
   }
@@ -470,7 +468,7 @@ int main(int argc, char ** argv)
     
     // get the energy range from the EventGenerator validity context
     double Emin = evgen->ValidityContext().Emin() ;
-    double Emax = std::min(evgen->ValidityContext().Emax(), gOptMaxE) ;
+    double Emax = std::min(evgen->ValidityContext().Emax(), gOptEnu) ;
 
     // We now have an algorithm we would normally ask for its Integral().
     // Check it really is QEL
@@ -535,39 +533,16 @@ int main(int argc, char ** argv)
     for( ; intliter != ilst.end(); ++intliter ) {
       // get current interaction. Raw pointer, ugh.
       Interaction * interaction = new Interaction(**intliter);
-      std::vector<double> Eknots(gOptNKnots+1, 0.);
-      double binsz[gOptNKnots+2]; // bin edges that encompass all gOptNKnots+1 points inside them
-      
-      // Perform one integration for each neutrino energy
-      // Same scheme as XSecSplineList.cxx
-      // Place the knots linearly for now
 
       double Ethr = interaction->PhaseSpace().Threshold();
       LOG("gqelmap", pNOTICE) << "Threshold = " << Ethr << " GeV";
 
       if (Ethr>Emax) {
-	SLOG("gqelmap", pFATAL) << "Energy threshold higher than maximum.";
+	SLOG("gqelmap", pFATAL) << "Energy threshold higher than requested energy.";
 	SLOG("gqelmap", pFATAL) << "Energy threshold = " << Ethr << " GeV";
-	SLOG("gqelmap", pFATAL) << "Energy maximum = " << Emax << " GeV";
+	SLOG("gqelmap", pFATAL) << "Energy requested = " << Emax << " GeV";
 	return 4;
       }
-
-      // Set knots.
-      /*
-	We will pick exactly one point at threshold, and then spread out
-	the rest of the knots logarithmically between Ethr and Emax.
-       */
-      Eknots[0] = Ethr; 
-      binsz[0] = (Ethr > 0.) ? 0.5 * Ethr : -1.; 
-      double logEthr = std::log10(Ethr); double logEmax = std::log10(Emax);
-      double dlog = logEmax - logEthr; double step = dlog / gOptNKnots;
-      for( int ik = 1; ik <= gOptNKnots ; ik++ ) {
-        double arg  = std::log10(Eknots[ik-1]) + step;
-	double barg = std::log10(Eknots[ik-1]) + std::log10(5.) * step;
-	Eknots[ik] = std::pow(10., arg);
-	binsz[ik]  = std::pow(10., barg);
-      } // set knots
-
 
       // Get a reference to the histogram of the model. 
       // We may not modify the reference in this App, the model takes care of that.
@@ -575,100 +550,86 @@ int main(int argc, char ** argv)
       LOG("gqelmap", pFATAL) << "phase_space has " << phase_space.GetNbinsX() << " x "
 			     << phase_space.GetNbinsY() << " bins";
       
-      // Initialise the 3D histogram
-      // Because the bins in Enu are not fixed-width, we'll declare it as variable on all 3 axes
-      // It has one bin for Ethr, one 
-      int nx = phase_space.GetNbinsX()+1; int ny = phase_space.GetNbinsY()+1; int nz = gOptNKnots + 2;
-      double binsx[nx]; double binsy[ny]; 
-      for( int ix = 1; ix < nx; ix++ ) { binsx[ix-1] = phase_space.GetXaxis()->GetBinLowEdge(ix); }
-      for( int iy = 1; iy < ny; iy++ ) { binsy[iy-1] = phase_space.GetYaxis()->GetBinLowEdge(iy); }
-      binsx[nx-1] = phase_space.GetXaxis()->GetXmax();
-      binsy[ny-1] = phase_space.GetYaxis()->GetXmax();
-      binsz[nz-1] = Emax * 1.1;
+      TLorentzVector nup4(0., 0., gOptEnu, gOptEnu);
+      interaction->InitStatePtr()->SetProbeP4(nup4);
       
-      TH3D QELModelMap( "QELModelMap", "Phase space: (pN, Eb, Enu);pN [GeV/c];Eb [MeV];Enu [GeV]",
-		        nx-1, binsx, ny-1, binsy, nz-1, binsz );
-      for( double Enu : Eknots ) {
-	TLorentzVector nup4(0., 0., Enu, Enu);
-	Interaction * nu_int = new Interaction(*interaction);
-	nu_int->InitStatePtr()->SetProbeP4(nup4);
+      Target* tgt = interaction->InitState().TgtPtr();      
+      // Construct the integrating function.
       
-	Target* tgt = nu_int->InitState().TgtPtr();      
-	// Construct the integrating function.
+      // Using raw pointer here, that's what ROOT wants
+      // last 0. is min angle for EM scattering, normally configurable but I'll hard-code it
+      // also, I'll hard-code the integration type to be adaptive
+      GridQELdXSec * func = 
+	new GridQELdXSec( alg, interaction );
+      func->SetApproximant( approximant );
       
-	// Using raw pointer here, that's what ROOT wants
-	// last 0. is min angle for EM scattering, normally configurable but I'll hard-code it
-	// also, I'll hard-code the integration type to be adaptive
-	GridQELdXSec * func = 
-	  new GridQELdXSec( alg, nu_int );
-	func->SetApproximant( approximant );
-      
-	// Switch to using the copy of the interaction in the integrator rather than
-	// the copy that we made in this function
-	delete nu_int;
-	nu_int = func->GetInteractionPtr();
-      
-	// Also update the pointer to the Target
-	tgt = nu_int->InitState().TgtPtr();
-      
-	// The actual integrating function.
-	ROOT::Math::IntegratorMultiDim ig(*func, ig_type, abstol, reltol, maxeval);
-      
-	// Now setup the custom loop.
-	/*
-	 * While the nuclear model still has (pN, Eb) to look over,
-	 * generate a nucleon at that (pN, Eb) bin (centre of bin). (Note Eb needs to be in GeV)
-	 * Then make as many evaluations as the order of your angular approximant,
-	 * given that you need to evaluate at costh = <that abscissa>.
-	 * 
-	 * Once done, sum up the xsec from each iteration of the nuclear target and give the answer
-	 */
-
-	steady_clock::time_point start = steady_clock::now();
-
-	int iy_prev = -1;
-	while( ps_model->Next() ) {
-
-	  // sample from the centre of the bin
-	  int ix = ps_model->X(); int iy = ps_model->Y();
-	  double pN = phase_space.GetXaxis()->GetBinCenter(ix);
-	  double Eb = phase_space.GetYaxis()->GetBinCenter(iy);
-	  Eb *= units::MeV / units::GeV; // to GeV
-	  func->SetpN(pN); func->SetEb(Eb);
-	  if( iy != iy_prev ) {
-	    LOG("gqelmap", pDEBUG) << "iy --> " << iy << " , Eb = " << 1000. * Eb << " MeV" ;
-	    iy_prev = iy;
-	  }
-
-
-	  LOG("gqelmap", pDEBUG) << "trying pN = " << pN << " GeV/c, Eb = "
-				 << Eb << " GeV";
-	  // all the machinery is dealt with internally by GridQELXSec
-	  double xsec = ig.Integral(kine_min, kine_max);
-
-	  LOG("gqelmap", pINFO) << "total xsec = " << xsec;
-	  // error?
-	  ps_model->SetXSec(xsec, 0.);
-	  QELModelMap.Fill( pN, Eb * 1000.0, Enu, xsec );
-	} // loop over (pN, Eb) bins
-      
-	delete func;
-	ps_model->Reset();
-
-	steady_clock::time_point end = steady_clock::now();
-	duration<double> time_span = duration_cast<duration<double>>(end - start);
-	LOG("gqelmap", pNOTICE) << "Evaluated map at Enu = " << Enu << " GeV in " 
-				<< time_span.count() << " s";
-
-      } // loop over energies
-
-      // clean up
+      // Switch to using the copy of the interaction in the integrator rather than
+      // the copy that we made in this function
       delete interaction;
+      interaction = func->GetInteractionPtr();
+      
+      // Also update the pointer to the Target
+      tgt = interaction->InitState().TgtPtr();
+      
+      // The actual integrating function.
+      ROOT::Math::IntegratorMultiDim ig(*func, ig_type, abstol, reltol, maxeval);
+      
+      // Now setup the custom loop.
+      /*
+       * While the nuclear model still has (pN, Eb) to look over,
+       * generate a nucleon at that (pN, Eb) bin (centre of bin). (Note Eb needs to be in GeV)
+       * Then make as many evaluations as the order of your angular approximant,
+       * given that you need to evaluate at costh = <that abscissa>.
+       * 
+       * Once done, sum up the xsec from each iteration of the nuclear target and give the answer
+       */
+      
+      steady_clock::time_point start = steady_clock::now();
+	
+      int iy_prev = -1;
+      while( ps_model->Next() ) {
+	
+	// sample from the centre of the bin
+	int ix = ps_model->X(); int iy = ps_model->Y();
+	double pN = phase_space.GetXaxis()->GetBinCenter(ix);
+	double Eb = phase_space.GetYaxis()->GetBinCenter(iy);
+	Eb *= units::MeV / units::GeV; // to GeV
+	func->SetpN(pN); func->SetEb(Eb);
+	if( iy != iy_prev ) {
+	  LOG("gqelmap", pDEBUG) << "iy --> " << iy << " , Eb = " << 1000. * Eb << " MeV" ;
+	  iy_prev = iy;
+	}
+	
+
+	//LOG("gqelmap", pDEBUG) << "trying pN = " << pN << " GeV/c, Eb = "
+	//		       << Eb << " GeV";
+	// all the machinery is dealt with internally by GridQELXSec
+	double xsec = ig.Integral(kine_min, kine_max);
+	
+	//LOG("gqelmap", pINFO) << "total xsec = " << xsec;
+	// error?
+	ps_model->SetXSec(xsec, 0.);
+      } // loop over (pN, Eb) bins
+      
+      delete func;
+      //ps_model->Reset();
+      
+      steady_clock::time_point end = steady_clock::now();
+      duration<double> time_span = duration_cast<duration<double>>(end - start);
+      LOG("gqelmap", pNOTICE) << "Evaluated map at Enu = " << gOptEnu << " GeV in " 
+			      << time_span.count() << " s";
       
       // Write this out as a ROOT file
       TFile fout(gOptOutMapFile.c_str(), "RECREATE");
-      QELModelMap.Write();
+      phase_space.Write();
       fout.Close();
+
+      // and if we have HDF5 write an HDF5 too
+#ifdef __GENIE_HDF5_ENABLED__
+      std::string hdf5_output = gOptOutMapFile.substr(0, gOptOutMapFile.find_last_of("."));
+      hdf5_output.append(".h5"); // replace ".root" with ".h5"
+      WriteToHDF5(phase_space, gOptEnu, hdf5_output);
+#endif
       
     } // loop over all interactions
   } // loop over all EventGenerator objects
@@ -688,8 +649,7 @@ void PrintSyntax(void)
     << "   gqelmap -p nupdg"
     << "\n    -t tgtpdg"
     << "\n    [-o output_file.root]"
-    << "\n    -n N_Enu_points"
-    << "\n    -E Enu_max"
+    << "\n    -E Enu"
     << "\n    [-a, --angular-approximation-order n]"
     << "\n    [--tune tune_name]"
     << "\n    [--message-thresholds your-messenger.xml]"
@@ -743,22 +703,12 @@ void GetCommandLineArgs(int argc, char ** argv)
     exit(2);
   }
 
-  // Number of knots
-  if( parser.OptionExists('n') ) {
-    LOG("gqelmap", pINFO) << "Reading number of knots";
-    gOptNKnots = parser.ArgAsInt('n');
-  } else {
-    LOG("gqelmap", pFATAL) << "Please specify the number of knots. Exiting now.";
-    PrintSyntax();
-    exit(2);
-  }
-
   // Max Enu
   if( parser.OptionExists('E') ) {
-    LOG("gqelmap", pINFO) << "Reading maximum neutrino energy";
-    gOptMaxE = parser.ArgAsDouble('E');
+    LOG("gqelmap", pINFO) << "Reading neutrino energy";
+    gOptEnu = parser.ArgAsDouble('E');
   } else {
-    LOG("gqelmap", pFATAL) << "Please specify the maximum neutrino energy. Exiting now.";
+    LOG("gqelmap", pFATAL) << "Please specify the neutrino energy. Exiting now.";
     PrintSyntax();
     exit(2);
   }
@@ -785,11 +735,43 @@ void GetCommandLineArgs(int argc, char ** argv)
      << "\n Neutrino PDG code : " << gOptProbePDG
      << "\n Target PDG code : " << gOptTargetPDG
      << "\n Output map file : " << gOptOutMapFile
-     << "\n Number of knots : " << gOptNKnots
-     << "\n Maximum neutrino energy : " << gOptMaxE << " GeV"
+     << "\n Neutrino energy : " << gOptEnu << " GeV"
      << "\n Order of approximation for nucleon angular direction: " << gOptApproxOrder
      << "\n Random number seed : " << gOptRanSeed
      << "\n";
 
   LOG("gqelmap", pNOTICE) << *RunOpt::Instance();
 }
+//____________________________________________________________________________
+// Writes a TH2D of (nx, ny) bins into a dataset, "xsec", of shape (1, nx, ny)
+// and an "enu" dataset of shape (1,)
+// TODO: add metadata showing the QEL model, nucleus, target...
+#ifdef __GENIE_HDF5_ENABLED__
+void WriteToHDF5(const TH2D & h, double Enu, const std::string fname) {
+  const int nx = h.GetNbinsX();
+  const int ny = h.GetNbinsY();
+
+  // flatten into row-major contiguous buffer
+  std::vector<double> buffer(nx*ny, 0.0);
+  for( int ix = 1; ix <= nx; ix++ ) {
+    for( int iy = 1; iy <= ny; iy++ ) {
+      buffer[(ix-1)*ny + (iy-1)] = h.GetBinContent(ix, iy);
+    }
+  }
+
+  H5File fhout(fname, H5F_ACC_TRUNC);
+
+  hsize_t dims[3] = {1, static_cast<hsize_t>(nx), static_cast<hsize_t>(ny)};
+  DataSpace space(3, dims);
+  
+  DataSet dset = fhout.createDataSet("xsec", PredType::NATIVE_DOUBLE, space);
+  dset.write(buffer.data(), PredType::NATIVE_DOUBLE);
+
+  // and an enu dataset
+  hsize_t edims[1] = {1};
+  DataSpace espace(1, edims);
+
+  DataSet eset = fhout.createDataSet("Enu", PredType::NATIVE_DOUBLE, espace);
+  eset.write(&Enu, PredType::NATIVE_DOUBLE);
+}
+#endif
