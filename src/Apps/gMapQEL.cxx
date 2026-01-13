@@ -147,11 +147,17 @@ void          WriteToHDF5        (const TH2D & h, double Enu, const std::string 
 // Note Eb is *not a reference*. Also, we always assume the nucleon is bound.
 // Because genie::utils::BindHitNucleon() isn't called, we just pass the pN and Eb.
 double        ComputeGridQELPXSec(Interaction * interaction,
-				  const PhaseSpaceIteratorModel * nucl_model,
 				  const XSecAlgorithmI * xsec_model,
 				  double cth0, double ph0, 
 				  const double pN, const double Eb,
 				  GaussLegQuad approximant);
+double        ComputeSinglePoint(Interaction * interaction, 
+				 const XSecAlgorithmI * xsec_model,
+				 double cth0, double ph0, 
+				 const double pN, const double Eb,
+				 const double cthn,
+				 TLorentzVector * p4Ni,
+				 double lepMass, double mNf);
 // Helpers
 TVector3 COMframe2Lab(const genie::InitialState & initialState);
 
@@ -236,9 +242,10 @@ double GridQELdXSec::DoEval(const double * xin) const {
   double cth0 = xin[0];
   double ph0 = xin[1];
 
-  double ev = ComputeGridQELPXSec(fInteraction, fNuclModel, fXSecModel, cth0, ph0, fpN, fEb,
-				  fApproximant);
-  return ev;
+  double xsec = ComputeGridQELPXSec(fInteraction, fXSecModel, cth0, ph0, fpN, fEb,
+				    fApproximant);
+  LOG("gMapQEL", pFATAL) << "(cth0, ph0) = (" << cth0 << ", " << ph0 << ") : xsec = " << xsec;
+  return xsec;
 }
 
 //____________________________________________________________________________
@@ -256,7 +263,6 @@ TVector3 COMframe2Lab(const genie::InitialState& initialState) {
 
 // Our own implementation of ComputeFullQELdXSec, including bits from BindHitNucleon()
 double ComputeGridQELPXSec(Interaction * interaction,
-			   const PhaseSpaceIteratorModel * nucl_model,
 			   const XSecAlgorithmI * xsec_model,
 			   double cth0, double ph0, 
 			   const double pN, const double Eb,
@@ -293,6 +299,7 @@ double ComputeGridQELPXSec(Interaction * interaction,
   // The (lab-frame) off-shell initial nucleon energy is the difference
   // between the lab frame total energies of the initial and remnant nuclei
   ENi = Mi - std::sqrt( Mf*Mf + pN*pN );
+
   if( ENi < 0.0 ) { return 0.0; }
 
   // Update the initial nucleon lab-frame 4-momentum
@@ -305,6 +312,7 @@ double ComputeGridQELPXSec(Interaction * interaction,
   // can have a momentum greater than its total energy. This leads to numerical
   // issues (NaNs) since the invariant mass of the nucleon becomes imaginary.
   // In such cases, just return zero to avoid trouble.
+
   if ( interaction->InitState().Tgt().HitNucP4().M() <= 0. ) return 0.;
 
   // Mass of the outgoing lepton
@@ -316,99 +324,110 @@ double ComputeGridQELPXSec(Interaction * interaction,
   // In here, we will have to do one evaluation for each choice of the nucleon cos_theta,
   // i.e. the direction of p4Ni.Vect(). This will influence the kinematics
   // Sample from the approximant
-  auto const & weights = approximant.weights;
-  auto const & cthetas = approximant.nodes;
+  const std::vector<double> & weights = approximant.weights;
+  const std::vector<double> & cthetas = approximant.nodes;
 
   double xsec = 0.;
   for( int i = 0; i < weights.size() ; i++ ) {
-
-    double xsec_cth = 0.;
-    // Due to phi invariance about nucleon azimuthal angle we just pick +'ve root for sin theta
-    double wgt = weights[i]; double cth = cthetas[i]; double sth = std::sqrt(1.0 - cth*cth);
-    TVector3 p3Ni( 0.0, pN * sth, pN * cth );
-    p4Ni->SetVect( p3Ni );
-
-    // Mandelstam s for the probe/hit nucleon system
-    double s = std::pow( interaction->InitState().CMEnergy(), 2 );
-
-    // Return a differential cross section of zero if we're below threshold (and
-    // therefore need to sample a new event)
-    if ( std::sqrt(s) < lepMass + mNf ) return 0.;
-    
-    double outLeptonEnergy = ( s - mNf*mNf + lepMass*lepMass ) / (2 * std::sqrt(s));
-    
-    if (outLeptonEnergy*outLeptonEnergy - lepMass*lepMass < 0.) return 0.;
-    double outMomentum = TMath::Sqrt(outLeptonEnergy*outLeptonEnergy - lepMass*lepMass);
-
-    // Compute the boost vector for moving from the COM frame to the
-    // lab frame, i.e., the velocity of the COM frame as measured
-    // in the lab frame.
-    //TVector3 beta = COMframe2Lab( interaction->InitState() );
-
-    TLorentzVector totMom(p4Ni->Px(), p4Ni->Py(), 
-			  gOptEnu+p4Ni->Pz(), gOptEnu+p4Ni->E());
-    TVector3 beta = totMom.BoostVector();
-
-    // FullDifferentialXSec depends on theta_0 and ph0, the lepton COM
-    // frame angles with respect to the direction of the COM frame velocity
-    // as measured in the lab frame. To generate the correct dependence
-    // here, first set the lepton COM frame angles with respect to +z
-    // (via TVector3::SetTheta() and TVector3::SetPhi()).
-    TVector3 lepton3Mom(0., 0., outMomentum);
-    lepton3Mom.SetTheta( TMath::ACos(cth0) );
-    lepton3Mom.SetPhi( ph0 );
-
-    // Then rotate the lepton 3-momentum so that the old +z direction now
-    // points along the COM frame velocity (beta)
-    TVector3 zvec(0., 0., 1.);
-    TVector3 rot = ( zvec.Cross(beta) ).Unit();
-    double angle = beta.Angle( zvec );
-
-    // Handle the edge case where beta is along -z, so the
-    // cross product above vanishes
-    if ( beta.Perp() == 0. && beta.Z() < 0. ) {
-      rot = TVector3(0., 1., 0.);
-      angle = genie::constants::kPi;
-    }
-
-    // Rotate if the rotation vector is not 0
-    if ( rot.Mag() >= genie::controls::kASmallNum ) {
-      lepton3Mom.Rotate(angle, rot);
-    }
-
-    // Construct the lepton 4-momentum in the COM frame
-    TLorentzVector lepton(lepton3Mom, outLeptonEnergy);
-
-    // The final state nucleon will have an equal and opposite 3-momentum
-    // in the COM frame and will be on the mass shell
-    TLorentzVector outNucleon(-1*lepton.Px(),-1*lepton.Py(),-1*lepton.Pz(),
-			      TMath::Sqrt(outMomentum*outMomentum + mNf*mNf));
-    
-    // Boost the 4-momenta for both particles into the lab frame
-    lepton.Boost(beta);
-    outNucleon.Boost(beta);
-
-    //TLorentzVector  nuP4 = *(interaction->InitState().GetProbeP4( genie::kRfLab ));
-    //TLorentzVector qP4 = nuP4 - lepton;
-    TLorentzVector qP4(-lepton.Px(), -lepton.Py(), gOptEnu-lepton.Pz(), gOptEnu-lepton.E());
-    double Q2 = -1 * qP4.Mag2();
-
-    interaction->KinePtr()->SetFSLeptonP4( lepton );
-    interaction->KinePtr()->SetHadSystP4( outNucleon );
-    interaction->KinePtr()->SetQ2( Q2 );
-
-    // Check the Q2 range. If we're outside of it, don't bother
-    // with the rest of the calculation.
-    Range1D_t Q2lim = interaction->PhaseSpace().Q2Lim();
-    if (Q2 < Q2lim.min || Q2 > Q2lim.max) return 0.;
-
-    // Compute the QE cross section for the current kinematics
-    xsec_cth = xsec_model->XSec(interaction, genie::kPSQELEvGen);
     // update the xsec
-    xsec += wgt * xsec_cth;
+    xsec += weights[i] * ComputeSinglePoint(interaction, xsec_model, cth0, ph0, pN, Eb, cthetas[i],
+					    p4Ni, lepMass, mNf);
   }
  
   return xsec;
+}
+//____________________________________________________________________________
+// Computes a single point
+double ComputeSinglePoint(Interaction * interaction, 
+			  const XSecAlgorithmI * xsec_model,
+			  double cth0, double ph0, 
+			  const double pN, const double Eb,
+			  const double cthn,
+			  TLorentzVector * p4Ni,
+			  double lepMass, double mNf) {
+  double xsec_cth = 0.;
+  // Due to phi invariance about nucleon azimuthal angle we just pick +'ve root for sin theta
+  double cth = cthn; double sth = std::sqrt(1.0 - cth*cth);
+  TVector3 p3Ni( 0.0, pN * sth, pN * cth );
+  p4Ni->SetVect( p3Ni );
+
+  // Mandelstam s for the probe/hit nucleon system
+  double s = std::pow( interaction->InitState().CMEnergy(), 2 );
+
+  // Return a differential cross section of zero if we're below threshold (and
+  // therefore need to sample a new event)
+  if ( std::sqrt(s) < lepMass + mNf ) return 0.;
+  
+  double outLeptonEnergy = ( s - mNf*mNf + lepMass*lepMass ) / (2 * std::sqrt(s));
+  
+  if (outLeptonEnergy*outLeptonEnergy - lepMass*lepMass < 0.) return 0.;
+  double outMomentum = TMath::Sqrt(outLeptonEnergy*outLeptonEnergy - lepMass*lepMass);
+  
+  // Compute the boost vector for moving from the COM frame to the
+  // lab frame, i.e., the velocity of the COM frame as measured
+  // in the lab frame.
+  //TVector3 beta = COMframe2Lab( interaction->InitState() );
+  
+  TLorentzVector totMom(p4Ni->Px(), p4Ni->Py(), 
+			gOptEnu+p4Ni->Pz(), gOptEnu+p4Ni->E());
+  TVector3 beta = totMom.BoostVector();
+  
+  // FullDifferentialXSec depends on theta_0 and ph0, the lepton COM
+  // frame angles with respect to the direction of the COM frame velocity
+  // as measured in the lab frame. To generate the correct dependence
+  // here, first set the lepton COM frame angles with respect to +z
+  // (via TVector3::SetTheta() and TVector3::SetPhi()).
+  TVector3 lepton3Mom(0., 0., outMomentum);
+  lepton3Mom.SetTheta( TMath::ACos(cth0) );
+  lepton3Mom.SetPhi( ph0 );
+  
+  // Then rotate the lepton 3-momentum so that the old +z direction now
+  // points along the COM frame velocity (beta)
+  TVector3 zvec(0., 0., 1.);
+  TVector3 rot = ( zvec.Cross(beta) ).Unit();
+  double angle = beta.Angle( zvec );
+  
+  // Handle the edge case where beta is along -z, so the
+  // cross product above vanishes
+  if ( beta.Perp() == 0. && beta.Z() < 0. ) {
+    rot = TVector3(0., 1., 0.);
+    angle = genie::constants::kPi;
+  }
+  
+  // Rotate if the rotation vector is not 0
+  if ( rot.Mag() >= genie::controls::kASmallNum ) {
+    lepton3Mom.Rotate(angle, rot);
+  }
+  
+  // Construct the lepton 4-momentum in the COM frame
+  TLorentzVector lepton(lepton3Mom, outLeptonEnergy);
+  
+  // The final state nucleon will have an equal and opposite 3-momentum
+  // in the COM frame and will be on the mass shell
+  TLorentzVector outNucleon(-1*lepton.Px(),-1*lepton.Py(),-1*lepton.Pz(),
+			    TMath::Sqrt(outMomentum*outMomentum + mNf*mNf));
+  
+  // Boost the 4-momenta for both particles into the lab frame
+  lepton.Boost(beta);
+  outNucleon.Boost(beta);
+  
+  //TLorentzVector  nuP4 = *(interaction->InitState().GetProbeP4( genie::kRfLab ));
+  //TLorentzVector qP4 = nuP4 - lepton;
+  TLorentzVector qP4(-lepton.Px(), -lepton.Py(), gOptEnu-lepton.Pz(), gOptEnu-lepton.E());
+  double Q2 = -1 * qP4.Mag2();
+  
+  interaction->KinePtr()->SetFSLeptonP4( lepton );
+  interaction->KinePtr()->SetHadSystP4( outNucleon );
+  interaction->KinePtr()->SetQ2( Q2 );
+  
+  // Check the Q2 range. If we're outside of it, don't bother
+  // with the rest of the calculation.
+  Range1D_t Q2lim = interaction->PhaseSpace().Q2Lim();
+  if (Q2 < Q2lim.min || Q2 > Q2lim.max) return 0.;
+  
+  // Compute the QE cross section for the current kinematics
+  xsec_cth = xsec_model->XSec(interaction, genie::kPSQELEvGen);
+  return xsec_cth;
 }
 
 //____________________________________________________________________________
@@ -611,7 +630,28 @@ int main(int argc, char ** argv)
 	//LOG("gqelmap", pDEBUG) << "trying pN = " << pN << " GeV/c, Eb = "
 	//		       << Eb << " GeV";
 	// all the machinery is dealt with internally by GridQELXSec
-	double xsec = ig.Integral(kine_min, kine_max);
+	// Do an integral using quadrature (pick 10 points on costh, 10 on phi, 100 total)
+	// cf. the ~85 of the adaptive, that's fine
+	//double xsec = ig.Integral(kine_min, kine_max);
+	
+	double xsec = 0.0;
+	int n_lepton_approx = 10;
+	GaussLegQuad approx_lep = GLQuadLib->GetGLQuad(n_lepton_approx);
+	for( int ic = 0; ic < n_lepton_approx; ic++ ) {
+	  double wic  = (approx_lep.weights)[ic];
+	  double cth0 = (approx_lep.nodes)[ic];
+
+	  double xsec_cth0 = 0.;
+	  for( int ip = 0; ip < n_lepton_approx; ip++ ) {
+	    // Scale the weights by pi, as the integral is on [0, 2pi]
+	    double wip = constants::kPi * (approx_lep.weights)[ip];
+	    double ph0 = constants::kPi * (1.0 + (approx_lep.nodes)[ip]);
+	    xsec_cth0 += wip * ComputeGridQELPXSec(interaction, alg, cth0, ph0,
+						   pN, Eb, approximant);
+	  }
+	  
+	  xsec += wic * xsec_cth0;
+	} // loop over cth0
 	
 	//LOG("gqelmap", pINFO) << "total xsec = " << xsec;
 	// error?
