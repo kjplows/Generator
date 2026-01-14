@@ -5,6 +5,8 @@
 # C.Andreopoulos <c.andreopoulos \at cern.ch>, Rutherford Lab.
 #
 # Revised for usage with git by S. Gardiner <gardiner \at fnal.gov>, Fermilab.
+#
+# Checks for SBN added by John Plows <kplows \at liverpool.ac.uk>
 
 $GENIE = $ENV{'GENIE'};
 die ("Not even the GENIE environmental variable is defined!") unless defined $GENIE;
@@ -17,10 +19,13 @@ chomp($release = $rel_info[0]);
 
 # ($major, $minor, $rev) = split('.', $release);
 # note: split() doesn't split on dots...
-$release=~m/(\d+).(\d+).(\d+)/;
+# note: escaping dots and anchoring regex with ^ and $ to avoid partial matches
+# note: adding possibility for sbn string
+$release=~m/^(\d+)\.(\d+)\.(\d+)(?:\.(sbn))?$/;
 $major = $1;
 $minor = $2;
 $revis = $3;
+my $sbn = defined $4 ? 1 : 0;
 
 # Get the hash of the current git commit
 $git_revision = `git rev-parse --verify HEAD`;
@@ -78,6 +83,9 @@ if($major == 999 && $minor == 999 && $revis == 999) {
 else {
   if($minor % 2) {
      print GVRS "#define __GENIE_RELEASE_CANDIDATE__ \n\n";
+  }
+  if($sbn == 1) {
+      print GVRS "#define __GENIE_SBN_VERSION__ \n\n";
   }
 }
 
