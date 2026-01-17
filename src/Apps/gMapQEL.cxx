@@ -18,6 +18,8 @@
 		   -E Enu
 		   [-a, --angular-approximation-order]
 		      Order of the approximation for angular dependence of the xsec
+		   [-l, --lepton-approximation-order]
+		      Order of the approximation for lepton kinematic dependence of the xsec
 		   [-n, --num-nucleons]
 		      How many nucleons to throw (if mapping a nuclear model)
 
@@ -46,6 +48,11 @@
 	   -a, --angular-approximation-order
 	       What order of approximation to use (Gauss-Legendre quadrature) for defining
 	       the dependence on the polar angle of the struck nucleon.
+	       Default: 10
+	   -l, --lepton-approximation-order
+	       What order of approximation to use (Gauss-Legendre quadrature) for defining
+	       the dependence on the polar angle of the outgoing lepton, and the 
+	       azimuthal angle of the outgoing lepton (nl x nl grid).
 	       Default: 10
 	   -n, --num-nucleons
 	       How many nucleons to throw if you are mapping out a nuclear model
@@ -181,6 +188,7 @@ string kDefOutMapFile = "qel_map.root"; string gOptOutMapFile = kDefOutMapFile;
 double gOptEnu = -1.;
 // -- Order of the Gauss-Legendre angular approximation
 int kDefApproxOrder = 10; int gOptApproxOrder = kDefApproxOrder;
+int kDefLepApproxOrder = 10; int gOptLepApproxOrder = kDefLepApproxOrder;
 // -- Number of nucleons to throw if mapping out nuclear model
 int kDefNumNucleons = 1000000; int gOptNumNucleons = kDefNumNucleons;
 // -- random number seed
@@ -464,6 +472,7 @@ int main(int argc, char ** argv)
 
   GaussLegendreQuadrature * GLQuadLib = GaussLegendreQuadrature::Instance();
   GaussLegQuad approximant = GLQuadLib->GetGLQuad(gOptApproxOrder);
+  GaussLegQuad lep_approximant = GLQuadLib->GetGLQuad(gOptLepApproxOrder);
 
   // Load in the QEL model from the tune
   // Because we explicitly iterate over the entire (pN, Eb) space, we don't want a nuclear
@@ -695,17 +704,15 @@ int main(int argc, char ** argv)
 	//double xsec = ig.Integral(kine_min, kine_max);
 	
 	double xsec = 0.0;
-	int n_lepton_approx = 30;
-	GaussLegQuad approx_lep = GLQuadLib->GetGLQuad(n_lepton_approx);
-	for( int ic = 0; ic < n_lepton_approx; ic++ ) {
-	  double wic  = (approx_lep.weights)[ic];
-	  double cth0 = (approx_lep.nodes)[ic];
+	for( int ic = 0; ic < gOptLepApproxOrder; ic++ ) {
+	  double wic  = (lep_approximant.weights)[ic];
+	  double cth0 = (lep_approximant.nodes)[ic];
 
 	  double xsec_cth0 = 0.;
-	  for( int ip = 0; ip < n_lepton_approx; ip++ ) {
+	  for( int ip = 0; ip < gOptLepApproxOrder; ip++ ) {
 	    // Scale the weights by pi, as the integral is on [0, 2pi]
-	    double wip = constants::kPi * (approx_lep.weights)[ip];
-	    double ph0 = constants::kPi * (1.0 + (approx_lep.nodes)[ip]);
+	    double wip = constants::kPi * (lep_approximant.weights)[ip];
+	    double ph0 = constants::kPi * (1.0 + (lep_approximant.nodes)[ip]);
 	    xsec_cth0 += wip * ComputeGridQELPXSec(interaction, alg, cth0, ph0,
 						   pN, Eb, approximant);
 	  }
@@ -758,6 +765,7 @@ void PrintSyntax(void)
     << "\n    [-o output_file.root]"
     << "\n    -E Enu"
     << "\n    [-a, --angular-approximation-order n]"
+    << "\n    [-l, --lepton-approximation-order n]"
     << "\n    [--tune tune_name]"
     << "\n    [--message-thresholds your-messenger.xml]"
     << "\n    [--seed random_number_seed]"
@@ -827,6 +835,13 @@ void GetCommandLineArgs(int argc, char ** argv)
       parser.ArgAsInt('a') : parser.ArgAsInt("angular-approximation-order");
   } else { LOG("gqelmap", pINFO) << "Unspecified angular approximation order - Using default"; }
 
+  // Gauss-Legendre approximant order
+  if( parser.OptionExists('l') || parser.OptionExists("lepton-approximation-order") ) {
+    LOG("gqelmap", pINFO) << "Reading lepton approximation order";
+    gOptLepApproxOrder = (parser.OptionExists('l')) ? 
+      parser.ArgAsInt('l') : parser.ArgAsInt("lepton-approximation-order");
+  } else { LOG("gqelmap", pINFO) << "Unspecified lepton approximation order - Using default"; }
+
   // Number of nucleons
   if( parser.OptionExists('n') || parser.OptionExists("num-nucleons") ) {
     LOG("gqelmap", pINFO) << "Reading number of nucleons";
@@ -851,6 +866,7 @@ void GetCommandLineArgs(int argc, char ** argv)
      << "\n Output map file : " << gOptOutMapFile
      << "\n Neutrino energy : " << gOptEnu << " GeV"
      << "\n Order of approximation for nucleon angular direction: " << gOptApproxOrder
+     << "\n Order of approximation for outgoing lepton direction: " << gOptLepApproxOrder
      << "\n Number of nucleons to map nuclear models: " << gOptNumNucleons
      << "\n Random number seed : " << gOptRanSeed
      << "\n";
