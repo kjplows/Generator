@@ -18,6 +18,8 @@
 		   -E Enu
 		   [-a, --angular-approximation-order]
 		      Order of the approximation for angular dependence of the xsec
+		   [-n, --num-nucleons]
+		      How many nucleons to throw (if mapping a nuclear model)
 
                    // command line args handled by RunOpt:
                    [--tune tune_name]
@@ -45,6 +47,10 @@
 	       What order of approximation to use (Gauss-Legendre quadrature) for defining
 	       the dependence on the polar angle of the struck nucleon.
 	       Default: 10
+	   -n, --num-nucleons
+	       How many nucleons to throw if you are mapping out a nuclear model
+	       (i.e. not generating the QEL cross sections using the PhaseSpaceIteratorModel)
+	       Default: 1000000
 
            --tune
               Specifies a GENIE comprehensive neutrino interaction model tune.
@@ -74,6 +80,7 @@
 #include <string>
 #include <vector>
 //#include <sstream>
+#include <algorithm>
 #include <chrono>
 
 #if defined(HAVE_FENV_H) && defined(HAVE_FEENABLEEXCEPT)
@@ -114,6 +121,7 @@
 #include "Framework/Utils/StringUtils.h"
 #include "Framework/Utils/PrintUtils.h"
 #include "Framework/Utils/CmdLnArgParser.h"
+#include "Physics/Common/VertexGenerator.h"
 #include "Physics/NuclearState/NuclearModelI.h"
 #include "Physics/NuclearState/PhaseSpaceIteratorModel.h"
 #include "Physics/QuasiElastic/XSection/NewQELXSec.h"
@@ -142,6 +150,7 @@ void          GetCommandLineArgs (int argc, char ** argv);
 void          PrintSyntax        (void);
 #ifdef __GENIE_HDF5_ENABLED__
 void          WriteToHDF5        (const TH2D & h, double Enu, const std::string fname);
+void          WriteNucleusToHDF5 (const TH2D & h, const std::string model, const std::string fname);
 #endif
 // Reimplementing ComputeFullQELPXSec for absolute control over *exactly* what's happening.
 // Note Eb is *not a reference*. Also, we always assume the nucleon is bound.
@@ -172,6 +181,8 @@ string kDefOutMapFile = "qel_map.root"; string gOptOutMapFile = kDefOutMapFile;
 double gOptEnu = -1.;
 // -- Order of the Gauss-Legendre angular approximation
 int kDefApproxOrder = 10; int gOptApproxOrder = kDefApproxOrder;
+// -- Number of nucleons to throw if mapping out nuclear model
+int kDefNumNucleons = 1000000; int gOptNumNucleons = kDefNumNucleons;
 // -- random number seed
 long int kDefRanSeed = -1; long int gOptRanSeed = kDefRanSeed;
 
@@ -518,15 +529,63 @@ int main(int argc, char ** argv)
     // Note, this is done by going "via" the NuclearModelMap <-- IntegralNuclearModel
     const NuclearModelI * nucl_model = dynamic_cast<
       const NuclearModelI*>( (alg->SubAlg("IntegralNuclearModel"))->SubAlg("NuclearModel") );
-    //LOG("gqelmap", pNOTICE) << "The nuclear model is " << nucl_model->Id().Key();
-    // If the model is not the PhaseSpaceIterator, complain and exit
     std::string nucl_model_name = nucl_model->Id().Name();
-    LOG("gqelmap", pFATAL) << "name is " << nucl_model_name;
     if( strcmp( nucl_model_name.c_str(), "genie::PhaseSpaceIteratorModel" ) != 0 ) {
-      LOG("gqelmap", pFATAL) << "You have configured a nuclear model that is not the "
-			     << "PhaseSpaceIteratorModel. Please switch to that model to run this"
-			     << " utility. Exiting now to save you time.";
-      return 2;
+      // If not the PhaseSpaceIteratorModel, then this is a realistic nuclear model.
+      // Ask it to generate a whole bunch of nucleons, save the result, clean up, exit.
+
+      LOG("gqelmap", pFATAL) << "Mapping out the nuclear model: " << nucl_model->Id().Key();
+
+      std::string title = "Phase space for ";
+      title.append((nucl_model->Id().Key()).c_str());
+      title.append(";pN [GeV/c];Eb [MeV]");
+      TH2D phase_space("phase_space", title.c_str(),
+		       200, 0.0, 2.0, 400, 0.0, 500.0);
+
+      // one Interaction is enough
+      InteractionList::const_iterator intliter = (intgen_map->GetInteractionList()).begin();
+      Interaction * interaction = new Interaction(**intliter);
+      Target * tgt = interaction->InitState().TgtPtr();
+
+      // Obtain a Vertex Generator anyway
+      const VertexGenerator * vtx_gen = dynamic_cast<
+	const VertexGenerator *>( algf->GetAlgorithm(RgAlg("genie::VertexGenerator", "Default")) );
+
+      for( int i = 0 ; i < gOptNumNucleons ; i++ ) {
+	if( i % 1000 == 0 ) { 
+	  std::cerr << Form("%d k", i/1000) << " / " << (gOptNumNucleons/1000) << " k\r";
+	}
+
+	// If this is LocalFGM, we need to generate a vertex
+	double radius = 0;
+	if( strcmp( nucl_model_name.c_str(), "genie::LocalFGM" ) == 0 ) {
+	  TVector3 vertex_pos = vtx_gen->GenerateVertex( interaction, tgt->A() );
+	  radius = vertex_pos.Mag();
+	  tgt->SetHitNucPosition( radius );
+	  //LOG("gqelmap", pFATAL) << "Set radius " << radius;
+	} // Generate a vertex.
+
+	nucl_model->GenerateNucleon(*tgt, radius);
+	double Eb_model = nucl_model->RemovalEnergy() * units::GeV / units::MeV;
+	double pN_model = nucl_model->Momentum();
+	phase_space.Fill( pN_model, Eb_model );
+      }
+      std::cerr << "Done processing nucleons" << std::endl;
+
+      TFile fout(gOptOutMapFile.c_str(), "RECREATE");
+      phase_space.Write();
+      fout.Close();
+
+      // and if we have HDF5 write an HDF5 too
+#ifdef __GENIE_HDF5_ENABLED__
+      std::string hdf5_output = gOptOutMapFile.substr(0, gOptOutMapFile.find_last_of("."));
+      hdf5_output.append(".h5"); // replace ".root" with ".h5"
+      WriteNucleusToHDF5(phase_space, nucl_model->Id().Key(), hdf5_output);
+#endif
+
+      delete interaction;
+      
+      return 0;
     }
     const PhaseSpaceIteratorModel * ps_model = dynamic_cast<
 				const PhaseSpaceIteratorModel*>( nucl_model );
@@ -578,7 +637,7 @@ int main(int argc, char ** argv)
       TLorentzVector nup4(0., 0., gOptEnu, gOptEnu);
       interaction->InitStatePtr()->SetProbeP4(nup4);
       
-      Target* tgt = interaction->InitState().TgtPtr();      
+      Target* tgt = interaction->InitState().TgtPtr();
       // Construct the integrating function.
       
       // Using raw pointer here, that's what ROOT wants
@@ -621,7 +680,8 @@ int main(int argc, char ** argv)
 	Eb *= units::MeV / units::GeV; // to GeV
 	func->SetpN(pN); func->SetEb(Eb);
 	if( iy != iy_prev ) {
-	  LOG("gqelmap", pDEBUG) << "iy --> " << iy << " , Eb = " << 1000. * Eb << " MeV" ;
+	  LOG("gqelmap", pDEBUG) << "iy --> " << iy << " , Eb = " 
+				 << units::GeV / units::MeV * Eb << " MeV" ;
 	  iy_prev = iy;
 	  //gObjectTable->Print();
 	}
@@ -635,7 +695,7 @@ int main(int argc, char ** argv)
 	//double xsec = ig.Integral(kine_min, kine_max);
 	
 	double xsec = 0.0;
-	int n_lepton_approx = 10;
+	int n_lepton_approx = 30;
 	GaussLegQuad approx_lep = GLQuadLib->GetGLQuad(n_lepton_approx);
 	for( int ic = 0; ic < n_lepton_approx; ic++ ) {
 	  double wic  = (approx_lep.weights)[ic];
@@ -762,10 +822,17 @@ void GetCommandLineArgs(int argc, char ** argv)
 
   // Gauss-Legendre approximant order
   if( parser.OptionExists('a') || parser.OptionExists("angular-approximation-order") ) {
-    LOG("qelmap", pINFO) << "Reading angular approximation order";
+    LOG("gqelmap", pINFO) << "Reading angular approximation order";
     gOptApproxOrder = (parser.OptionExists('a')) ? 
       parser.ArgAsInt('a') : parser.ArgAsInt("angular-approximation-order");
-  } else { LOG("qelmap", pINFO) << "Unspecified angular approximation order - Using default"; }
+  } else { LOG("gqelmap", pINFO) << "Unspecified angular approximation order - Using default"; }
+
+  // Number of nucleons
+  if( parser.OptionExists('n') || parser.OptionExists("num-nucleons") ) {
+    LOG("gqelmap", pINFO) << "Reading number of nucleons";
+    gOptNumNucleons = (parser.OptionExists('n')) ?
+      parser.ArgAsInt('n') : parser.ArgAsInt("num-nucleons");
+  } else { LOG("gqelmap", pINFO) << "Unspecified number of nucleons - Using default"; }
 
   // random number seed
   if( parser.OptionExists("seed") ) {
@@ -784,6 +851,7 @@ void GetCommandLineArgs(int argc, char ** argv)
      << "\n Output map file : " << gOptOutMapFile
      << "\n Neutrino energy : " << gOptEnu << " GeV"
      << "\n Order of approximation for nucleon angular direction: " << gOptApproxOrder
+     << "\n Number of nucleons to map nuclear models: " << gOptNumNucleons
      << "\n Random number seed : " << gOptRanSeed
      << "\n";
 
@@ -821,4 +889,32 @@ void WriteToHDF5(const TH2D & h, double Enu, const std::string fname) {
   DataSet eset = fhout.createDataSet("Enu", PredType::NATIVE_DOUBLE, espace);
   eset.write(&Enu, PredType::NATIVE_DOUBLE);
 }
+//____________________________________________________________________________
+// Similar to the above, but only one set with the population of nucleons in phase space
+// from a model (that is not the PhaseSpaceIteratorModel)
+void WriteNucleusToHDF5(const TH2D & h, const std::string model, const std::string fname) {
+  const int nx = h.GetNbinsX();
+  const int ny = h.GetNbinsY();
+
+  // flatten into row-major contiguous buffer
+  std::vector<double> buffer(nx*ny, 0.0);
+  for( int ix = 1; ix <= nx; ix++ ) {
+    for( int iy = 1; iy <= ny; iy++ ) {
+      buffer[(ix-1)*ny + (iy-1)] = h.GetBinContent(ix, iy);
+    }
+  }
+
+  // sanitise model name
+  std::string safe_model = model;
+  std::replace(safe_model.begin(), safe_model.end(), '/', '_');
+  
+  H5File fhout(fname, H5F_ACC_TRUNC);
+
+  hsize_t dims[3] = {1, static_cast<hsize_t>(nx), static_cast<hsize_t>(ny)};
+  DataSpace space(3, dims);
+  
+  DataSet dset = fhout.createDataSet(safe_model.c_str(), PredType::NATIVE_DOUBLE, space);
+  dset.write(buffer.data(), PredType::NATIVE_DOUBLE);
+}
+
 #endif
