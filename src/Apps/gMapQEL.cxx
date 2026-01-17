@@ -678,6 +678,7 @@ int main(int argc, char ** argv)
        */
       
       steady_clock::time_point start = steady_clock::now();
+      steady_clock::time_point prev = start;
 	
       int iy_prev = -1;
       while( ps_model->Next() ) {
@@ -687,14 +688,7 @@ int main(int argc, char ** argv)
 	double pN = phase_space.GetXaxis()->GetBinCenter(ix);
 	double Eb = phase_space.GetYaxis()->GetBinCenter(iy);
 	Eb *= units::MeV / units::GeV; // to GeV
-	func->SetpN(pN); func->SetEb(Eb);
-	if( iy != iy_prev ) {
-	  LOG("gqelmap", pDEBUG) << "iy --> " << iy << " , Eb = " 
-				 << units::GeV / units::MeV * Eb << " MeV" ;
-	  iy_prev = iy;
-	  //gObjectTable->Print();
-	}
-	
+	func->SetpN(pN); func->SetEb(Eb);	
 
 	//LOG("gqelmap", pDEBUG) << "trying pN = " << pN << " GeV/c, Eb = "
 	//		       << Eb << " GeV";
@@ -723,6 +717,18 @@ int main(int argc, char ** argv)
 	//LOG("gqelmap", pINFO) << "total xsec = " << xsec;
 	// error?
 	ps_model->SetXSec(xsec, 0.);
+
+	if( iy != iy_prev ) {
+	  steady_clock::time_point ts_now = steady_clock::now();
+	  duration<double> time_span_to_now = duration_cast<duration<double>>(ts_now - prev);
+	  LOG("gqelmap", pNOTICE) << "Evaluated iy = " << iy << " (Eb = "
+				  << Eb * units::GeV / units::MeV << " MeV) in " 
+				  << time_span_to_now.count() << " s";
+	  prev = ts_now;
+	  iy_prev = iy;
+	}
+
+
       } // loop over (pN, Eb) bins
       
       delete func;

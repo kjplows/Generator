@@ -195,7 +195,7 @@
   <priority msgstream="ReinSehgalSpp">         NOTICE </priority>
   <priority msgstream="RSHAmpl">               WARN   </priority>
   <priority msgstream="SPPEventGen">          NOTICE </priority>
-  <priority msgstream="Registry">              INFO   </priority>
+  <priority msgstream="Registry">              WARN   </priority>
   <priority msgstream="ReW">                   NOTICE </priority>
   <priority msgstream="RESHadronicVtx">        WARN   </priority>
   <priority msgstream="RESKinematics">         WARN   </priority>
@@ -251,6 +251,7 @@
   <priority msgstream="gcalchedisdiffxsec">  INFO   </priority>
   <priority msgstream="gmkhedissf">          INFO   </priority>
   <priority msgstream="gmkphotonsf">         INFO   </priority>
+  <priority msgstream="gqelmap">             NOTICE  </priority>
   <priority msgstream="gevgen_hnl">          FATAL </priority>
   <priority msgstream="gevgen_pghnl">        FATAL </priority>
   <priority msgstream="gevald_hnl">          FATAL </priority>
