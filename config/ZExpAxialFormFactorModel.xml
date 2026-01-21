@@ -50,7 +50,7 @@ QEL-Q4limit bool    Yes        1/Q^4 limit conditions     GPL value: QEL-Q4limit
 
     <param type="string"   name="CommonParam"> QuasiElastic  </param>
     
-    <param type="bool"   name="QEL-Q4limit"> false  </param>
+    <param type="bool"   name="QEL-Q4limit"> true   </param>
     <param type="int"    name="QEL-Kmax">     2     </param>
 
     <param type="double" name="QEL-T0">   -0.5   </param>
@@ -58,21 +58,6 @@ QEL-Q4limit bool    Yes        1/Q^4 limit conditions     GPL value: QEL-Q4limit
 
     <param type="double" name="QEL-Z_A1">   1.65    </param>
     <param type="double" name="QEL-Z_A2">  -0.94    </param>
-
-  </param_set>
-
-  <param_set name="minervaFull"> 
-
-    <param type="string"   name="CommonParam"> QuasiElastic  </param>
-    
-    <param type="bool"   name="QEL-Q4limit"> true   </param>
-    <param type="int"    name="QEL-Kmax">     2     </param>
-
-    <param type="double" name="QEL-T0">   -0.5   </param>
-    <param type="double" name="QEL-Tcut">  0.161604   </param> <!-- 9*m_pi0^2 -->
-
-    <param type="double" name="QEL-Z_A1">   1.64778080    </param>
-    <param type="double" name="QEL-Z_A2">  -0.94181417    </param>
 
   </param_set>
 
@@ -97,7 +82,7 @@ QEL-Q4limit bool    Yes        1/Q^4 limit conditions     GPL value: QEL-Q4limit
 
     <param type="string"   name="CommonParam"> QuasiElastic  </param>
     
-    <param type="bool"   name="QEL-Q4limit"> false  </param>
+    <param type="bool"   name="QEL-Q4limit"> true   </param>
     <param type="int"    name="QEL-Kmax">     2     </param>
 
     <param type="double" name="QEL-T0">    -0.5    </param>
@@ -105,21 +90,6 @@ QEL-Q4limit bool    Yes        1/Q^4 limit conditions     GPL value: QEL-Q4limit
 
     <param type="double" name="QEL-Z_A1">   1.721     </param>
     <param type="double" name="QEL-Z_A2">  -0.31      </param>
-
-  </param_set> 
-
-  <param_set name="lqcdFull"> 
-
-    <param type="string"   name="CommonParam"> QuasiElastic  </param>
-    
-    <param type="bool"   name="QEL-Q4limit"> true   </param>
-    <param type="int"    name="QEL-Kmax">     2     </param>
-
-    <param type="double" name="QEL-T0">    -0.5    </param>
-    <param type="double" name="QEL-Tcut">  0.161604   </param>
-
-    <param type="double" name="QEL-Z_A1">   1.72089706     </param>
-    <param type="double" name="QEL-Z_A2">  -0.30982708     </param>
   </param_set> 
 
 </alg_conf>
