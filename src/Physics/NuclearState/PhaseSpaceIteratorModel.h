@@ -69,6 +69,12 @@ public:
   int Y() const { return fY; }
   const TH2D & PhaseSpace() const { return *fPhaseSpace; }
 
+  // Utility functions to return all bin centres / edges
+  std::vector<double> XCentres() const;
+  std::vector<double> XEdges() const;
+  std::vector<double> YCentres() const;
+  std::vector<double> YEdges() const;
+
   // -- Iterate over histogram bins
   bool Next() const;
   // -- Reset the histogram and counters

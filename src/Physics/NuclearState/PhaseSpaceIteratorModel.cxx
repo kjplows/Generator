@@ -104,3 +104,37 @@ bool PhaseSpaceIteratorModel::GenerateNucleon(const double pN, const double Eb,
   return true;
 }
 //____________________________________________________________________________
+std::vector<double> PhaseSpaceIteratorModel::XCentres() const {
+  std::vector<double> xc;
+  for( int ix = 1 ; ix <= fPhaseSpace->GetNbinsX() ; ix++ ){ 
+    xc.emplace_back( fPhaseSpace->GetXaxis()->GetBinCenter(ix) );
+  }
+  return xc;
+}
+//____________________________________________________________________________
+std::vector<double> PhaseSpaceIteratorModel::YCentres() const {
+  std::vector<double> yc;
+  for( int iy = 1 ; iy <= fPhaseSpace->GetNbinsY() ; iy++ ){ 
+    yc.emplace_back( fPhaseSpace->GetYaxis()->GetBinCenter(iy) );
+  }
+  return yc;
+}
+//____________________________________________________________________________
+std::vector<double> PhaseSpaceIteratorModel::XEdges() const {
+  std::vector<double> xc;
+  for( int ix = 1 ; ix <= fPhaseSpace->GetNbinsX() ; ix++ ){ 
+    xc.emplace_back( fPhaseSpace->GetXaxis()->GetBinLowEdge(ix) );
+  }
+  xc.emplace_back( fPhaseSpace->GetXaxis()->GetBinUpEdge(fPhaseSpace->GetNbinsX()) );
+  return xc;
+}
+//____________________________________________________________________________
+std::vector<double> PhaseSpaceIteratorModel::YEdges() const {
+  std::vector<double> yc;
+  for( int iy = 1 ; iy <= fPhaseSpace->GetNbinsY() ; iy++ ){ 
+    yc.emplace_back( fPhaseSpace->GetYaxis()->GetBinLowEdge(iy) );
+  }
+  yc.emplace_back( fPhaseSpace->GetYaxis()->GetBinUpEdge(fPhaseSpace->GetNbinsY()) );
+  return yc;
+}
+//____________________________________________________________________________
