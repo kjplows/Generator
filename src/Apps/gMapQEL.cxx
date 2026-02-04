@@ -160,8 +160,14 @@ void          WriteToHDF5        (const TH2D & h, double Enu, const std::string 
 void          WriteNucleusToHDF5 (const TH2D & h, const std::string model, const std::string fname);
 #endif
 // Reimplementing ComputeFullQELPXSec for absolute control over *exactly* what's happening.
-// Note Eb is *not a reference*. Also, we always assume the nucleon is bound.
-// Because genie::utils::BindHitNucleon() isn't called, we just pass the pN and Eb.
+// Always assume the nucleon is bound.
+double        ComputeVectorisedQELPXSec(Interaction * interaction,
+					const XSecAlgorithmI * xsec_model,
+					const double pN, const double Eb, 
+					const double Enu, const double ENi,
+					const double lepMass, const double finalNucMass,
+					GaussLegQuad approximant,
+					GaussLegQuad lep_approximant);
 double        ComputeGridQELPXSec(Interaction * interaction,
 				  const XSecAlgorithmI * xsec_model,
 				  double cth0, double ph0, 
@@ -176,7 +182,7 @@ double        ComputeSinglePoint(Interaction * interaction,
 				 double lepMass, double mNf);
 // Helpers
 TVector3 COMframe2Lab(const genie::InitialState & initialState);
-TH2C SupportMask(const double tgtMass, const double nucleonMass, 
+TH2D SupportMask(const double tgtMass, const double nucleonMass, 
 		 std::vector<double> pN_vec, std::vector<double> Eb_vec);
 
 // Global variables
@@ -281,12 +287,13 @@ TVector3 COMframe2Lab(const genie::InitialState& initialState) {
   return beta;
 }
 //____________________________________________________________________________
-// Helper. Makes a TH2C (1 char per bin), with 1 if the hit nucleon is above threshold,
-// and 0 if below. Reimplementation of BindHitNucleon.
-TH2C SupportMask( const double tgtMass, const double nucleonMass,
+// Helper. Reimplementation of BindHitNucleon.
+// Makes a TH2D with the initial energy of the off-shell struck nucleon,
+// which is >= 0 if have support, or -1 if no support
+TH2D SupportMask( const double tgtMass, const double nucleonMass,
 		  std::vector<double> pN_vec, std::vector<double> Eb_vec ) {
   const int nx = pN_vec.size(); const int ny = Eb_vec.size();
-  TH2C support_mask("support_mask", "Support over phase space", nx, 0, nx, ny, 0, ny);
+  TH2D support_mask("support_mask", "Support over phase space", nx, 0, nx, ny, 0, ny);
 
   // RETHERE: SpetralFunc does the calc differently, return here.
   // This uses the Bodek-Ritchie Fermi gas model convention
@@ -294,19 +301,156 @@ TH2C SupportMask( const double tgtMass, const double nucleonMass,
     double pN = pN_vec[ix-1];
     bool have_exceeded_support = false;
     for( int iy = 1; iy <= ny; iy++ ) {
-      char cont = 0;
+      double cont = -1.0;
       if( ! have_exceeded_support ) {
 	double Eb = Eb_vec[iy-1] * units::MeV / units::GeV;
 	double Mf = tgtMass + Eb - nucleonMass;
+	double ENi = tgtMass - std::sqrt( Mf*Mf + pN*pN );
 	// Support is lost if the mass of the hit nucleon + nuclear remnant system is > tgt nucleus
-	if( tgtMass < std::sqrt( Mf*Mf + pN*pN ) ) { have_exceeded_support = true; }
-	else { cont = 1; }
+	if( ENi < 0.0 ) { have_exceeded_support = true; }
+	else { cont = ENi; }
       } // only bother calculating while potentially we have support
 
       support_mask.SetBinContent(ix, iy, cont);
     } // loop over Eb
   } // loop over pN
   return support_mask;
+}
+//____________________________________________________________________________
+// Refactored call to ComputeGridQELPXSec()
+double ComputeVectorisedQELPXSec( Interaction * interaction,
+				  const XSecAlgorithmI * xsec_model,
+				  const double pN, const double Eb, 
+				  const double Enu, const double ENi,
+				  const double lepMass, const double finalNucMass,
+				  GaussLegQuad approximant,
+				  GaussLegQuad lep_approximant ) {
+
+  // For all iterators used in these lambdas, reset them to begin immediately after filling.
+  // For each vector constructed, declare an iterator immediately after construction
+  // https://stackoverflow.com/questions/12511711 for the magic
+
+  // First get the nodes from the approximant
+  std::vector<double> cosths  = approximant.nodes; 
+  std::vector<double> weights = approximant.weights;
+
+  std::vector<double>::iterator it_cth = cosths.begin();
+  std::vector<double>::iterator it_wgt = weights.begin();
+
+  // Sin theta
+  std::vector<double> sinths;
+  std::generate_n( std::back_inserter(sinths), cosths.size(), [&]()->double{
+      double cth = (*it_cth);
+      double sth = std::sqrt(1.0-cth*cth); // fine to take +'ve root due to phi symmetry
+      ++it_cth; return sth;} );
+  std::vector<double>::iterator it_sth = sinths.begin();
+  it_cth = cosths.begin();
+
+  // Mandelstam s
+  std::vector<double> mand_s;
+  std::generate_n( std::back_inserter(mand_s), cosths.size(), [&]()->double{ 
+      double s=(ENi*ENi - pN*pN + 2.0 * Enu * (ENi - pN * (*it_cth)));
+      ++it_cth; return s;} );
+  std::vector<double>::iterator it_mds = mand_s.begin();
+  it_cth = cosths.begin();
+
+  // Centre-of-mass energy
+  std::vector<double> ECMs; 
+  std::generate_n( std::back_inserter(ECMs), mand_s.size(), [&]()->double{
+      double ECM=std::sqrt(*it_mds);
+      ++it_mds; return ECM;} );
+  std::vector<double>::iterator it_ecm = ECMs.begin();
+  it_mds = mand_s.begin();
+
+  // Threshold check; ECM >= sum of on shell FS masses
+  std::vector<bool> threshold_mask;
+  std::generate_n( std::back_inserter(threshold_mask), mand_s.size(), [&]()->bool{
+      bool passes=( (*it_ecm) >= lepMass + finalNucMass );
+      ++it_ecm; return passes;} );
+  std::vector<bool>::iterator it_bth = threshold_mask.begin();
+  it_ecm = ECMs.begin();
+  
+  // Outgoing lepton energy. Returns -1 for events failing threshold
+  std::vector<double> leptonEs;
+  std::generate_n( std::back_inserter(leptonEs), mand_s.size(), [&]()->double{
+      double Elep = -1.0;
+      if( (*it_bth) ) {
+	Elep=( (*it_mds) - finalNucMass*finalNucMass + lepMass*lepMass )/(2.0 * (*it_ecm));
+      } // if passes threshold
+      ++it_bth; ++it_mds; ++it_ecm; return Elep;} );
+  std::vector<double>::iterator it_elp = leptonEs.begin();
+  it_bth = threshold_mask.begin();
+  it_mds = mand_s.begin();
+  it_ecm = ECMs.begin();
+
+  // Lepton check: Elep >= Mlep
+  std::vector<bool> lepton_mask;
+  std::generate_n( std::back_inserter(lepton_mask), leptonEs.size(), [&]()->bool{
+      double Elep = (*it_elp);
+      bool passes=(Elep >= lepMass);
+      ++it_elp; return passes;} );
+  std::vector<bool>::iterator it_blp = lepton_mask.begin();
+  it_elp = leptonEs.begin();
+
+  // Outgoing lepton momentum. Returns -1 for events failing lepton check
+  std::vector<double> leptonPs;
+  std::generate_n( std::back_inserter(leptonPs), leptonEs.size(), [&]()->double{
+      double Plep = -1.0;
+      if( (*it_blp) ) {
+	double Elep = (*it_elp);
+	Plep = std::sqrt(Elep*Elep - lepMass*lepMass);
+      } // if Elep > Mlep
+      ++it_blp; ++it_elp; return Plep;} );
+  std::vector<double>::iterator it_plp = leptonPs.begin();
+  it_blp = lepton_mask.begin();
+  it_elp = leptonEs.begin();
+
+  // mask is the element wise AND of the threshold and lepton masks
+  // From now on, we'll use it to return early on events that fail
+  std::vector<bool> mask;
+  std::generate_n( std::back_inserter(mask), threshold_mask.size(), [&]()->bool{
+      bool passes=( (*it_bth) && (*it_blp) );
+      ++it_bth; ++it_blp; return passes;} );
+  std::vector<bool>::iterator it_bmk = mask.begin();
+  it_bth = threshold_mask.begin();
+  it_blp = lepton_mask.begin();
+
+  // TLorentzVectors are heavy, I will do the maths.
+  // First, write out the components as 4-arrays in the (X, Y, Z, T) convention.
+  // Default for events not passing the mask is {0., 0., 0., -1.}
+  std::vector<std::array<double, 4>> totMoms;
+  std::generate_n( std::back_inserter(totMoms), mask.size(), [&]()->std::array<double, 4>{ 
+      std::array<double, 4> outArray = {0., 0., 0., -1.};
+      if( *it_bmk ) {
+	double X = 0.;
+	double Y = pN * (*it_sth);
+	double Z = pN * (*it_cth) + Enu;
+	double T = ENi + Enu;
+	outArray = {X, Y, Z, T};
+      } // calculate momentum if event passes
+      ++it_cth; ++it_sth; ++it_bmk; return outArray;});
+  std::vector<std::array<double, 4>>::iterator it_top = totMoms.begin();
+  it_bmk = mask.begin();
+  it_cth = cosths.begin();
+  it_sth = sinths.begin();
+
+  // Boost vector is a 3-vector, {X/T, Y/T, Z/T}
+  std::vector<std::array<double, 3>> boostVecs;
+  std::generate_n( std::back_inserter(boostVecs), mask.size(), [&]()->std::array<double, 3>{
+      std::array<double, 3> outArray = {-1., -1., -1.};
+      if( *it_bmk ) {
+	std::array<double, 4> totMom = (*it_top);
+	double bx = totMom[0]/totMom[3];
+	double by = totMom[1]/totMom[3];
+	double bz = totMom[2]/totMom[3];
+	outArray = {bx, by, bz};
+      } // calculate boost vector if event passes
+      ++it_bmk; ++it_top; return outArray;} );
+  std::vector<std::array<double, 3>>::iterator it_bvc = boostVecs.begin();
+  it_bmk = mask.begin();
+  it_top = totMoms.begin();
+  
+  return 0.;
 }
 //____________________________________________________________________________
 // Our own implementation of ComputeFullQELdXSec, including bits from BindHitNucleon()
@@ -705,9 +849,11 @@ int main(int argc, char ** argv)
       std::vector<double> pN_vec = ps_model->XCentres();
       std::vector<double> Eb_vec = ps_model->YCentres();
       
-      const double tgtMass = tgt->Mass();
-      const double hitNucMass = tb->GetParticle( tgt->HitNucPdg() )->Mass();
-      TH2C support_mask = SupportMask( tgtMass, hitNucMass, pN_vec, Eb_vec );
+      const double tgtMass      = tgt->Mass();
+      const double lepMass      = interaction->FSPrimLepton()->Mass();
+      const double hitNucMass   = tb->GetParticle( tgt->HitNucPdg() )->Mass();
+      const double finalNucMass = tb->GetParticle( interaction->RecoilNucleonPdg() )->Mass();
+      TH2D support_mask = SupportMask( tgtMass, hitNucMass, pN_vec, Eb_vec );
       
       // Now setup the custom loop.
       /*
@@ -727,9 +873,10 @@ int main(int argc, char ** argv)
 	
 	// sample from the centre of the bin
 	int ix = ps_model->X(); int iy = ps_model->Y();
-	bool support = static_cast<bool>( support_mask.GetBinContent(ix, iy) );
+	double ENi = support_mask.GetBinContent(ix, iy);
+	bool support = ( ENi >= 0.0 );
 	double xsec = 0.0;
-
+	
 	if( support ) {
 	  double pN = phase_space.GetXaxis()->GetBinCenter(ix);
 	  double Eb = phase_space.GetYaxis()->GetBinCenter(iy);
@@ -738,6 +885,10 @@ int main(int argc, char ** argv)
 	  
 	  //double xsec = ig.Integral(kine_min, kine_max);
 	  
+	  xsec = ComputeVectorisedQELPXSec( interaction, alg, 
+					    pN, Eb, gOptEnu, ENi, lepMass, finalNucMass,
+					    approximant, lep_approximant );
+	  /*
 	  for( int ic = 0; ic < gOptLepApproxOrder; ic++ ) {
 	    double wic  = (lep_approximant.weights)[ic];
 	    double cth0 = (lep_approximant.nodes)[ic];
@@ -753,6 +904,7 @@ int main(int argc, char ** argv)
 	    
 	    xsec += wic * xsec_cth0;
 	  } // loop over cth0
+	  */
 	
 	}
 	//LOG("gqelmap", pINFO) << "total xsec = " << xsec;
