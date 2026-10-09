@@ -21,6 +21,8 @@ if(($match = grep(/--help/i, @ARGV)) > 0) {
   print "    pythia8              Use the PYTHIA8 MC generator                                default: enabled  \n";
   print "    incl                 Interface with INCL++ for nuclear transport                 default: disabled \n";
   print "    geant4               Interface with Geant4 for nuclear transport                 default: disabled \n";
+  print "    hepmc3               Interface with HepMC3 event format library                  default: disabled \n";
+  print "    marley               Interface with MARLEY                                       default: disabled \n";
   print "    lhapdf5              Use the LHAPDF5 parton density function library             default: enabled  \n";
   print "    lhapdf6              Use the LHAPDF6 parton density function library             default: disabled \n";
   print "    apfel                Use APFEL to compute NLO structure functions                default: disabled \n";
@@ -1159,6 +1161,7 @@ print MKCONF "GOPT_ENABLE_EVTLIB=$gopt_enable_evtlib\n";
 print MKCONF "GOPT_ENABLE_INCL=$gopt_enable_incl\n";
 print MKCONF "GOPT_ENABLE_GEANT4_INTERFACE=$gopt_enable_geant4_interface\n";
 print MKCONF "GOPT_ENABLE_HEPMC3_INTERFACE=$gopt_enable_hepmc3_interface\n";
+print MKCONF "GOPT_ENABLE_MARLEY=$gopt_enable_marley\n";
 print MKCONF "GOPT_ENABLE_MASTERCLASS=$gopt_enable_masterclass\n";
 print MKCONF "GOPT_ENABLE_TEST=$gopt_enable_test\n";
 print MKCONF "GOPT_ENABLE_DYLIBVERSION=$gopt_enable_dylibversion\n";
