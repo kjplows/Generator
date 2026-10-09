@@ -586,16 +586,18 @@ Generator-%d                alg     No
      <param type="alg" name="Generator-3">   genie::EventGenerator/MEC-CC       </param>
   </param_set>
 
+  <!-- MARLEY specific for debugging -->
+  <param_set name="MARLEY">
+     <param type="int" name="NGenerators">  2                                  </param>
+     <param type="alg" name="Generator-0">  genie::EventGenerator/MARLEY-CC    </param>
+     <param type="alg" name="Generator-1">  genie::EventGenerator/MARLEY-NC    </param>
+  </param_set>
 
-
-  <!-- Only the MARLEY channel (handy for the event-generator-list option of gmkspl) -->
   <param_set name="MARLEY-CC">
      <param type="int" name="NGenerators">  1                                  </param>
      <param type="alg" name="Generator-0">  genie::EventGenerator/MARLEY-CC    </param>
   </param_set>
 
-
-  <!-- Only the MARLEY NC channel -->
   <param_set name="MARLEY-NC">
      <param type="int" name="NGenerators">  1                                  </param>
      <param type="alg" name="Generator-0">  genie::EventGenerator/MARLEY-NC    </param>

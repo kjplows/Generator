@@ -354,6 +354,7 @@ void ConvertToGST(void)
   bool   brIsCoh       = false;  // Is Coherent?
   bool   brIsMec       = false;  // Is MEC?
   bool   brIsDfr       = false;  // Is Diffractive?
+  bool   brIsMarley    = false;  // Is MARLEY?
   bool   brIsImd       = false;  // Is IMD?
   bool   brIsNrm       = false;  // Is Norm?
   bool   brIsSingleK   = false;  // Is single kaon?  
@@ -481,6 +482,7 @@ void ConvertToGST(void)
   s_tree->Branch("dis",	          &brIsDis,	    "dis/O"	    );
   s_tree->Branch("coh",           &brIsCoh,         "coh/O"	    );
   s_tree->Branch("dfr",           &brIsDfr,         "dfr/O"	    );
+  s_tree->Branch("marley",        &brIsMarley,      "marley/O"	    );
   s_tree->Branch("imd",	          &brIsImd,	    "imd/O"	    );
   s_tree->Branch("norm",          &brIsNrm,         "norm/O"	    );
   s_tree->Branch("imdanh",        &brIsImdAnh,	    "imdanh/O"	    );
@@ -712,12 +714,13 @@ void ConvertToGST(void)
     bool is_weakcc    = proc_info.IsWeakCC();
     bool is_weaknc    = proc_info.IsWeakNC();
     bool is_mec       = proc_info.IsMEC();
+    bool is_marley    = proc_info.IsMarley();
     bool is_amnugamma = proc_info.IsAMNuGamma();
     bool is_hnl       = proc_info.IsHNLDecay();
     bool is_norm      = proc_info.IsNorm();
     
     if (!hitnucl && neutrino) {
-        assert(is_coh || is_imd || is_imdanh || is_nuel | is_amnugamma || is_coh_el || is_hnl || is_norm);
+        assert(is_coh || is_imd || is_marley || is_imdanh || is_nuel | is_amnugamma || is_coh_el || is_hnl || is_norm);
     }
   
     // Hit quark - set only for DIS events
@@ -818,8 +821,9 @@ void ConvertToGST(void)
     // Extract more info on the hadronic system
     // Only for QEL/RES/DIS/COH/MEC events
     // Edit: Add in HNL events
+    // Add in MARLEY too
     //
-    bool study_hadsyst = (is_qel || is_res || is_dis || is_coh || is_dfr || is_mec || is_singlek || is_hnl);
+    bool study_hadsyst = (is_qel || is_res || is_dis || is_coh || is_dfr || is_mec || is_singlek || is_hnl || is_marley);
     
     //
 
@@ -911,9 +915,9 @@ void ConvertToGST(void)
     vector<int> prim_had_syst;
     if(study_hadsyst) {
       // if coherent or free nucleon target set primary states equal to final states
-      // Edit: same for HNL
+      // Edit: same for HNL and MARLEY (MARLEY handles its own de-excitation)
       
-      if(!pdg::IsIon(target->Pdg()) || (is_coh) || (is_hnl)) {
+      if(!pdg::IsIon(target->Pdg()) || (is_coh) || (is_hnl) || (is_marley)) {
 
 	for( vector<int>::const_iterator hiter = final_had_syst.begin();
 	     hiter != final_had_syst.end(); ++hiter) {
@@ -1033,6 +1037,7 @@ void ConvertToGST(void)
     brIsDis      = is_dis;  
     brIsCoh      = is_coh;  
     brIsDfr      = is_dfr;  
+    brIsMarley   = is_marley;
     brIsImd      = is_imd;
     brIsNrm      = is_norm;
     brIsSingleK  = is_singlek;    
