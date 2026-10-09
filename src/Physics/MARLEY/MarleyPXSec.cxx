@@ -96,7 +96,7 @@ bool MarleyPXSec::ValidProcess(const Interaction * interaction) const
   // reaction and the kinematics, so only the probe type and current need
   // to be checked here
   if ( proc_info.IsMarley() ) {
-    bool is_nu = pdg::IsNeutrino( nu ) || pdg::IsAntiNeutrino( nu );
+    bool is_nu = pdg::IsNeutrino( init_state.ProbePdg() ) || pdg::IsAntiNeutrino( init_state.ProbePdg() );
     return is_nu && ( proc_info.IsWeakCC() || proc_info.IsWeakNC() );
   }
 

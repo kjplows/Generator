@@ -33,6 +33,14 @@ ifeq ($(strip $(GOPT_ENABLE_MARLEY)),YES)
   CPP_INCLUDES           += $(MARLEY_INCLUDES)
   ROOT_DICT_GEN_INCLUDES += $(MARLEY_INCLUDES)
   EXTRA_EXT_LIBS         += $(MARLEY_LIBRARIES)
+
+  # Need to add additional flags from marley-config
+  ROOT_DICT_GEN_INCLUDES += $(filter -I% -D%,$(MARLEY_FLAGS))
+  # And HepMC3 flags for dictionary generation
+  CXXFLAGS               += $(HEPMC3_FLAGS)
+  CPP_INCLUDES           += $(HEPMC3_INCLUDES)
+  ROOT_DICT_GEN_INCLUDES += $(HEPMC3_INCLUDES)
+  EXTRA_EXT_LIBS         += $(HEPMC3_LIBRARIES)
 else
   $(info $(PACKAGE) not build against MARLEY)
 endif
