@@ -8,4 +8,14 @@
     
   </param_set>
 
+
+  <param_set name="AR26-CC">
+     <param type="alg"  name="MarleyAlg"> genie::MarleyInterface/AR26-CC </param>
+  </param_set>
+
+
+  <param_set name="AR26-NC">
+     <param type="alg"  name="MarleyAlg"> genie::MarleyInterface/AR26-NC </param>
+  </param_set>
+
 </alg_conf>

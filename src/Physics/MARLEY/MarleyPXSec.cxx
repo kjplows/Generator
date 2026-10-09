@@ -16,6 +16,7 @@
 #include "Framework/Algorithm/AlgConfigPool.h"
 #include "Framework/Conventions/KineVar.h"
 #include "Framework/Conventions/Units.h"
+#include "Framework/EventGen/ChannelBlend.h"
 #include "Physics/MARLEY/MarleyInterface.h"
 #include "Physics/MARLEY/MarleyPXSec.h"
 
@@ -68,6 +69,13 @@ double MarleyPXSec::Integral(const Interaction* in) const
   // Probe kinetic energy (MeV)
   double probe_KE = ( probe_p4.E() - probe_p4.M() ) / genie::units::MeV;
 
+  // If the tune blends MARLEY with native GENIE channels, MARLEY is never used
+  // above the upper edge of the blend window. Return zero there rather than
+  // asking MARLEY for cross sections outside of its range of validity (this
+  // also keeps gmkspl from evaluating MARLEY at every knot up to 1 TeV).
+  if ( genie::utils::channelblend::IsActive()
+    && probe_p4.E() >= genie::utils::channelblend::Emax() ) return 0.;
+
   marley::Generator* marley_gen = fMARLEY->GetMarleyGenerator();
   double tot_xsec = marley_gen->total_xs( probe_pdg, probe_KE, tgt_pdg );
 
@@ -84,6 +92,15 @@ bool MarleyPXSec::ValidProcess(const Interaction * interaction) const
   const InitialState& init_state = interaction->InitState();
   const ProcessInfo&  proc_info  = interaction->ProcInfo();
 
+  // Dedicated MARLEY channel (MARLEY-CC / MARLEY-NC): MARLEY decides the
+  // reaction and the kinematics, so only the probe type and current need
+  // to be checked here
+  if ( proc_info.IsMarley() ) {
+    bool is_nu = pdg::IsNeutrino( nu ) || pdg::IsAntiNeutrino( nu );
+    return is_nu && ( proc_info.IsWeakCC() || proc_info.IsWeakNC() );
+  }
+
+  // Legacy mode (e.g., GTEST20_99a): MARLEY replaces the QE CC channel
   if ( !proc_info.IsQuasiElastic() ) return false;
 
   int nuc = init_state.Tgt().HitNucPdg();

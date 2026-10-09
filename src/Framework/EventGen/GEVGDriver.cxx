@@ -17,6 +17,7 @@
 
 #include "Framework/Algorithm/AlgFactory.h"
 #include "Framework/EventGen/XSecAlgorithmI.h"
+#include "Framework/EventGen/ChannelBlend.h"
 #include "Framework/Conventions/Controls.h"
 #include "Framework/Conventions/Units.h"
 #include "Framework/EventGen/GEVGDriver.h"
@@ -403,16 +404,25 @@ double GEVGDriver::XSecSum(const TLorentzVector & nup4)
                fIntGenMap->FindGenerator(interaction)->CrossSectionAlg();
      assert(xsec_alg);
 
-     // compute (or evaluate) the cross section
-     double xsec = 0;
-     bool spline_exists = xssl->SplineExists(xsec_alg, interaction);
-     if (spline_exists && fUseSplines) {
-        double E = nup4.Energy();
-        xsec = xssl->GetSpline(xsec_alg,interaction)->Evaluate(E);
-     } else
-        xsec = xsec_alg->Integral(interaction);
+     // energy-dependent weight for blending MARLEY with native GENIE channels
+     // (unity unless the tune enables a MARLEY channel, see ChannelBlend.h)
+     double blend_w = utils::channelblend::Weight(
+                                  *interaction, ilst, nup4.Energy());
 
-     xsec = TMath::Max(0., xsec);
+     // compute (or evaluate) the cross section. Skip channels that are
+     // switched off at this energy: this also avoids calling MARLEY where it
+     // is not supposed to be used.
+     double xsec = 0;
+     if (blend_w > 0.) {
+       bool spline_exists = xssl->SplineExists(xsec_alg, interaction);
+       if (spline_exists && fUseSplines) {
+          double E = nup4.Energy();
+          xsec = xssl->GetSpline(xsec_alg,interaction)->Evaluate(E);
+       } else
+          xsec = xsec_alg->Integral(interaction);
+     }
+
+     xsec = TMath::Max(0., xsec) * blend_w;
 
      // sum-up and report
      xsec_sum += xsec;

@@ -313,6 +313,7 @@
    <config alg="genie::MarleyInterface">    MarleyInterface.xml </config>
    <config alg="genie::MarleyGenerator">    MarleyGenerator.xml </config>
    <config alg="genie::MarleyPXSec">        MarleyPXSec.xml     </config>
+   <config alg="genie::MarleyInteractionListGenerator"> MarleyInteractionListGenerator.xml </config>
    <config alg="genie::MarleyDeExcitation"> MarleyDeExcitation.xml </config>
 
 </genie_config>

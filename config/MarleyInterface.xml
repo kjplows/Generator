@@ -8,4 +8,20 @@
 
   </param_set>
 
+
+  <!-- MARLEY job file for the MARLEY-CC channel of the AR26 tune: nu_e + 40Ar CC
+       (HF-CRPA continuum + Bhattacharya 2009 discrete). Only CC reactions are
+       listed so that this generator can only produce CC events. -->
+  <param_set name="AR26-CC">
+     <param type="string" name="ConfigFileName"> ar26_cc.js </param>
+  </param_set>
+
+
+  <!-- MARLEY job file for the MARLEY-NC channel of the AR26 tune: coherent
+       elastic neutrino-nucleus scattering (CEvNS) on 40Ar for all four
+       (anti)neutrino flavours. -->
+  <param_set name="AR26-NC">
+     <param type="string" name="ConfigFileName"> ar26_nc.js </param>
+  </param_set>
+
 </alg_conf>

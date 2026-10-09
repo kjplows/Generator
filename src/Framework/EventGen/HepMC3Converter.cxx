@@ -119,6 +119,8 @@ namespace {
     { { SType::kScQuasiElastic, IType::kIntWeakNC }, 250 }, // QEL-NC
     { { SType::kScResonant, IType::kIntWeakCC }, 400 }, // RES-CC
     { { SType::kScResonant, IType::kIntWeakNC }, 450 }, // RES-NC
+    { { SType::kScMarley, IType::kIntWeakCC }, 120 }, // MARLEY-CC (1xx = low-energy family; avoids 100/150 used by IBD/CEvNS)
+    { { SType::kScMarley, IType::kIntWeakNC }, 170 }, // MARLEY-NC
 
     // Electromagnetic channels have negative process IDs according to E.C.1
     { { SType::kScCoherentElastic, IType::kIntEM }, -100 }, // COH-El-EM

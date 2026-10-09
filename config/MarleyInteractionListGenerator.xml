@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<!--
+Configuration of the MARLEY interaction list generator (see
+src/Physics/MARLEY/MarleyInteractionListGenerator.h)
+
+Configurable parameters:
+..........................................................................................
+Name       Type   Opt   Comment
+..........................................................................................
+is-CC      bool   Yes   list MARLEY-CC interactions      (default: false)
+is-NC      bool   Yes   list MARLEY-NC interactions      (default: false)
+MarleyAlg  alg    No    genie::MarleyInterface instance whose MARLEY generator is queried
+-->
+
+<alg_conf>
+
+  <param_set name="AR26-CC">
+     <param type="bool" name="is-CC">     true                                  </param>
+     <param type="alg"  name="MarleyAlg"> genie::MarleyInterface/AR26-CC       </param>
+  </param_set>
+
+
+  <param_set name="AR26-NC">
+     <param type="bool" name="is-NC">     true                                  </param>
+     <param type="alg"  name="MarleyAlg"> genie::MarleyInterface/AR26-NC       </param>
+  </param_set>
+
+</alg_conf>

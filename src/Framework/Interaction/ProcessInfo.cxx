@@ -81,6 +81,11 @@ bool ProcessInfo::IsSinglePion(void) const
   return (fScatteringType == kScSinglePion);
 }
 //____________________________________________________________________________
+bool ProcessInfo::IsMarley(void) const
+{
+  return (fScatteringType == kScMarley);
+}
+//____________________________________________________________________________
 bool ProcessInfo::IsSingleKaon(void) const
 {
   return (fScatteringType == kScSingleKaon);

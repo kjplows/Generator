@@ -7,7 +7,17 @@
 \class    genie::MarleyGenerator
 
 \brief    Simulate events using an interface to the external MARLEY
-          generator for low-energy neutrino interactions
+          generator for low-energy neutrino interactions.
+
+          MARLEY generates the *complete* event: the primary reaction and the
+          full de-excitation cascade of the residual nucleus. The entire
+          MARLEY history (excited residues, ejected nucleons and gammas, final
+          residue) is copied into the GHEP record, with mother/daughter links
+          and GENIE particle statuses, and with momenta converted from MeV
+          to GeV. As for GENIE's own nuclear remnant, the *final* residual
+          nucleus is recorded as a hadronic blob (kPdgHadronicBlob with status
+          kIStFinalStateNuclearRemnant); the earlier de-exciting residues keep
+          their nuclear PDG codes.
 
 \author   Steven Gardiner <gardiner \at fnal.gov>
           Fermi National Accelerator Laboratory
@@ -49,8 +59,10 @@ public :
   void Configure(const Registry& config);
   void Configure(string config);
 
-  void AddMarleyParticle( GHepRecord* event,
-    const HepMC3::GenParticle& part, int mom_index,
+  /// Appends one MARLEY particle to the GHEP record (converting MeV -> GeV),
+  /// registers it as a daughter of its mother(s), and returns its index
+  int AddMarleyParticle( GHepRecord* event,
+    const HepMC3::GenParticle& part, int mom1, int mom2,
     GHepStatus_t status, const TLorentzVector& v4 ) const;
 
 private:

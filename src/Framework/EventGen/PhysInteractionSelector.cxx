@@ -19,6 +19,7 @@
 #include "Framework/EventGen/XSecAlgorithmI.h"
 #include "Framework/Conventions/Units.h"
 #include "Framework/EventGen/PhysInteractionSelector.h"
+#include "Framework/EventGen/ChannelBlend.h"
 #include "Framework/EventGen/EventRecord.h"
 #include "Framework/EventGen/EventGeneratorI.h"
 #include "Framework/EventGen/InteractionList.h"
@@ -114,9 +115,16 @@ EventRecord * PhysInteractionSelector::SelectInteraction
 
      double xsec = 0; // cross section for this interaction
 
-     bool spline_computed = xssl->SplineExists(xsec_alg, interaction);
+     // energy-dependent weight for blending MARLEY with native GENIE channels
+     // (unity unless the tune enables a MARLEY channel, see ChannelBlend.h)
+     double blend_w = utils::channelblend::Weight(*interaction, ilst, p4.E());
+
+     bool spline_computed = fUseSplines && xssl->SplineExists(xsec_alg, interaction);
      bool eval = fUseSplines && spline_computed;
-     if (eval) {
+     if (blend_w <= 0.) {
+           // channel is switched off at this energy: do not evaluate it
+           xsec = 0.;
+     } else if (eval) {
            const InitialState & init = interaction->InitState();
            //const ProcessInfo & proc  = interaction->ProcInfo();
            double E = init.ProbeE(kRfLab);
@@ -131,7 +139,7 @@ EventRecord * PhysInteractionSelector::SelectInteraction
      } else {
            xsec = xsec_alg->Integral(interaction);
      }
-     TMath::Max(0., xsec);
+     xsec = TMath::Max(0., xsec) * blend_w;
 /*
      LOG("IntSel", pNOTICE)
        << interaction->AsString()

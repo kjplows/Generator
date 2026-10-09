@@ -20,6 +20,13 @@
 // MARLEY includes
 #include "marley/JSONConfig.hh"
 
+// GENIE includes
+#include "Framework/Numerical/RandomGen.h"
+
+// Standard library includes
+#include <cstdint>
+#include <functional>
+
 using namespace genie;
 
 //____________________________________________________________________________
@@ -62,6 +69,17 @@ void MarleyInterface::LoadConfig(void)
   full_path += "/data/evgen/marley/" + config_file_name;
   marley::JSONConfig jc( full_path );
   fMarleyGenerator = jc.create_generator();
+
+  // Seed MARLEY from the GENIE random number seed (so that jobs with
+  // different GENIE seeds do not produce identical MARLEY events). The name
+  // of this configuration is mixed in so that several MARLEY generators
+  // (e.g., MARLEY-CC and MARLEY-NC) in the same job are not correlated.
+  std::uint64_t seed = static_cast< std::uint64_t >(
+    genie::RandomGen::Instance()->GetSeed() );
+  seed ^= static_cast< std::uint64_t >(
+    std::hash< std::string >()( this->Id().Key() ) ) + 0x9e3779b97f4a7c15ULL
+    + ( seed << 6 ) + ( seed >> 2 );
+  fMarleyGenerator.reseed( seed );
 }
 //____________________________________________________________________________
 marley::Generator* MarleyInterface::GetMarleyGenerator() const {
