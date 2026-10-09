@@ -9,6 +9,7 @@
 //____________________________________________________________________________
 
 #include <cassert>
+#include <limits>
 
 #include <TVector3.h>
 #include <TSystem.h>
@@ -167,6 +168,21 @@ void GMCJDriver::ForceInteraction()
 
   LOG("GMCJDriver", pNOTICE)
     << "GMCJDriver will generate weighted events forcing the interaction. ";
+}
+//___________________________________________________________________________
+void GMCJDriver::SetFluxEnergyWindow(double emin, double emax)
+{
+  // Veto flux neutrinos outside of [emin,emax] (GeV). The vetoed neutrinos are
+  // still consumed from the flux driver (which keeps track of the exposure), but
+  // are never thrown at the detector.
+  //
+  fWindowMin = emin;
+  fWindowMax = emax;
+
+  LOG("GMCJDriver", pNOTICE)
+    << "Flux neutrinos will be vetoed outside of the energy window ["
+    << fWindowMin << ", " << fWindowMax << "] GeV. "
+    << "(The exposure of vetoed neutrinos is still accounted for.)";
 }
 //___________________________________________________________________________
 void GMCJDriver::ForceSingleProbScale()
@@ -463,6 +479,9 @@ void GMCJDriver::InitJob(void)
   fUseExtMaxPl        = false;
   fUseSplines         = false;
   fNFluxNeutrinos     = 0;     // <-- number of flux neutrinos thrown so far
+  fNFluxNeutrinosVetoed = 0;   // <-- number of flux neutrinos vetoed due to being outside an energy window
+  fWindowMin          = -1.0;  // <-- Lower edge of energy window
+  fWindowMax          = std::numeric_limits<float>::max(); // <-- Upper edge of energy window
 
   fXSecSplineNbins    = 100;   // <-- number of energy bins used in the xsec splines
   fPmaxLogBinning     = false; // <-- maximum interaction probability is computed in logarithmic energy bins
@@ -557,6 +576,16 @@ void GMCJDriver::GetMaxFluxEnergy(void)
   LOG("GMCJDriver", pNOTICE)
      << "Querying the flux driver for the maximum energy of flux neutrinos";
   fEmax = fFluxDriver->MaxEnergy();
+
+  // Neutrinos above the upper edge of the energy window are vetoed, so the
+  // interaction probability scale only needs to be valid up to that edge
+  if(fWindowMax < fEmax) {
+    LOG("GMCJDriver", pNOTICE)
+      << "Capping the maximum flux neutrino energy declared by the flux driver"
+      << " (" << fEmax << " GeV) to the upper edge of the energy window ("
+      << fWindowMax << " GeV)";
+    fEmax = fWindowMax;
+  }
 
   LOG("GMCJDriver", pNOTICE)
      << "Maximum flux neutrino energy = " << fEmax << " GeV";
@@ -1072,14 +1101,32 @@ bool GMCJDriver::GenerateFluxNeutrino(void)
 //
   LOG("GMCJDriver", pNOTICE) << "Generating a flux neutrino";
 
-  bool ok = fFluxDriver->GenerateNext();
-  if(!ok) {
-     LOG("GMCJDriver", pERROR)
-         << "*** The flux driver couldn't generate a flux neutrino!!";
-     return false;
+  bool ok = false;
+  while(true) {
+    ok = fFluxDriver->GenerateNext();
+    if(!ok) {
+      LOG("GMCJDriver", pERROR)
+	<< "*** The flux driver couldn't generate a flux neutrino!!";
+      return false;
+    }
+
+    // Every neutrino read from the flux driver is counted (the flux driver has
+    // already accounted for its exposure), whether it is vetoed or not
+    fNFluxNeutrinos++;
+
+    // Veto neutrinos outside of the flux energy window. By default
+    // the window is open, and nothing is vetoed.
+    const double Ev = fFluxDriver->Momentum().Energy();
+    if(Ev < fWindowMin || Ev > fWindowMax) {
+      fNFluxNeutrinosVetoed++;
+      LOG("GMCJDriver", pDEBUG)
+	<< "Vetoing flux neutrino with E = " << Ev << " GeV (outside of ["
+	<< fWindowMin << ", " << fWindowMax << "])";
+      continue;
+    }
+    break;
   }
 
-  fNFluxNeutrinos++;
   int                    nupdg = fFluxDriver -> PdgCode  ();
   const TLorentzVector & nup4  = fFluxDriver -> Momentum ();
   const TLorentzVector & nux4  = fFluxDriver -> Position ();

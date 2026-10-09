@@ -63,6 +63,7 @@ public :
   void SetPmaxNbins                (int nbins);
   void SetPmaxSafetyFactor         (double sf);
   void ForceInteraction            (void);
+  void SetFluxEnergyWindow         (double emin, double emax);
   void ForceSingleProbScale        (void);
   void PreSelectEvents             (bool preselect = true);
   bool PreCalcFluxProbabilities    (void);
@@ -76,6 +77,9 @@ public :
   // info needed for computing the generated sample normalization
   double   GlobProbScale  (void) const { return fGlobPmax;                  }
   long int NFluxNeutrinos (void) const { return (long int) fNFluxNeutrinos; }
+  long int NFluxNeutrinosVetoed (void) const { return (long int) fNFluxNeutrinosVetoed; }
+  double   FluxWindowMin  (void) const { return fWindowMin; }
+  double   FluxWindowMax  (void) const { return fWindowMax; }
   map<int, double> SumFluxIntProbs(void) const { return fSumFluxIntProbs;   }
 
   /// Returns the path-length-weighted total cross section for the flux
@@ -142,6 +146,9 @@ private:
   int             fSelTgtPdg;          ///< [current] selected target material PDG code
   map<int,double> fCurCumulProbMap;    ///< [current] cummulative interaction probabilities
   double          fNFluxNeutrinos;     ///< [current] number of flux nuetrinos fired by the flux driver so far
+  double          fNFluxNeutrinosVetoed; ///< [current] number of flux nuetrinos vetoed so far
+  double          fWindowMin;          ///< [config] lower edge of flux energy window (GeV)
+  double          fWindowMax;          ///< [config] upper edge of flux energy window (GeV)
   int             fXSecSplineNbins;    ///< [config] number of bins in energy used in the xsec splines
   bool            fPmaxLogBinning;     ///< [config] maximum interaction probability is computed in logarithmic energy bins
   int             fPmaxNbins;          ///< [config] number of bins in energy used in the maximum interaction probability
