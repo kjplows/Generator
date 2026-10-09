@@ -36,6 +36,7 @@
              [-F fid_cut_string]
              [-S nrays]
              [-z zmin]
+	     [--window wmin,wmax]
              [-d debug flags]
              [--seed random_number_seed]
               --cross-sections xml_file
@@ -206,6 +207,11 @@
               If left unset then flux originates on the flux window
               [No longer attempts to determine z from geometry, generally
               got this wrong]
+           --window
+	      Energy window (min, max) in GeV for the flux neutrino.
+	      This option is useful if you want to generate signal events in a specific energy region.
+	      POT from all neutrino rays are kept, to keep POT counting sane.
+	      By default, this window is (-1, max-float), so no flux neutrinos are vetoed
            -o
               Sets the prefix of the output event file.
               The output filename is built as:
@@ -289,6 +295,7 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <limits>
 #include <csignal>
 
 #include <string>
@@ -409,6 +416,8 @@ double          gOptPOT;                       // exposure (in POT)
 string          gOptFidCut;                    // fiducial cut selection
 int             gOptNScan = 0;                 // # of geometry scan rays
 double          gOptZmin = -2.0e30;            // starting z position [ if abs() < 1e30 ]
+double          gOptWindowMin = -1.0;          // lower edge of flux energy window (GeV)
+double          gOptWindowMax = std::numeric_limits<float>::max(); // upper edge of flux energy window (GeV)
 string          gOptEvFilePrefix;              // event file prefix
 int             gOptDebug = 0;                 // debug flags
 long int        gOptRanSeed;                   // random number seed
@@ -632,6 +641,7 @@ int main(int argc, char ** argv)
   GMCJDriver * mcj_driver = new GMCJDriver;
   mcj_driver->SetEventGeneratorList(RunOpt::Instance()->EventGeneratorList());
   mcj_driver->UseFluxDriver(flux_driver);
+  mcj_driver->SetFluxEnergyWindow(gOptWindowMin, gOptWindowMax);
   mcj_driver->UseGeomAnalyzer(geom_driver);
   if ( ( gOptExtMaxPlXml != "" ) && ! gOptWriteMaxPlXml ) {
     mcj_driver->UseMaxPathLengths(gOptExtMaxPlXml);
@@ -808,8 +818,10 @@ int main(int argc, char ** argv)
     // Get nunber of flux neutrinos read-in by flux driver, number of flux
     // neutrinos actually thrown to the event generation driver and number
     // of neutrino interactions actually generated
-    long int nflx     = 0;
-    long int nflx_evg = mcj_driver-> NFluxNeutrinos();
+    // If an energy window is configured, some of those neutrinos will be vetoed.
+    long int nflx      = 0;
+    long int nflx_evg  = mcj_driver-> NFluxNeutrinos();
+    long int nflx_veto = mcj_driver-> NFluxNeutrinosVetoed();
     double   fpot     = 0;
     const char* exposureUnits = "(unknown units)";
     if ( fluxExposureI ) {
@@ -1151,6 +1163,36 @@ void GetCommandLineArgs(int argc, char ** argv)
     gOptEvFilePrefix = kDefOptEvFilePrefix;
   } //-o
 
+  // flux energy window (wmin,wmax) in GeV
+  if( parser.OptionExists("window") ) {
+    string window = parser.ArgAsString("window");
+    LOG("gevgen_fnal", pINFO) << "Reading the flux energy window: " << window;
+    size_t comma = window.find(',');
+    bool ok = ( comma != string::npos && comma > 0 && comma + 1 < window.size() );
+    if ( ok ) {
+      string smin = window.substr(0, comma);
+      string smax = window.substr(comma + 1);
+      char * endmin = 0;
+      char * endmax = 0;
+      gOptWindowMin = std::strtod(smin.c_str(), &endmin);
+      gOptWindowMax = std::strtod(smax.c_str(), &endmax);
+      ok = ( *endmin == '\0' && *endmax == '\0' );
+    }
+    if ( ! ok ) {
+      LOG("gevgen_fnal", pFATAL)
+	<< "Could not parse the argument of --window: \"" << window
+	<< "\". Expected: --window wmin,wmax (in GeV)";
+      PrintSyntax();
+      exit(1);
+    }
+    if ( gOptWindowMax <= gOptWindowMin || gOptWindowMax <= 0. ) {
+      LOG("gevgen_fnal", pFATAL)
+	<< "Invalid flux energy window [" << gOptWindowMin << ", "
+	<< gOptWindowMax << "] GeV: need wmax > wmin and wmax > 0";
+      PrintSyntax();
+      exit(1);
+    }
+  }
 
   // random number seed
   if( parser.OptionExists("seed") ) {
@@ -1300,7 +1342,8 @@ void PrintSyntax(void)
    << "\n            [-n n_of_events] [-e exposure_in_POTs]"
    << "\n            [-o output_event_file_prefix]"
    << "\n            [-F fid_cut_string] [-S nrays_scan]"
-   << "\n            [-z zmin_start]"
+   << "\n            [-z zmin]"
+   << "\n            [--window wmin,wmax]"
    << "\n            [--seed random_number_seed]"
    << "\n             --cross-sections xml_file"
    << RunOpt::RunOptSyntaxString(true)

@@ -869,4 +869,32 @@ XSecModel                   alg     Yes  Cross section model used at the thread 
      <param type="alg"    name="XSecModel@genie::EventGenerator/NORM">  genie::NormXSec/Default  </param>
   </param_set>
   
+
+  <!-- MARLEY-CC generation chain (AR26 tune).
+       The neutrino has already been thrown and accepted by GENIE, and the
+       interaction selector has chosen this channel (probability weighted by
+       the blend, see ChannelBlend.h). MARLEY then generates the full event
+       (reaction, kinematics, de-excitation) for the probe 4-momentum and the
+       interaction vertex of the GENIE record. -->
+  <param_set name="MARLEY-CC">
+     <param type="string" name="VldContext"> </param>
+     <param type="int"    name="NModules">   3                                                    </param>
+     <param type="alg"    name="Module-0">   genie::InitialStateAppender/Default                  </param>
+     <param type="alg"    name="Module-1">   genie::VertexGenerator/Default                       </param>
+     <param type="alg"    name="Module-2">   genie::MarleyGenerator/AR26-CC                       </param>
+     <param type="alg"    name="ILstGen">    genie::MarleyInteractionListGenerator/AR26-CC        </param>
+  </param_set>
+
+
+  <!-- MARLEY-NC generation chain (AR26 tune): CEvNS on 40Ar simulated by MARLEY.
+       Same structure as MARLEY-CC. -->
+  <param_set name="MARLEY-NC">
+     <param type="string" name="VldContext"> </param>
+     <param type="int"    name="NModules">   3                                                    </param>
+     <param type="alg"    name="Module-0">   genie::InitialStateAppender/Default                  </param>
+     <param type="alg"    name="Module-1">   genie::VertexGenerator/Default                       </param>
+     <param type="alg"    name="Module-2">   genie::MarleyGenerator/AR26-NC                       </param>
+     <param type="alg"    name="ILstGen">    genie::MarleyInteractionListGenerator/AR26-NC        </param>
+  </param_set>
+
 </alg_conf>

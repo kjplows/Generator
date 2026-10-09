@@ -67,6 +67,7 @@ public:
   bool IsCoherentProduction      (void) const;
   bool IsCoherentElastic         (void) const;
   bool IsSinglePion              (void) const;
+  bool IsMarley                  (void) const;
   bool IsSingleKaon              (void) const;
   bool IsElectronScattering      (void) const;
   bool IsNuElectronElastic       (void) const;

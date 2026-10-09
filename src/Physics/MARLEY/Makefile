@@ -1,7 +1,7 @@
 #
 # Makefile for GENIE Neutrino Generator
 #
-# Costas Andreopoulos <c.andreopoulos \at cern.ch>
+# Costas Andreopoulos <constantinos.andreopoulos \at cern.ch>
 #
 
 SHELL    = /bin/sh
@@ -9,10 +9,11 @@ NAME     = all
 MAKEFILE = Makefile
 
 # Include machine specific flags and locations (inc. files & libs)
+#
 include $(GENIE)/src/make/Make.include
 
-PACKAGE           = Framework/EventGen
-PACKAGE_ABBREV    = FwEG
+PACKAGE           = Physics/MARLEY
+PACKAGE_ABBREV    = PhMARLEY
 DICTIONARY        = _ROOT_DICT_$(PACKAGE_ABBREV)
 LIBNAME           = libG$(PACKAGE_ABBREV)
 EXTRA_EXT_LIBS    =
@@ -24,16 +25,24 @@ install : install-inc install-lib
 #
 include $(GENIE)/src/make/Make.std-package-targets
 
-# Only need these if we're building with HepMC3 support
-ifeq ($(strip $(GOPT_ENABLE_HEPMC3_INTERFACE)),YES)
+# Only need these here ... not in every package
+
+ifeq ($(strip $(GOPT_ENABLE_MARLEY)),YES)
   # extra flags, include paths, and libraries to link to
+  CXXFLAGS               += $(MARLEY_FLAGS)
+  CPP_INCLUDES           += $(MARLEY_INCLUDES)
+  ROOT_DICT_GEN_INCLUDES += $(MARLEY_INCLUDES)
+  EXTRA_EXT_LIBS         += $(MARLEY_LIBRARIES)
+
+  # Need to add additional flags from marley-config
+  ROOT_DICT_GEN_INCLUDES += $(filter -I% -D%,$(MARLEY_FLAGS))
+  # And HepMC3 flags for dictionary generation
   CXXFLAGS               += $(HEPMC3_FLAGS)
   CPP_INCLUDES           += $(HEPMC3_INCLUDES)
   ROOT_DICT_GEN_INCLUDES += $(HEPMC3_INCLUDES)
   EXTRA_EXT_LIBS         += $(HEPMC3_LIBRARIES)
 else
-  $(info $(PACKAGE) not built against HepMC3)
+  $(info $(PACKAGE) not build against MARLEY)
 endif
 
 FORCE:
-

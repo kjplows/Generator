@@ -90,6 +90,10 @@ double KPhaseSpace::Threshold(void) const
 
   if( ! pi.IsKnown() ) return 0;
 
+  // MARLEY applies its own (level-by-level) thresholds inside its cross
+  // section calculation, so there is no kinematic threshold to impose here
+  if (pi.IsMarley()) return 0;
+
   if (pi.IsSinglePion()) {
     double Mi   = tgt.HitNucP4Ptr()->M(); // initial nucleon mass
     double Mf   = (xcls.NProtons()==1) ? kProtonMass : kNeutronMass;
@@ -298,7 +302,8 @@ bool KPhaseSpace::IsAboveThreshold(void) const
       pi.IsMEC()                ||
       pi.IsPhotonCoherent()          ||
       pi.IsPhotonResonance()          ||
-      pi.IsGlashowResonance())
+      pi.IsGlashowResonance()         ||
+      pi.IsMarley())
   {
       E = init_state.ProbeE(kRfLab);
   }

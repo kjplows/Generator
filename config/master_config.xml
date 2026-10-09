@@ -284,4 +284,11 @@
    <config alg="genie::PhotonRESWdecPythia6">     PhotonRESGenerator.xml      </config>
    <config alg="genie::PhotonRESWdecPythia8">     PhotonRESGenerator.xml      </config>
 
+   <!-- ****** CONFIGURATION FOR OPTIONAL INTERFACE TO MARLEY ****** -->
+   <config alg="genie::MarleyInterface">    MarleyInterface.xml </config>
+   <config alg="genie::MarleyGenerator">    MarleyGenerator.xml </config>
+   <config alg="genie::MarleyPXSec">        MarleyPXSec.xml     </config>
+   <config alg="genie::MarleyInteractionListGenerator"> MarleyInteractionListGenerator.xml </config>
+   <config alg="genie::MarleyDeExcitation"> MarleyDeExcitation.xml </config>
+
 </genie_config>
