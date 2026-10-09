@@ -594,9 +594,7 @@ std::shared_ptr< HepMC3::GenEvent > genie::HepMC3Converter::ConvertToHepMC3(
   evt->set_run_info( fRunInfo );
 
   // E.C.2
-  // NOTE: the Gen2 (v3_06_02) GHepRecord does not store the total inclusive
-  // cross section or the running flux-averaged estimate (GENIE trunk does)
-  double totXS = 0.;
+  double totXS = gevrec.TotInclXSec() / genie::units::picobarn;
   evt->add_attribute( "tot_xs",
     std::make_shared< HepMC3::DoubleAttribute >(totXS) );
 
@@ -606,8 +604,8 @@ std::shared_ptr< HepMC3::GenEvent > genie::HepMC3Converter::ConvertToHepMC3(
     std::make_shared< HepMC3::DoubleAttribute >(procXS) );
 
   // E.C.4
-  double flux_avg_xsec = 0.;
-  double flux_avg_xsec_err = 0.;
+  double flux_avg_xsec = gevrec.FluxAvgXSec() / genie::units::picobarn;
+  double flux_avg_xsec_err = gevrec.FluxAvgXSecErr() / genie::units::picobarn;
   if( ! std::isfinite(flux_avg_xsec_err) ) { flux_avg_xsec_err = 1.0e+10 * flux_avg_xsec; }
 
   auto gen_xsec = std::make_shared< HepMC3::GenCrossSection >();

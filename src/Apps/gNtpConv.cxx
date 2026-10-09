@@ -42,6 +42,8 @@
    	       * `rootracker_mock_data': 
                      As the `rootracker' format but hiddes all information
                      except the final state particles.
+	       * `hepmc': [Assuming HepMC3 is enabled]
+	             A HepMC3 compliant text record.
 	       * `revhepmc': [Assuming HepMC3 is enabled]
 	             Reads in HepMC3 to GHEP.
               >>
@@ -91,6 +93,7 @@
                `nuance_tracker'       -> *.gtrac_legacy.dat
                `ghad'                 -> *.ghad.dat
                `ginuke'               -> *.ginuke.root
+	       `hepmc'                -> *.hepmc.txt
 	       `revhepmc'             -> *.ghep.root
            --seed
               Random number seed.
@@ -173,6 +176,7 @@
 
 #ifdef __GENIE_HEPMC3_INTERFACE_ENABLED__
 #include "Framework/EventGen/HepMC3Converter.h"
+#include "Framework/Ntuple/HepMC3NtpWriter.h"
 #include "HepMC3/ReaderAscii.h"
 #include <limits>
 #endif
@@ -202,6 +206,7 @@ void   ConvertToGRooTracker      (void);
 void   ConvertToGHad             (void);
 void   ConvertToGINuke           (void);
 #ifdef __GENIE_HEPMC3_INTERFACE_ENABLED__
+void   ConvertToHepMC3           (void);
 void   ConvertFromHepMC3         (void);
 #endif
 void   GetCommandLineArgs        (int argc, char ** argv);
@@ -228,6 +233,7 @@ typedef enum EGNtpcFmt {
   kConvFmt_nuance_tracker,
   kConvFmt_ghad,
   kConvFmt_ginuke,
+  kConvFmt_hepmc,
   kConvFmt_revhepmc,
 } GNtpcFmt_t;
 
@@ -302,6 +308,11 @@ int main(int argc, char ** argv)
 	break;
 
 #ifdef __GENIE_HEPMC3_INTERFACE_ENABLED__
+   case (kConvFmt_hepmc) :
+
+        ConvertToHepMC3();
+	break;
+
    case (kConvFmt_revhepmc) :
 
         ConvertFromHepMC3();
@@ -3136,6 +3147,60 @@ TTree * tEvtTree = new TTree("ginuke","GENIE INuke Summary Tree");
 }
 #ifdef __GENIE_HEPMC3_INTERFACE_ENABLED__
 //____________________________________________________________________________________
+// GENIE GHEP EVENT TREE -> HepMC3 ASCII FORMAT
+//____________________________________________________________________________________
+void ConvertToHepMC3()
+{
+  //-- open the ROOT file and get the TTree & its header
+  TFile fin(gOptInpFileName.c_str(),"READ");
+  TTree *           tree = 0;
+  NtpMCTreeHeader * thdr = 0;
+  tree = dynamic_cast <TTree *>           ( fin.Get("gtree")  );
+  thdr = dynamic_cast <NtpMCTreeHeader *> ( fin.Get("header") );
+        
+  // Before adding to the event record: make sure tune name is got from the EventRecord
+  std::string tune_name = (thdr->tune).GetString().Data();
+  RunOpt::Instance()->SetTuneName(tune_name);
+  RunOpt::Instance()->BuildTune();
+  LOG("gntpc", pINFO) << "Input tree header: " << *thdr;
+   
+  //-- get mc record
+  NtpMCEventRecord * mcrec = 0;
+  tree->SetBranchAddress("gmcrec", &mcrec);
+        
+  //-- figure out how many events to analyze
+  Long64_t nmax = (gOptN<0) ?
+       tree->GetEntries() : TMath::Min(tree->GetEntries(), gOptN);
+  if (nmax<0) {
+    LOG("gntpc", pERROR) << "Number of events = 0";
+    return;
+  }
+  LOG("gntpc", pNOTICE) << "*** Analyzing: " << nmax << " events";
+
+  // Use HepMC3NtpWriter and HepMC3Converter to write out.
+  std::shared_ptr<HepMC3NtpWriter> hepmc_ntp_writer = 
+    std::make_shared< HepMC3NtpWriter >();
+  hepmc_ntp_writer->CustomizeFilename( gOptOutFileName );
+  hepmc_ntp_writer->Initialize();
+
+  LOG("gntpc", pNOTICE) 
+       << "*** Saving HepMC3 ASCII record to: " << gOptOutFileName;
+  
+  //-- event loop
+  for(Long64_t iev = 0; iev < nmax; iev++) {
+    tree->GetEntry(iev);
+    NtpMCRecHeader rec_header = mcrec->hdr;
+    EventRecord *  event      = mcrec->event;
+
+    LOG("gntpc", pINFO) << rec_header;
+    LOG("gntpc", pINFO) << *event;
+    hepmc_ntp_writer->AddEventRecord(iev, event);
+  } // end event loop
+
+  // Save the generated MC events
+  hepmc_ntp_writer->Save();
+}
+//____________________________________________________________________________________
 // HepMC3 ASCII FORMAT -> GENIE GHEP EVENT TREE
 //____________________________________________________________________________________
 void ConvertFromHepMC3()
@@ -3228,10 +3293,10 @@ void GetCommandLineArgs(int argc, char ** argv)
     else if (fmt == "ghad")                  { gOptOutFileFormat = kConvFmt_ghad;                  }
     else if (fmt == "ginuke")                { gOptOutFileFormat = kConvFmt_ginuke;                }
 #ifdef __GENIE_HEPMC3_INTERFACE_ENABLED__
-    // NOTE: the `hepmc' format (GHEP -> HepMC3 text) needs HepMC3NtpWriter, which is not part of this branch
+    else if (fmt == "hepmc")                 { gOptOutFileFormat = kConvFmt_hepmc;                 }
     else if (fmt == "revhepmc")              { gOptOutFileFormat = kConvFmt_revhepmc;              }
 #else
-    else if (fmt == "revhepmc") {
+    else if (fmt == "hepmc" || fmt == "revhepmc") {
     LOG("gntpc", pFATAL) << "Requested HepMC3 compliant format " << fmt << " but HepMC3 is not enabled."
 			 << " GENIE will produce an exception and exit."
 			 << "\n\tFor HepMC3, please rebuild GENIE against the HepMC3 libraries and configure GENIE with the `--enable-hepmc3' flag.";
@@ -3324,6 +3389,7 @@ string DefaultOutputFile(void)
   else if (gOptOutFileFormat == kConvFmt_ghad                 ) { ext = "ghad.dat";         }
   else if (gOptOutFileFormat == kConvFmt_ginuke               ) { ext = "ginuke.root";      }
 #ifdef __GENIE_HEPMC3_INTERFACE_ENABLED__
+  else if (gOptOutFileFormat == kConvFmt_hepmc                ) { ext = "hepmc.txt";        }
   else if (gOptOutFileFormat == kConvFmt_revhepmc             ) { ext = "ghep.root";        }
 #endif
 

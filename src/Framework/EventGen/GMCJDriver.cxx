@@ -507,6 +507,7 @@ void GMCJDriver::InitJob(void)
   fBrFluxEnu          = -1.;
   fBrFluxWeight       = -1.;
   fBrFluxPDG          = 0;
+  fCurPathLengthWeightedTotalXSec = 0.;
   fSumFluxIntProbs.clear();
 
   // Throw as many flux neutrinos as necessary till one has interacted
@@ -876,6 +877,9 @@ EventRecord * GMCJDriver::GenerateEvent1Try(void)
 //
   RandomGen * rnd = RandomGen::Instance();
 
+  // Reset the path-length-weighted total cross section for the current event
+  fCurPathLengthWeightedTotalXSec = 0.;
+
   double Pno=0, Psum=0;
   double R = rnd->RndEvg().Rndm();
   LOG("GMCJDriver", pDEBUG) << "Rndm [0,1] = " << R;
@@ -1060,6 +1064,33 @@ EventRecord * GMCJDriver::GenerateEvent1Try(void)
     this->ComputeEventProbability();
   }
 
+  // Before returning the accepted event, tally its contribution to the running
+  // value of the inverse flux-averaged total cross section. Take any weighted
+  // sampling of the incident flux into account along the way.
+  double flux_weight = fFluxDriver->Weight();
+  fInvFluxAvgXSecStats.AddValue( 1. / fCurPathLengthWeightedTotalXSec,
+    flux_weight );
+
+  // Store the running estimate of the flux-averaged total cross section and
+  // its MC statistical uncertainty in the accepted event
+  fCurEvt->SetFluxAvgXSec( this->FluxAvgTotXSec() );
+  fCurEvt->SetFluxAvgXSecErr( this->FluxAvgTotXSecError() );
+
+  // Also store the total inclusive cross section (for the selected probe +
+  // target summed over all available channels) in the event
+  const genie::InitialState& init_state = fCurEvt->Summary()->InitState();
+  genie::GEVGDriver* evg_driver = fGPool->FindDriver( init_state );
+  // These if statements protect against null-pointer-induced segfaults
+  if ( evg_driver ) {
+    const genie::Spline* tot_xsec_spl = evg_driver->XSecSumSpline();
+    if ( tot_xsec_spl ) {
+      double Ev = init_state.ProbeE( genie::kRfLab );
+      double tot_incl_xsec = tot_xsec_spl->Evaluate( Ev );
+
+      fCurEvt->SetTotInclXSec( tot_incl_xsec );
+    }
+  }
+
   return fCurEvt;
 }
 //___________________________________________________________________________
@@ -1165,6 +1196,11 @@ double GMCJDriver::ComputeInteractionProbabilities(bool use_max_path_length)
 
   fCurCumulProbMap.clear();
 
+  // Temporary storage for the numerator and denominator of the
+  // path-length-weighted total cross section
+  double plw_xsec_numer = 0.;
+  double plw_xsec_denom = 0.;
+
   const PathLengthList & path_length_list =
         (use_max_path_length) ? fMaxPathLengths : fCurPathLengths;
 
@@ -1206,6 +1242,9 @@ double GMCJDriver::ComputeInteractionProbabilities(bool use_max_path_length)
         LOG("GMCJDriver", pDEBUG)
           << " (xsec, pl, A)=(" << xsec << "," << pl << "," << A << ")";
 
+        plw_xsec_numer += prob;
+        plw_xsec_denom += this->InteractionProbability( 1., pl, A );
+
         // scale the interaction probability to the maximum one so as not
         // to have to throw few billions of flux neutrinos before getting
         // an interaction...
@@ -1234,6 +1273,11 @@ double GMCJDriver::ComputeInteractionProbabilities(bool use_max_path_length)
      probsum += probn;
      fCurCumulProbMap.insert(map<int,double>::value_type(mpdg,probsum));
   }
+
+  if ( plw_xsec_denom > 0. ) {
+    fCurPathLengthWeightedTotalXSec = plw_xsec_numer / plw_xsec_denom;
+  }
+
   return probsum;
 }
 //___________________________________________________________________________
@@ -1352,7 +1396,7 @@ void GMCJDriver::ComputeEventProbability(void)
   fCurEvt->SetWeight(weight * fCurEvt->Weight());
 }
 //___________________________________________________________________________
-double GMCJDriver::InteractionProbability(double xsec, double pL, int A)
+double GMCJDriver::InteractionProbability(double xsec, double pL, int A) const
 {
 // P = Na   (Avogadro number,                 atoms/mole) *
 //     1/A  (1/mass number,                   mole/gr)    *
@@ -1411,3 +1455,80 @@ double GMCJDriver::PreGenFluxInteractionProbability()
   return fBrFluxIntProb/fGlobPmax;
 }
 //___________________________________________________________________________
+double GMCJDriver::PathLengthWeightedTotalXSec( int nu_pdg,
+  const TLorentzVector& nu_mom4, const TLorentzVector& nu_pos4 ) const
+{
+  PathLengthList temp_path_lengths = fGeomAnalyzer->ComputePathLengths(
+    nu_pos4, nu_mom4 );
+
+  if ( temp_path_lengths.size() == 0 ) {
+    LOG( "GMCJDriver", pWARN ) << "Empty path length list";
+    return 0.;
+  }
+  if ( temp_path_lengths.AreAllZero() ) {
+    LOG( "GMCJDriver", pNOTICE ) << "Current flux v doesn't cross any"
+      << " geometry material";
+  }
+
+  // Temporary storage for the numerator and denominator of the
+  // path-length-weighted total cross section
+  double plw_xsec_numer = 0.;
+  double plw_xsec_denom = 0.;
+
+  for ( const auto& pl_pair : temp_path_lengths ) {
+    int mpdg = pl_pair.first; // material PDG code
+    double pl = pl_pair.second; // density * path length * weight fraction
+
+    // Skip cases where the path length is zero
+    if ( pl <= 0. ) continue;
+
+    int A = pdg::IonPdgCodeToA( mpdg );
+
+    // Find the GEVGDriver object that handles the initial state of interest
+    InitialState init_state( mpdg, nu_pdg );
+    GEVGDriver* evgdriver = fGPool->FindDriver( init_state );
+    if ( !evgdriver ) {
+      LOG( "GMCJDriver", pFATAL ) << "No event generation driver found for"
+        << " the initial state " << init_state.AsString();
+      std::exit( 1 );
+    }
+
+    // Compute the total interaction cross section for the current neutrino
+    // energy and target material
+    const Spline* tot_xsec_spl = evgdriver->XSecSumSpline();
+    if ( !tot_xsec_spl ) {
+      LOG( "GMCJDriver", pFATAL ) << "No total cross section spline found for"
+        << " the initial state " << init_state.AsString();
+      std::exit( 1 );
+    }
+
+    double xsec = tot_xsec_spl->Evaluate( nu_mom4.Energy() );
+    plw_xsec_numer += this->InteractionProbability( xsec, pl, A );
+    plw_xsec_denom += this->InteractionProbability( 1., pl, A );
+  }
+
+  double plw_tot_xsec = 0.;
+  if ( plw_xsec_denom > 0. ) {
+    plw_tot_xsec = plw_xsec_numer / plw_xsec_denom;
+  }
+
+  return plw_tot_xsec;
+}
+//___________________________________________________________________________
+double GMCJDriver::FluxAvgTotXSec(void) const {
+  double xsec = 0.;
+  if ( fInvFluxAvgXSecStats.SampleSize() > 0 ) {
+    xsec = 1. / fInvFluxAvgXSecStats.Mean();
+  }
+  return xsec;
+}
+//___________________________________________________________________________
+double GMCJDriver::FluxAvgTotXSecError(void) const {
+  double err = DBL_MAX;
+  if ( fInvFluxAvgXSecStats.SampleSize() > 1 ) {
+    double inv_xsec = fInvFluxAvgXSecStats.Mean();
+    double inv_err = fInvFluxAvgXSecStats.StdErrorOnMean();
+    err = inv_err / ( inv_xsec * inv_xsec );
+  }
+  return err;
+}
