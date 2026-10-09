@@ -668,6 +668,10 @@ LIBRARIES := $(SYSLIBS) \
              $(GPROF_LIBRARIES) \
              $(EXTRALIBS)
 
+ifeq ($(strip $(GOPT_ENABLE_HEPMC3_INTERFACE)),YES)
+    LIBRARIES += $(HEPMC3_LIBRARIES)
+endif
+
 # Default compiler and preprocessor flags
 
 CXXFLAGS := $(ENV_CXXFLAGS) $(CXXFLAGS)
