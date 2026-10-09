@@ -81,6 +81,8 @@ public:
   double GetKV(KineVar_t kv) const;
   void   SetKV(KineVar_t kv, double value);
 
+  const map<KineVar_t, double>& GetMap(void) const;
+
   void ClearRunningValues    (void);
   void UseSelectedKinematics (void);
 
